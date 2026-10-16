@@ -7,6 +7,10 @@ import {
   toAmount,
   toMinorUnits,
 } from "../src/openPayments/amounts.js";
+import {
+  computeInteractHash,
+  verifyInteractHash,
+} from "../src/openPayments/hash.js";
 import { buildRepeatingInterval } from "../src/openPayments/interval.js";
 import {
   normalizeWalletAddressUrl,
@@ -50,6 +54,35 @@ describe("amounts", () => {
     expect(() =>
       compareAmounts(usd("1"), { value: "1", assetCode: "EUR", assetScale: 2 }),
     ).toThrow();
+  });
+});
+
+describe("interaction hash", () => {
+  const input = {
+    clientNonce: "client-nonce",
+    interactNonce: "server-nonce",
+    interactRef: "ref-123",
+    authServerUrl: "https://auth.interledger-test.dev/tenant-1",
+  };
+
+  it("accepts the padded base64 hash Rafiki sends", () => {
+    expect(verifyInteractHash(input, computeInteractHash(input))).toBe(true);
+  });
+
+  it("accepts unpadded hashes, '+' turned into spaces and trailing-slash URLs", () => {
+    const hash = computeInteractHash(input);
+    expect(verifyInteractHash(input, hash.replace(/=+$/, ""))).toBe(true);
+    expect(verifyInteractHash(input, hash.replace(/\+/g, " "))).toBe(true);
+    const withSlash = { ...input, authServerUrl: `${input.authServerUrl}/` };
+    expect(verifyInteractHash(input, computeInteractHash(withSlash))).toBe(
+      true,
+    );
+  });
+
+  it("rejects a hash computed for another interaction", () => {
+    const other = computeInteractHash({ ...input, interactRef: "ref-999" });
+    expect(verifyInteractHash(input, other)).toBe(false);
+    expect(verifyInteractHash(input, "not-a-hash")).toBe(false);
   });
 });
 
