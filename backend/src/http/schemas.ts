@@ -61,22 +61,33 @@ export const callbackQuery = z
 
 // MiPlante -----------------------------------------------------------------------------------------
 
+const rule = z.object({
+  label: z.string().trim().min(1).max(60),
+  kind: z.enum(["debt", "savings"]),
+  destination: walletAddress,
+  sharePercent: z.number().gt(0).max(50),
+  outstanding: decimalAmount.optional(),
+});
+
 export const onboardMerchant = z.object({
   name: z.string().trim().min(1).max(80),
   wallet: walletAddress,
   dailyCap: decimalAmount,
+  rules: z.array(rule).min(1).max(5),
+});
+
+export const updateRules = z.object({
   rules: z
-    .array(
-      z.object({
-        label: z.string().trim().min(1).max(60),
-        kind: z.enum(["debt", "savings"]),
-        destination: walletAddress,
-        sharePercent: z.number().gt(0).max(50),
-        outstanding: decimalAmount.optional(),
-      }),
-    )
+    .array(rule.extend({ id: z.uuid().optional() }))
     .min(1)
-    .max(5),
+    .max(5)
+    .refine(
+      (rules) => {
+        const ids = rules.flatMap((r) => (r.id ? [r.id] : []));
+        return new Set(ids).size === ids.length;
+      },
+      { message: "una regla aparece dos veces" },
+    ),
 });
 
 export const createSale = z.object({ amount: decimalAmount, description });

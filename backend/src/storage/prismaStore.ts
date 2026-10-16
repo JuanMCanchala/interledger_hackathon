@@ -13,7 +13,7 @@ import type {
   StoredToken,
 } from "../openPayments/records.js";
 import type { Amount, Asset } from "../shared/money.js";
-import type { SalePaymentChanges, Store } from "./store.js";
+import type { RuleUpdate, SalePaymentChanges, Store } from "./store.js";
 
 const merchantInclude = { rules: { orderBy: { position: "asc" } } } as const;
 const saleInclude = { items: { orderBy: { position: "asc" } } } as const;
@@ -174,6 +174,54 @@ export class PrismaStore implements Store {
             outstanding = CASE WHEN outstanding IS NULL THEN NULL
                                ELSE GREATEST(outstanding - ${delta}, 0) END
         WHERE merchant_id = ${merchantId}::uuid AND id = ${ruleId}::uuid`,
+      this.prisma.merchant.update({
+        where: { id: merchantId },
+        data: { updatedAt: new Date(updatedAt) },
+      }),
+    ]);
+  }
+
+  async updateRules(
+    merchantId: string,
+    rules: RuleUpdate[],
+    updatedAt: string,
+  ) {
+    const ids = rules.map((rule) => rule.id);
+    await this.prisma.$transaction([
+      this.prisma.rule.deleteMany({
+        where: { merchantId, id: { notIn: ids } },
+      }),
+      // Move the kept rules out of the way, so reordering never trips the unique position.
+      this.prisma.$executeRaw`
+        UPDATE rules SET position = -1 - position WHERE merchant_id = ${merchantId}::uuid`,
+      ...rules.map((rule, position) => {
+        const outstanding =
+          rule.outstanding === undefined
+            ? undefined
+            : rule.outstanding && BigInt(rule.outstanding.value);
+        const fields = {
+          position,
+          label: rule.label,
+          kind: rule.kind,
+          destination: rule.destination,
+          shareBps: rule.shareBps,
+        };
+        return this.prisma.rule.upsert({
+          where: { merchantId_id: { merchantId, id: rule.id } },
+          create: {
+            merchantId,
+            id: rule.id,
+            ...fields,
+            outstanding: outstanding ?? null,
+            repaid: 0n,
+          },
+          // `repaid` is left alone: only recordRepayment changes it.
+          update: {
+            ...fields,
+            ...(outstanding !== undefined && { outstanding }),
+          },
+        });
+      }),
       this.prisma.merchant.update({
         where: { id: merchantId },
         data: { updatedAt: new Date(updatedAt) },

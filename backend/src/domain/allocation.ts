@@ -50,7 +50,12 @@ export function percentToBps(percent: number): number {
   return bps;
 }
 
-export function validateRules(rules: AllocationRule[], asset: Asset): void {
+/** `paidDebts`: rule IDs whose debt is already fully repaid; a zero balance is fine for them. */
+export function validateRules(
+  rules: AllocationRule[],
+  asset: Asset,
+  options: { paidDebts?: ReadonlySet<string> } = {},
+): void {
   if (rules.length < 1 || rules.length > MAX_RULES) {
     throw new AppError(`Configura entre 1 y ${MAX_RULES} reglas`);
   }
@@ -63,7 +68,12 @@ export function validateRules(rules: AllocationRule[], asset: Asset): void {
     }
     total += rule.shareBps;
     if (rule.kind === "debt") {
-      if (!rule.outstanding || BigInt(rule.outstanding.value) <= 0n) {
+      const paid =
+        options.paidDebts?.has(rule.id) && rule.outstanding?.value === "0";
+      if (
+        !rule.outstanding ||
+        (!paid && BigInt(rule.outstanding.value) <= 0n)
+      ) {
         throw new AppError(
           `La deuda "${rule.label}" necesita un saldo pendiente mayor que cero`,
         );

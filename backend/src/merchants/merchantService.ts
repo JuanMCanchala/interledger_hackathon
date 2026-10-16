@@ -7,7 +7,7 @@ import {
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
 import { toAmount, type Amount } from "../shared/money.js";
-import type { Store } from "../storage/store.js";
+import type { RuleUpdate, Store } from "../storage/store.js";
 import type { MerchantRecord, MerchantRule } from "./types.js";
 
 export interface RuleInput {
@@ -18,6 +18,11 @@ export interface RuleInput {
   sharePercent: number;
   /** Debt rules: amount owed, in the merchant's currency. */
   outstanding?: string;
+}
+
+/** Editing the rules: `id` names an existing rule; without it, the rule is new. */
+export interface RuleEditInput extends RuleInput {
+  id?: string;
 }
 
 export interface OnboardInput {
@@ -98,6 +103,69 @@ export class MerchantService {
       updatedAt: timestamp,
     });
     return { merchant: await this.view(merchant), redirectUrl };
+  }
+
+  /**
+   * The merchant changes how future sales split: shares, destinations, new or removed rules. The
+   * wallet grant only caps the daily total (ADR 0004), so this needs no new consent. Repaid amounts
+   * are kept, and a debt keeps its stored balance unless a new one is given.
+   */
+  async updateRules(id: string, input: RuleEditInput[]) {
+    const merchant = await this.require(id);
+    const existing = new Map(merchant.rules.map((rule) => [rule.id, rule]));
+    for (const rule of input) {
+      if (rule.id && !existing.has(rule.id)) {
+        throw new AppError(`El comercio no tiene la regla ${rule.id}`);
+      }
+    }
+    const destinations = await Promise.all(
+      input.map((rule) => this.flows.describeWalletAddress(rule.destination)),
+    );
+
+    const updates: RuleUpdate[] = input.map((rule, index) => {
+      const old = rule.id ? existing.get(rule.id) : undefined;
+      const outstanding =
+        rule.kind !== "debt"
+          ? null
+          : rule.outstanding !== undefined
+            ? toAmount(rule.outstanding, merchant.asset)
+            : old?.kind === "debt"
+              ? undefined // keep the stored balance, repayments may be landing right now
+              : null;
+      return {
+        id: rule.id ?? randomUUID(),
+        label: rule.label,
+        kind: rule.kind,
+        destination: destinations[index]!.id,
+        shareBps: percentToBps(rule.sharePercent),
+        outstanding,
+      };
+    });
+    // Validate what the rules will look like once saved. A debt that was already paid off can stay.
+    const paidDebts = new Set(
+      updates
+        .filter((rule) => rule.outstanding === undefined)
+        .map((rule) => rule.id),
+    );
+    validateRules(
+      updates.map((rule) => ({
+        ...rule,
+        outstanding:
+          rule.outstanding === undefined
+            ? existing.get(rule.id)?.outstanding
+            : (rule.outstanding ?? undefined),
+      })),
+      merchant.asset,
+      { paidDebts },
+    );
+    if (updates.some((rule) => rule.destination === merchant.wallet)) {
+      throw new AppError(
+        "Una regla no puede enviar dinero a la misma wallet del negocio",
+      );
+    }
+
+    await this.store.updateRules(id, updates, this.now().toISOString());
+    return this.view(await this.require(id));
   }
 
   async require(id: string): Promise<MerchantRecord> {

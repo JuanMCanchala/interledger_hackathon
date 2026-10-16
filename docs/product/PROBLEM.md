@@ -27,6 +27,7 @@ The result is a merchant who works every day and still ends up with less capital
 | ---------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Micro-businesses in Colombia | 5,297,252 in 2024; 90.5% are own-account workers                                | [DANE, EMICRON 2024](https://www.dane.gov.co/files/operaciones/EMICRON/bol-EMICRON-2024.pdf)                      |
 | People working in them       | 6,879,489 in 2024                                                               | [DANE, EMICRON 2024](https://www.dane.gov.co/files/operaciones/EMICRON/bol-EMICRON-2024.pdf)                      |
+| Self-employed workers        | 10.1 million, 41.3% of everyone employed (June 2026)                            | [DANE, GEIH June 2026](https://www.dane.gov.co/files/operaciones/GEIH/bol-GEIH-jun2026.pdf)                        |
 | Medellín's weight            | 17.5% of the micro-businesses in the 24 main cities (≈426,000, our calculation) | [DANE, EMICRON 24 cities 2025](https://www.dane.gov.co/files/operaciones/EMICRON/bol-EMICRON-24Ciudades-2025.pdf) |
 
 ### The credit gap

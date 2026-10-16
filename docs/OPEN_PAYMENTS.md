@@ -38,14 +38,15 @@ The layer also handles:
 
    *(Total: **6 Wallet Addresses** repartidas entre los 5 integrantes. En Open Payments **no** necesitan generar 5 llaves privadas distintas: basta con generar 1 par de Developer Keys en la cuenta principal `tienda-billeticos` que actúa como cliente de la API).*
 
-3. On the main app wallet (`tienda-billeticos`): **Settings → Developer Keys → Generate**. Save `private.key` in the repository
-   root (it is git-ignored) and copy the **Key ID**.
+3. On the main app wallet (`tienda-billeticos`): **Settings → Developer Keys → Generate**. Save
+   `private.key` in `backend/` for local runs and in the repository root for Docker Compose (both
+   are git-ignored), and copy the **Key ID**.
 
 ## 2. Configure and check
 
 ```bash
-npm install
-cp env.example .env   # set OP_CLIENT_WALLET_ADDRESS and OP_KEY_ID
+npm --prefix backend install
+cp env.example backend/.env   # set OP_CLIENT_WALLET_ADDRESS and OP_KEY_ID
 npm run check:wallet -- '$ilp.interledger-test.dev/tienda-billeticos' '$ilp.interledger-test.dev/cliente-one' '$ilp.interledger-test.dev/extranjero-billeticos'
 ```
 
@@ -62,17 +63,21 @@ key and key ID are registered by requesting a grant.
 | `FRONTEND_URL`             | `PUBLIC_BASE_URL`          | Where browsers land after consent, if the client runs elsewhere |
 | `OP_ALLOWED_WALLET_HOSTS`  | `ilp.interledger-test.dev` | Comma-separated hosts the server may call (`*` for any)         |
 | `OP_LOG_LEVEL`             | `warn`                     | SDK log level                                                   |
-| `DATA_FILE`                | `data/store.json`          | Local persistence (holds tokens; git-ignored)                   |
+| `DATABASE_URL`             | local Docker PostgreSQL    | PostgreSQL connection string (holds tokens; never expose it)    |
 
 ## 3. Run the flows
 
 ```bash
-npm run dev   # http://localhost:3000
+npm run db:up && npm run db:deploy   # PostgreSQL in Docker, with the migrations applied
+npm run dev                          # http://localhost:3000
+npm run demo:merchant                # optional: the demo shop with the team's wallets
 ```
 
 - **MiPlante:** register the merchant at `/onboard.html` and approve the daily cap in the wallet.
   From the till (`/merchant.html?id=…`), create a sale, open its QR link (`/pay.html?sale=…`) on a
-  phone, pay from the customer's wallet, and watch the sale split itself.
+  phone, pay from the customer's wallet, and watch the sale split itself. **Editar repartos**
+  changes the shares and destinations for the next sales, with no new consent: the grant only
+  caps the daily total (ADR 0004).
 - **Sandbox:** `/sandbox.html` runs the raw flows (one-off payment, mandate, charges) and shows the
   four required demo steps.
 
@@ -93,5 +98,6 @@ laptop, expose the server through a tunnel (`cloudflared tunnel --url http://loc
 | No webhooks           | Open Payments has no webhooks for client apps; we poll incoming payments (ADR 0006).                                                                                                                                                                           |
 | Errors                | `OpenPaymentsClientError` becomes HTTP 502 with the wallet's description and status.                                                                                                                                                                           |
 
-Code map: [`src/openPayments/operations.ts`](../src/openPayments/operations.ts) has one method per
-Open Payments step; [`src/openPayments/flows.ts`](../src/openPayments/flows.ts) composes them.
+Code map: [`backend/src/openPayments/operations.ts`](../backend/src/openPayments/operations.ts) has
+one method per Open Payments step;
+[`backend/src/openPayments/flows.ts`](../backend/src/openPayments/flows.ts) composes them.

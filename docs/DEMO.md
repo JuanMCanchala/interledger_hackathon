@@ -6,7 +6,11 @@ with its four steps: **payment request → authorization → execution → compl
 ## Before going on stage
 
 - [ ] `npm run dev` is running and `npm run check:wallet` passes.
-- [ ] The merchant is onboarded and **active**. The demo starts from the till, not from onboarding.
+- [ ] The shop is registered and **active**: run `npm run demo:merchant` and approve the consent
+      link once with the shop's account (`tienda-billeticos`). The demo starts from the till, not
+      from onboarding.
+- [ ] The splits are set to the story: 15% microcrédito and 5% ahorro (8,000 / 1,500 / 500 on
+      10,000 COP). Change them from **Editar repartos** if a rehearsal left them different.
 - [ ] Test balances are loaded: the customer can pay 10,000 COP or its USD equivalent.
 - [ ] The phone reaches the server: same network, or a tunnel set in `PUBLIC_BASE_URL`.
 - [ ] Two browser windows: the till on the laptop (`/merchant.html?id=…`) and the test wallet logged
@@ -19,7 +23,7 @@ with its four steps: **payment request → authorization → execution → compl
 | --------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0:00–0:45 | Problem               | Rosa runs a shop in Medellín. Sales come in small amounts, every day; the microcredit installment comes every week, fixed. One slow week and she ends up with the _gota a gota_ lender at 20% a month. 35.6% of the micro-businesses that asked for credit last year went there (DANE).                                                                    |
 | 0:45–1:15 | Idea                  | MiPlante: every sale splits itself. A share repays her debts, a share goes to savings, the rest is hers. **If she sells nothing today, nobody collects today.**                                                                                                                                                                                            |
-| 1:15–1:45 | Consent               | Show Rosa's rules and her daily cap. She approved them **once**, in her own wallet, with Open Payments: the wallet will never let anyone debit more than the cap, and she can revoke it.                                                                                                                                                                   |
+| 1:15–1:45 | Consent               | Show Rosa's rules and her daily cap. She approved the cap **once**, in her own wallet, with Open Payments: the wallet will never let anyone debit more than the cap, and she can revoke it. The splits are hers: **Editar repartos** changes them without asking for consent again.                                                                    |
 | 1:45–3:30 | Live demo             | Type 10,000 COP and show the QR. The customer scans it, enters their wallet and **approves in their own wallet** (request → authorization). The payment moves over Interledger (execution) and the till shows "¡Pagado!" (completion). The sale splits itself: **8,000 Rosa · 1,500 microcredit · 500 emergency fund**. The microcredit balance goes down. |
 | 3:30–4:15 | Why Open Payments     | Revenue-based repayment already exists at Mercado Pago, Square and Shopify, but only for sales inside their closed platforms. With Open Payments it works between any wallets: the customer's, Rosa's and the lender's can each be at a different provider. Grants make the cap a rule that the wallet enforces, so Rosa does not have to trust the app.   |
 | 4:15–5:00 | Impact and next steps | Lenders can lend against real sales instead of collectors. Next: verifiable income history for formal credit, cash-in at banking agents, WhatsApp.                                                                                                                                                                                                         |

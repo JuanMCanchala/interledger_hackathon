@@ -1,14 +1,25 @@
 import type {
   MerchantRecord,
+  MerchantRule,
   SaleRecord,
   SaleStatus,
 } from "../merchants/types.js";
+import type { Amount } from "../shared/money.js";
 import type { MandateRecord, PaymentRecord } from "../openPayments/records.js";
 
 /** Customer-payment fields of a sale; changing them never touches its settlement. */
 export type SalePaymentChanges = Partial<
   Pick<SaleRecord, "status" | "customer" | "paymentId" | "error" | "paidAt">
 >;
+
+/**
+ * A rule as the merchant edits it. `repaid` is never written here: it only grows with repayments.
+ * `outstanding`: an Amount sets it, null clears it (savings), undefined keeps the stored balance, so
+ * an edit never undoes a repayment recorded meanwhile.
+ */
+export type RuleUpdate = Omit<MerchantRule, "repaid" | "outstanding"> & {
+  outstanding?: Amount | null;
+};
 
 /**
  * Persistence port (ADR 0010). PostgreSQL through Prisma in the server (`PrismaStore`), memory in
@@ -61,6 +72,16 @@ export interface Store {
     merchantId: string,
     ruleId: string,
     value: string,
+    updatedAt: string,
+  ): Promise<void>;
+
+  /**
+   * Replaces the merchant's rules with `rules`, in that order, in one transaction. Rules whose ID
+   * already exists keep what they have repaid; new IDs start at zero; missing IDs are removed.
+   */
+  updateRules(
+    merchantId: string,
+    rules: RuleUpdate[],
     updatedAt: string,
   ): Promise<void>;
 
@@ -173,6 +194,28 @@ export class MemoryStore implements Store {
         value: (left > 0n ? left : 0n).toString(),
       };
     }
+    merchant.updatedAt = updatedAt;
+  }
+
+  async updateRules(
+    merchantId: string,
+    rules: RuleUpdate[],
+    updatedAt: string,
+  ) {
+    const merchant = this.merchants.get(merchantId);
+    if (!merchant) return;
+    const previous = new Map(merchant.rules.map((rule) => [rule.id, rule]));
+    merchant.rules = rules.map(({ outstanding, ...rule }) => {
+      const old = previous.get(rule.id);
+      return {
+        ...rule,
+        outstanding:
+          outstanding === undefined
+            ? old?.outstanding
+            : (outstanding ?? undefined),
+        repaid: old?.repaid ?? { value: "0", ...merchant.asset },
+      };
+    });
     merchant.updatedAt = updatedAt;
   }
 

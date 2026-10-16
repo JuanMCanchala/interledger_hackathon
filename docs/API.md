@@ -77,6 +77,31 @@ The till and dashboard.
 }
 ```
 
+### `PUT /api/merchants/:id/rules`
+
+The shop changes how its **next** sales split. No new consent is needed: the wallet grant only caps
+the daily total, and the percentages are applied by MiPlante (ADR 0004).
+
+```jsonc
+{ "rules": [
+  { "id": "<existing rule>", "label": "Microcrédito", "kind": "debt",
+    "destination": "$ilp.interledger-test.dev/microcredito", "sharePercent": 10 },
+  { "label": "Proveedor", "kind": "debt", "destination": "$ilp.interledger-test.dev/proveedor-billeticos",
+    "sharePercent": 10, "outstanding": "200000" },
+  { "id": "<existing rule>", "label": "Ahorro", "kind": "savings",
+    "destination": "$ilp.interledger-test.dev/ahorro-billeticos", "sharePercent": 5 }
+] }
+```
+
+→ `200` with the merchant, as `GET /api/merchants/:id` without the dashboard fields.
+
+- The list replaces the rules, in order: rules with an `id` are kept, rules without one are new,
+  and missing ones are removed.
+- What each rule has repaid is always kept. A debt keeps its stored balance unless `outstanding`
+  is sent, so an edit never undoes a repayment recorded meanwhile.
+- The same limits as onboarding apply: 1–5 rules, at most 50% in total, and never the shop's own
+  wallet as a destination. Otherwise the answer is `400` and nothing changes.
+
 ### `POST /api/merchants/:id/sales`
 
 `{ "amount": "10000", "description": "Mercado" }` → `201 { "sale": Sale, "payUrl": "…/pay.html?sale=<id>" }`.

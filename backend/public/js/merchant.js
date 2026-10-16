@@ -25,6 +25,7 @@ import {
   toNumber,
   withBusy,
 } from "../app.js";
+import { createRulesEditor } from "./rules-editor.js";
 
 /** How the merchant sees a sale progress (the customer sees the four Open Payments steps). */
 const SALE_STAGES = [
@@ -284,6 +285,105 @@ function renderSales(sales) {
     ),
   );
 }
+
+// Rules editor ------------------------------------------------------------------------------------
+
+let editor = null;
+
+/** Minor units → the plain decimal the inputs use ("29850000", scale 2 → "298500"). */
+function toDecimal(amount) {
+  if (!amount) return "";
+  const scale = amount.assetScale;
+  const digits = amount.value.padStart(scale + 1, "0");
+  const whole = scale ? digits.slice(0, -scale) : digits;
+  const fraction = scale ? digits.slice(-scale).replace(/0+$/, "") : "";
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
+function openRulesEditor() {
+  if (!merchant) return;
+  editor = createRulesEditor({
+    box: $("rules-editor"),
+    template: $("rule-template"),
+    addButton: $("add-rule"),
+    preview: {
+      sentence: $("preview-sentence"),
+      bar: $("preview-bar"),
+      list: $("preview-list"),
+      warning: $("preview-warning"),
+      cap: $("preview-cap"),
+    },
+    asset: merchant.asset,
+    capMinor: () => BigInt(merchant.dailyCap.value),
+  });
+  editor.clear();
+  for (const rule of merchant.rules) {
+    editor.add({
+      id: rule.id,
+      label: rule.label,
+      kind: rule.kind,
+      sharePercent: rule.shareBps / 100,
+      outstanding: toDecimal(rule.outstanding),
+      destination: rule.destination,
+    });
+  }
+  showMessage($("rules-error"), "");
+  showMessage($("rules-saved"), "");
+  setEditing(true);
+}
+
+function setEditing(editing) {
+  $("rules-form").hidden = !editing;
+  $("rules").hidden = editing;
+  $("edit-rules").hidden = editing;
+}
+
+$("edit-rules").addEventListener("click", openRulesEditor);
+
+$("cancel-rules").addEventListener("click", () => setEditing(false));
+
+$("add-rule").addEventListener("click", () =>
+  editor?.add({ label: "Proveedor", kind: "debt" }),
+);
+
+$("rules-form").addEventListener("input", () => {
+  editor?.render();
+  showMessage($("rules-error"), "");
+});
+
+$("rules-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!editor) return;
+  showMessage($("rules-error"), "");
+  if (!$("rules-form").reportValidity()) return;
+  let rules;
+  try {
+    rules = editor.collect();
+  } catch (error) {
+    showMessage($("rules-error"), error.message);
+    return;
+  }
+  try {
+    await withBusy($("save-rules"), "Guardando…", async () => {
+      const updated = await api(
+        `/api/merchants/${encodeURIComponent(merchantId)}/rules`,
+        { method: "PUT", body: JSON.stringify({ rules }) },
+      );
+      merchant = { ...merchant, rules: updated.rules };
+      renderRules(updated.rules);
+      $("rules").dataset.signature = JSON.stringify(updated.rules);
+      setEditing(false);
+      showMessage(
+        $("rules-saved"),
+        "Listo: tus próximas ventas se reparten así.",
+        "ok",
+      );
+      loadMerchant();
+    });
+  } catch (error) {
+    showMessage($("rules-error"), error.message);
+  }
+});
 
 // Sales -------------------------------------------------------------------------------------------
 

@@ -209,8 +209,70 @@
               </section>
 
               <section class="card stack" aria-labelledby="rules-title">
-                <h2 id="rules-title">Reglas de reparto</h2>
+                <div class="row between">
+                  <h2 id="rules-title">Reglas de reparto</h2>
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    id="edit-rules"
+                  >
+                    Editar repartos
+                  </button>
+                </div>
                 <ul class="list" id="rules"></ul>
+
+                <form id="rules-form" class="stack" hidden novalidate>
+                  <p class="muted small">
+                    Cambia los porcentajes, las wallets de destino o agrega
+                    reglas. Aplica desde la próxima venta y no necesitas volver
+                    a autorizar en tu wallet: el tope diario sigue igual.
+                  </p>
+                  <div id="rules-editor" class="stack"></div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    id="add-rule"
+                  >
+                    + Agregar regla
+                  </button>
+
+                  <div class="stack-sm" aria-live="polite">
+                    <h3>Así se reparte una venta</h3>
+                    <p id="preview-sentence" class="small"></p>
+                    <div
+                      class="stacked-bar"
+                      id="preview-bar"
+                      aria-hidden="true"
+                    ></div>
+                    <ul class="split" id="preview-list"></ul>
+                    <p id="preview-warning" class="banner banner-bad" hidden></p>
+                    <p id="preview-cap" class="hint" hidden></p>
+                  </div>
+
+                  <p
+                    id="rules-error"
+                    class="banner banner-bad"
+                    role="alert"
+                    hidden
+                  ></p>
+                  <div class="row">
+                    <button
+                      type="submit"
+                      class="btn btn-primary"
+                      id="save-rules"
+                    >
+                      Guardar repartos
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      id="cancel-rules"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+                <p id="rules-saved" class="banner banner-ok" role="status" hidden></p>
               </section>
 
               <section class="card stack" aria-labelledby="history-title">
@@ -239,5 +301,61 @@
         <a href="/sandbox.html">Sandbox de Open Payments</a>
       </footer>
     </div>
+
+    <template id="rule-template">
+      <fieldset class="rule-row">
+        <legend class="sr-only">Regla de reparto</legend>
+        <label class="field">
+          <span>Nombre</span>
+          <input
+            data-field="label"
+            required
+            maxlength="60"
+            placeholder="Microcrédito"
+          />
+        </label>
+        <label class="field">
+          <span>Tipo</span>
+          <select data-field="kind">
+            <option value="debt">Crédito / proveedor</option>
+            <option value="savings">Ahorro</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>% de cada venta</span>
+          <input
+            data-field="sharePercent"
+            type="number"
+            required
+            min="0.01"
+            max="50"
+            step="0.01"
+            inputmode="decimal"
+          />
+        </label>
+        <label class="field outstanding-field">
+          <span>Saldo por pagar</span>
+          <input
+            data-field="outstanding"
+            inputmode="decimal"
+            autocomplete="off"
+            placeholder="300.000"
+          />
+        </label>
+        <label class="field destination-field">
+          <span>Wallet de destino</span>
+          <input
+            data-field="destination"
+            required
+            maxlength="300"
+            autocomplete="off"
+            spellcheck="false"
+            autocapitalize="off"
+            placeholder="$ilp.interledger-test.dev/cooperativa"
+          />
+        </label>
+        <button type="button" class="btn btn-danger remove-rule">Quitar</button>
+      </fieldset>
+    </template>
   </body>
 </html>

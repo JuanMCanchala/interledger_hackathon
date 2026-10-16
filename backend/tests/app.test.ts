@@ -189,6 +189,37 @@ describe("MiPlante API", () => {
     expect((await res.json()).details.join(" ")).toContain("sharePercent");
   });
 
+  it("edits the split rules of a merchant", async () => {
+    const { merchant } = await (await postJson("/api/merchants", rosa)).json();
+    const put = (body: unknown) =>
+      fetch(`${baseUrl}/api/merchants/${merchant.id}/rules`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const [microcredit] = merchant.rules;
+
+    const ok = await put({
+      rules: [
+        { ...rosa.rules[0], id: microcredit.id, sharePercent: 20 },
+        { ...rosa.rules[1], sharePercent: 10 },
+      ],
+    });
+    expect(ok.status).toBe(200);
+    expect(
+      (await ok.json()).rules.map((r: { shareBps: number }) => r.shareBps),
+    ).toEqual([2000, 1000]);
+
+    const duplicated = await put({
+      rules: [
+        { ...rosa.rules[0], id: microcredit.id },
+        { ...rosa.rules[1], id: microcredit.id },
+      ],
+    });
+    expect(duplicated.status).toBe(400);
+    expect((await put({ rules: [] })).status).toBe(400);
+  });
+
   it("answers 404 for unknown merchants and sales", async () => {
     expect((await fetch(`${baseUrl}/api/merchants/nope`)).status).toBe(404);
     expect((await fetch(`${baseUrl}/api/sales/nope`)).status).toBe(404);

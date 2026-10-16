@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaStore } from "../src/storage/prismaStore.js";
-import { ALICE, COOP } from "./fakeOperations.js";
+import { ALICE, COOP, SUPPLIER } from "./fakeOperations.js";
 import { cop, setupMiPlante } from "./miplanteHarness.js";
 
 /**
@@ -142,5 +142,46 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     const [rule] = (await store.getMerchant(merchantId))!.rules;
     expect(rule!.repaid).toEqual(cop("120000"));
     expect(rule!.outstanding).toEqual(cop("0"));
+  });
+
+  it("edits the rules in place: reorders, adds, keeps what was repaid", async () => {
+    const env = setupMiPlante(store);
+    const { merchantId, saleId } = await paidSale(env);
+    await env.sales.refresh(saleId);
+    const [microcredit, savings] = (await store.getMerchant(merchantId))!
+      .rules;
+
+    await env.merchants.updateRules(merchantId, [
+      {
+        id: savings!.id,
+        label: "Ahorro",
+        kind: "savings",
+        destination: savings!.destination,
+        sharePercent: 10,
+      },
+      {
+        label: "Proveedor",
+        kind: "debt",
+        destination: SUPPLIER,
+        sharePercent: 10,
+        outstanding: "50000",
+      },
+      {
+        id: microcredit!.id,
+        label: microcredit!.label,
+        kind: "debt",
+        destination: microcredit!.destination,
+        sharePercent: 15,
+      },
+    ]);
+
+    const rules = (await store.getMerchant(merchantId))!.rules;
+    expect(rules.map((r) => [r.label, r.shareBps, r.repaid.value])).toEqual([
+      ["Ahorro", 1000, "50000"],
+      ["Proveedor", 1000, "0"],
+      ["Microcrédito", 1500, "150000"],
+    ]);
+    expect(rules[1]!.outstanding).toEqual(cop("5000000"));
+    expect(rules[2]!.outstanding).toEqual(cop("29850000"));
   });
 });

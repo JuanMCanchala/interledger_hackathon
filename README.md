@@ -118,23 +118,24 @@ Requires Node.js 22 or later (developed on 26), Docker and an account on the
 [Interledger test wallet](https://wallet.interledger-test.dev).
 
 ```bash
-npm install                          # also generates the Prisma client
-cp env.example .env                  # MiPlante's wallet address and developer key ID
-# put the downloaded private.key in the repository root (it is git-ignored)
+npm --prefix backend install         # also generates the Prisma client
+cp env.example backend/.env          # MiPlante's wallet address and developer key ID
+# put the downloaded private.key in backend/ (it is git-ignored)
 npm run check:wallet                 # verifies the wallet and the key
 npm run db:up                        # PostgreSQL 16 in Docker
-npm run db:deploy                    # applies the migrations in prisma/migrations
+npm run db:deploy                    # applies the migrations in backend/prisma/migrations
 npm run dev                          # http://localhost:3000
 ```
 
-Or run everything in containers with `npm run docker:up`; the backend applies the migrations when
-it starts. After changing `prisma/schema.prisma`, create a migration with
-`npm run db:migrate -- --name <change>`.
+Or run everything in containers with `npm run docker:up`: Compose reads `.env` and `private.key`
+from the repository root, and the backend applies the migrations when it starts. After changing
+`backend/prisma/schema.prisma`, create a migration with `npm run db:migrate -- --name <change>`.
 
 Then open:
 
-- `/onboard.html` to register a merchant;
-- `/merchant.html?id=…` for the till;
+- `/onboard.html` to register a merchant (or `npm run demo:merchant` for the demo shop with the
+  team's wallets);
+- `/merchant.html?id=…` for the till, where the shop can also change its splits;
 - `/pay.html?sale=…` for the customer, from the QR code;
 - `/sandbox.html` for the raw Open Payments flows.
 
@@ -145,18 +146,20 @@ script: [`docs/DEMO.md`](docs/DEMO.md).
 ## Project structure
 
 ```
-src/
-  domain/          allocation engine and Bogotá calendar (pure functions)
-  merchants/       onboarding, sales, settlement, dashboard
-  openPayments/    adapter over the SDK: grants, quotes, payments, hash, tokens
-  storage/         Store port: PostgreSQL through Prisma, in memory for tests
-  shared/          money (BigInt minor units) and errors
-  http/            Express routes and zod validation
-prisma/            schema and migrations
-public/            Spanish, mobile-first web client (no build step)
-tests/             Vitest: domain, flows against an Open Payments fake, HTTP
+backend/
+  src/
+    domain/        allocation engine and Bogotá calendar (pure functions)
+    merchants/     onboarding, split rules, sales, settlement, dashboard
+    openPayments/  adapter over the SDK: grants, quotes, payments, hash, tokens
+    storage/       Store port: PostgreSQL through Prisma, in memory for tests
+    shared/        money (BigInt minor units) and errors
+    http/          Express routes and zod validation
+  prisma/          schema and migrations
+  public/          Spanish, mobile-first web client (no build step)
+  tests/           Vitest: domain, flows against an Open Payments fake, HTTP, PostgreSQL
+  scripts/         check-wallet diagnostic, demo-merchant setup
+frontend/          Next.js App Router (landing, work in progress)
 docs/              problem, ideation, product brief, ADRs, system design, API, demo
-scripts/           check-wallet diagnostic
 ```
 
 ## Quality

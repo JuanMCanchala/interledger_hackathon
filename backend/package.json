@@ -12,6 +12,7 @@
     "start": "tsx src/server.ts",
     "postinstall": "prisma generate",
     "check:wallet": "tsx scripts/check-wallet.ts",
+    "demo:merchant": "tsx scripts/demo-merchant.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

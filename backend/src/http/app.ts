@@ -141,6 +141,11 @@ export function createApp({
     res.json(await dashboard.get(req.params.id));
   });
 
+  app.put("/api/merchants/:id/rules", async (req, res) => {
+    const { rules } = schemas.updateRules.parse(req.body);
+    res.json(await merchants.updateRules(req.params.id, rules));
+  });
+
   app.post("/api/merchants/:id/sales", async (req, res) => {
     res
       .status(201)
@@ -220,7 +225,10 @@ function cors(origin: string) {
   return (req: Request, res: Response, next: NextFunction) => {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,DELETE,OPTIONS",
+    );
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") {
       res.sendStatus(204);
