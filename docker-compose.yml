@@ -69,6 +69,15 @@ services:
     volumes:
       - ./frontend/src:/app/src
 
+  landing:
+    build:
+      context: ./landing
+      dockerfile: Dockerfile
+    container_name: miplante-landing
+    restart: unless-stopped
+    ports:
+      - "4200:8080"
+
 volumes:
   miplante_pgdata:
 
