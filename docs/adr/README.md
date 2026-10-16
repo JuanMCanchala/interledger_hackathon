@@ -12,7 +12,8 @@ earlier one instead of editing it.
 | [0004](0004-grant-caps-with-percentage-rules-in-the-app.md)   | Grant caps in the wallet, percentage rules in the app       | Accepted |
 | [0005](0005-integer-money-and-merchant-favorable-rounding.md) | Integer money, basis points and merchant-favorable rounding | Accepted |
 | [0006](0006-settle-sales-by-polling-idempotently.md)          | Settle sales by polling, idempotently                       | Accepted |
-| [0007](0007-json-file-persistence-for-the-hackathon.md)       | JSON file persistence for the hackathon                     | Accepted |
-| [0008](0008-web-client-served-by-the-api.md)                  | Mobile-first web client served by the API                   | Accepted |
+| [0007](0007-json-file-persistence-for-the-hackathon.md)       | JSON file persistence for the hackathon                     | Superseded by 0009 |
+| [0008](0008-web-client-served-by-the-api.md)                  | Mobile-first web client served by the API                   | Superseded by 0009 |
+| [0009](0009-adopt-nextjs-nestjs-prisma-and-postgresql-stack.md) | Adopt Next.js, NestJS, Prisma ORM, and PostgreSQL stack   | Accepted |
 
 To add one, copy the structure of an existing ADR, take the next number and add it to this table.
