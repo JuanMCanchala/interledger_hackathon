@@ -1,251 +1,423 @@
 import {
   STORAGE_KEYS,
+  checkWallet,
   el,
   formatMoney,
   normalizeDecimal,
+  normalizeWallet,
   postJson,
   previewSplit,
   remember,
   showMessage,
   toMinor,
+  walletName,
   withBusy,
 } from "../app.js";
 
-const MAX_RULES = 5;
 const MAX_TOTAL_PERCENT = 50;
-/** The preview assumes COP with two decimals, like the test wallet's COP accounts. */
-const PREVIEW_SALE = "10000";
-const PREVIEW_SCALE = 2;
+/** The preview shows a 10,000 COP sale, like the demo. */
+const PREVIEW_SALE = 10000n * 100n;
+const OTHER = "__other__";
 
-const form = document.getElementById("onboard-form");
-const nameInput = document.getElementById("business-name");
-const walletInput = document.getElementById("business-wallet");
-const capInput = document.getElementById("daily-cap");
-const rulesBox = document.getElementById("rules");
-const template = document.getElementById("rule-template");
-const addButton = document.getElementById("add-rule");
-const submitButton = document.getElementById("submit");
-const formError = document.getElementById("form-error");
-const previewSentence = document.getElementById("preview-sentence");
-const previewBar = document.getElementById("preview-bar");
-const previewList = document.getElementById("preview-list");
-const previewWarning = document.getElementById("preview-warning");
-const previewCap = document.getElementById("preview-cap");
+/**
+ * What a shopkeeper wants their sales to pay for, in their own words. Each goal becomes one
+ * split rule on the server; the demo wallets of the team are offered as ready-made choices.
+ */
+const GOALS = [
+  {
+    key: "credit",
+    kind: "debt",
+    icon: "💳",
+    title: "Pagar mi crédito",
+    whoQuestion: "¿A quién le debes?",
+    owedQuestion: "¿Cuánto debes en total?",
+    options: [{ label: "Microcrédito", wallet: "microcredito" }],
+    on: true,
+    percent: 15,
+    maxPercent: 30,
+    owed: "300.000",
+  },
+  {
+    key: "supplier",
+    kind: "debt",
+    icon: "📦",
+    title: "Pagarle a mi proveedor",
+    whoQuestion: "¿A cuál proveedor?",
+    owedQuestion: "¿Cuánto le debes?",
+    options: [{ label: "Proveedor", wallet: "proveedor-billeticos" }],
+    on: false,
+    percent: 10,
+    maxPercent: 30,
+    owed: "200.000",
+  },
+  {
+    key: "savings",
+    kind: "savings",
+    icon: "🐷",
+    title: "Ahorrar para emergencias",
+    whoQuestion: "¿Dónde guardas tu ahorro?",
+    options: [{ label: "Fondo de emergencia", wallet: "ahorro-billeticos" }],
+    on: true,
+    percent: 5,
+    maxPercent: 20,
+  },
+];
 
-const money = (minor) =>
-  formatMoney(Number(minor) / 10 ** PREVIEW_SCALE, "COP");
+const CAP_CHOICES = [10000, 20000, 30000, 50000];
+const DEFAULT_CAP = 30000;
 
-function field(row, name) {
-  return row.querySelector(`[data-field="${name}"]`);
-}
+const $ = (id) => document.getElementById(id);
+const form = $("onboard-form");
+const goalsBox = $("goals");
+const peso = (minor) => formatMoney(Number(minor) / 100, "COP");
 
-function rows() {
-  return [...rulesBox.querySelectorAll(".rule-row")];
-}
-
-function addRule(values = {}) {
-  if (rows().length >= MAX_RULES) return;
-  const row = template.content.firstElementChild.cloneNode(true);
-  field(row, "label").value = values.label ?? "";
-  field(row, "kind").value = values.kind ?? "debt";
-  field(row, "sharePercent").value = values.sharePercent ?? "";
-  field(row, "outstanding").value = values.outstanding ?? "";
-  field(row, "destination").value = values.destination ?? "";
-  field(row, "kind").addEventListener("change", () => {
-    syncKind(row);
-    render();
-  });
-  row.querySelector(".remove-rule").addEventListener("click", () => {
-    if (rows().length <= 1) return;
-    row.remove();
-    render();
-  });
-  rulesBox.append(row);
-  syncKind(row);
-  render();
-}
-
-/** The outstanding balance only makes sense (and is required) for debts. */
-function syncKind(row) {
-  const isDebt = field(row, "kind").value === "debt";
-  row.querySelector(".outstanding-field").hidden = !isDebt;
-  field(row, "outstanding").required = isDebt;
-}
-
-function readRules() {
-  return rows().map((row) => {
-    const kind = field(row, "kind").value;
-    const percent = field(row, "sharePercent").valueAsNumber;
-    const outstanding =
-      kind === "debt" ? normalizeDecimal(field(row, "outstanding").value) : "";
-    return {
-      label: field(row, "label").value.trim(),
-      kind,
-      destination: field(row, "destination").value.trim(),
-      sharePercent: Number.isFinite(percent)
-        ? Math.round(percent * 100) / 100
-        : NaN,
-      outstanding,
-    };
+/** Formats what the person types as pesos with thousands separators: 300000 → "300.000". */
+function moneyInput(input) {
+  input.addEventListener("input", () => {
+    const digits = input.value.replace(/\D/g, "").replace(/^0+/, "");
+    input.value = digits ? Number(digits).toLocaleString("es-CO") : "";
   });
 }
 
-function render() {
-  const rules = readRules();
-  const count = rows().length;
-  addButton.disabled = count >= MAX_RULES;
-  for (const row of rows())
-    row.querySelector(".remove-rule").disabled = count <= 1;
+// Goals --------------------------------------------------------------------------------------------
 
-  const valid = rules.filter(
-    (rule) => Number.isFinite(rule.sharePercent) && rule.sharePercent > 0,
+function buildGoal(goal) {
+  const toggle = el("input", { type: "checkbox", class: "goal-check" });
+  toggle.checked = goal.on;
+
+  const who = el(
+    "select",
+    { class: "goal-who" },
+    ...goal.options.map((option) =>
+      el("option", { value: option.wallet, text: option.label }),
+    ),
+    el("option", { value: OTHER, text: "Otra billetera…" }),
   );
-  const saleMinor = toMinor(PREVIEW_SALE, PREVIEW_SCALE);
-  const preview = previewSplit(
-    saleMinor,
-    valid.map((rule) => ({
-      label: rule.label || (rule.kind === "debt" ? "Crédito" : "Ahorro"),
-      kind: rule.kind,
-      shareBps: Math.round(rule.sharePercent * 100),
-      outstandingMinor: rule.outstanding
-        ? toMinor(rule.outstanding, PREVIEW_SCALE)
-        : undefined,
-    })),
+  const otherInput = el("input", {
+    class: "goal-other",
+    maxlength: "300",
+    autocomplete: "off",
+    spellcheck: "false",
+    autocapitalize: "off",
+    placeholder: "Nombre de la billetera",
+  });
+  const otherField = el(
+    "label",
+    { class: "field", hidden: true },
+    el("span", { text: "Nombre de la billetera" }),
+    otherInput,
   );
+  who.addEventListener("change", () => {
+    otherField.hidden = who.value !== OTHER;
+    if (!otherField.hidden) otherInput.focus();
+  });
 
-  const parts = [
-    `tú recibes ${money(preview.kept)}`,
-    ...preview.items.map((item) => `${item.label} ${money(item.amount)}`),
-  ];
-  previewSentence.textContent = `Por una venta de ${money(saleMinor)}: ${parts.join(" · ")}`;
+  let owedInput = null;
+  const owedField =
+    goal.kind === "debt"
+      ? el(
+          "label",
+          { class: "field" },
+          el("span", { text: goal.owedQuestion }),
+          (owedInput = el("input", {
+            class: "goal-owed",
+            inputmode: "numeric",
+            autocomplete: "off",
+            placeholder: `Ej: ${goal.owed}`,
+          })),
+        )
+      : null;
+  if (owedInput) {
+    owedInput.value = goal.owed;
+    moneyInput(owedInput);
+  }
 
-  const share = (minor) => `${(Number(minor) * 100) / Number(saleMinor)}%`;
-  previewBar.replaceChildren(
-    el("span", { class: "seg-kept", style: `width: ${share(preview.kept)}` }),
-    ...preview.items.map((item) =>
+  const slider = el("input", {
+    type: "range",
+    class: "goal-percent",
+    min: "1",
+    max: String(goal.maxPercent),
+    step: "1",
+    "aria-label": `${goal.title}: parte de cada venta`,
+  });
+  slider.value = String(goal.percent);
+  const sliderText = el("output", { class: "goal-percent-text" });
+
+  const body = el(
+    "div",
+    { class: "goal-body stack-sm" },
+    el(
+      "label",
+      { class: "field" },
+      el("span", { text: goal.whoQuestion }),
+      who,
+    ),
+    otherField,
+    owedField,
+    el(
+      "div",
+      { class: "field" },
+      el("span", { text: "¿Qué parte de cada venta?" }),
+      slider,
+      sliderText,
+    ),
+  );
+  body.hidden = !goal.on;
+
+  const card = el(
+    "div",
+    { class: `goal${goal.on ? " is-on" : ""}`, "data-key": goal.key },
+    el(
+      "label",
+      { class: "goal-toggle" },
+      toggle,
       el("span", {
-        class: item.kind === "debt" ? "seg-debt" : "seg-savings",
-        style: `width: ${share(item.amount)}`,
+        class: "goal-icon",
+        "aria-hidden": "true",
+        text: goal.icon,
+      }),
+      el("span", { class: "goal-title", text: goal.title }),
+    ),
+    body,
+  );
+  toggle.addEventListener("change", () => {
+    body.hidden = !toggle.checked;
+    card.classList.toggle("is-on", toggle.checked);
+  });
+
+  return {
+    goal,
+    card,
+    read() {
+      const percent = Number(slider.value);
+      const wallet = who.value === OTHER ? otherInput.value.trim() : who.value;
+      const label =
+        who.value === OTHER
+          ? goal.title
+          : goal.options.find((o) => o.wallet === who.value).label;
+      sliderText.textContent = `${percent}% · ${peso((PREVIEW_SALE * BigInt(percent)) / 100n)} de cada ${peso(PREVIEW_SALE)}`;
+      return {
+        on: toggle.checked,
+        kind: goal.kind,
+        label,
+        wallet,
+        percent,
+        owed: owedInput ? normalizeDecimal(owedInput.value) : "",
+        focusWallet: () => (who.value === OTHER ? otherInput : who).focus(),
+        focusOwed: () => owedInput?.focus(),
+      };
+    },
+  };
+}
+
+const goals = GOALS.map(buildGoal);
+goalsBox.append(...goals.map((g) => g.card));
+
+// Daily cap ----------------------------------------------------------------------------------------
+
+const chips = $("cap-chips");
+for (const value of [...CAP_CHOICES, OTHER]) {
+  const radio = el("input", {
+    type: "radio",
+    name: "cap",
+    value: String(value),
+  });
+  radio.checked = value === DEFAULT_CAP;
+  chips.append(
+    el(
+      "label",
+      { class: "chip" },
+      radio,
+      el("span", {
+        text: value === OTHER ? "Otro" : formatMoney(value, "COP"),
       }),
     ),
   );
+}
+moneyInput($("cap-other"));
+chips.addEventListener("change", () => {
+  const other = form.elements.cap.value === OTHER;
+  $("cap-other-field").hidden = !other;
+  if (other) $("cap-other").focus();
+});
 
-  previewList.replaceChildren(
+function readCap() {
+  const choice = form.elements.cap.value;
+  return choice === OTHER ? normalizeDecimal($("cap-other").value) : choice;
+}
+
+// Wallet check -------------------------------------------------------------------------------------
+
+const walletInput = $("business-wallet");
+let checkedWallet = null;
+
+async function verifyWallet() {
+  const value = walletInput.value.trim();
+  const check = $("wallet-check");
+  checkedWallet = null;
+  if (!value) {
+    check.textContent = "";
+    return null;
+  }
+  check.className = "check";
+  check.textContent = "Buscando tu billetera…";
+  try {
+    const info = await checkWallet(value);
+    check.className = "check check-ok";
+    check.textContent = `✓ Encontramos tu billetera ${info.name} (${info.currency})`;
+    checkedWallet = info;
+    $("wallet-tip").replaceChildren(
+      "Ahora te llevamos a tu billetera. Entra con la cuenta dueña de ",
+      el("strong", { text: info.name }),
+      " y toca ",
+      el("strong", { text: "Aceptar" }),
+      ". Después vuelves aquí solo.",
+    );
+    return info;
+  } catch (error) {
+    check.className = "check check-bad";
+    check.textContent = error.message;
+    return null;
+  }
+}
+walletInput.addEventListener("change", verifyWallet);
+
+// Preview ------------------------------------------------------------------------------------------
+
+function render() {
+  const chosen = goals.map((g) => g.read()).filter((g) => g.on);
+  const preview = previewSplit(
+    PREVIEW_SALE,
+    chosen.map((g) => ({
+      label: g.label,
+      kind: g.kind,
+      shareBps: g.percent * 100,
+      outstandingMinor: g.owed ? toMinor(g.owed, 2) : undefined,
+    })),
+  );
+
+  $("summary-title").textContent =
+    `Así queda cada venta de ${peso(PREVIEW_SALE)}`;
+  const width = (minor) => `${(Number(minor) * 100) / Number(PREVIEW_SALE)}%`;
+  $("preview-bar").replaceChildren(
+    el("span", { class: "seg-kept", style: `width: ${width(preview.kept)}` }),
+    ...preview.items.map((item) =>
+      el("span", {
+        class: item.kind === "debt" ? "seg-debt" : "seg-savings",
+        style: `width: ${width(item.amount)}`,
+      }),
+    ),
+  );
+  $("preview-list").replaceChildren(
     el(
       "li",
       { class: "split-item is-kept" },
-      el("span", { class: "split-label", text: "Tú te quedas" }),
-      el("span", { class: "split-amount", text: money(preview.kept) }),
+      el("span", { class: "split-label", text: "Te queda a ti" }),
+      el("span", { class: "split-amount", text: peso(preview.kept) }),
     ),
     ...preview.items.map((item) =>
       el(
         "li",
         { class: "split-item" },
         el("span", { class: "split-label", text: item.label }),
-        el("span", { class: "split-amount", text: money(item.amount) }),
+        el("span", { class: "split-amount", text: peso(item.amount) }),
       ),
     ),
   );
 
-  const totalPercent = valid.reduce((sum, rule) => sum + rule.sharePercent, 0);
-  const overLimit = totalPercent > MAX_TOTAL_PERCENT;
+  const total = chosen.reduce((sum, g) => sum + g.percent, 0);
   showMessage(
-    previewWarning,
-    overLimit
-      ? `Las reglas suman ${totalPercent.toLocaleString("es-CO")}%. El máximo es ${MAX_TOTAL_PERCENT}% para que siempre te quede la mayor parte de cada venta.`
+    $("preview-warning"),
+    total > MAX_TOTAL_PERCENT
+      ? `Entre todo suman ${total}% de cada venta. Baja alguno: lo máximo es ${MAX_TOTAL_PERCENT}%, para que siempre te quede la mayor parte.`
       : "",
   );
-
-  const cap = normalizeDecimal(capInput.value);
-  const capMinor = cap ? toMinor(cap, PREVIEW_SCALE) : undefined;
-  if (capMinor !== undefined && preview.allocated > capMinor) {
-    previewCap.hidden = false;
-    previewCap.textContent = `Tu tope diario (${money(capMinor)}) es menor que lo que se repartiría en esta venta (${money(preview.allocated)}): lo que pase del tope no se descuenta ese día.`;
-  } else {
-    previewCap.hidden = true;
-  }
-  return { totalPercent, overLimit };
+  return { chosen, total };
 }
 
-function collect() {
-  const dailyCap = normalizeDecimal(capInput.value);
+// Submit -------------------------------------------------------------------------------------------
+
+function fail(message, focus) {
+  showMessage($("form-error"), message);
+  focus?.();
+  return null;
+}
+
+async function collect() {
+  const name = $("business-name").value.trim();
+  if (!name)
+    return fail("Escribe el nombre de tu negocio.", () =>
+      $("business-name").focus(),
+    );
+  if (!walletInput.value.trim())
+    return fail("Escribe el nombre de tu billetera.", () =>
+      walletInput.focus(),
+    );
+  const wallet = checkedWallet || (await verifyWallet());
+  if (!wallet)
+    return fail("Revisa el nombre de tu billetera.", () => walletInput.focus());
+
+  const { chosen, total } = render();
+  if (chosen.length === 0)
+    return fail("Elige al menos una cosa para pagar con tus ventas.");
+  if (total > MAX_TOTAL_PERCENT)
+    return fail(
+      `Entre todo no puedes pasar del ${MAX_TOTAL_PERCENT}% de cada venta.`,
+    );
+  for (const goal of chosen) {
+    if (!goal.wallet)
+      return fail(
+        `Escribe la billetera para "${goal.label}".`,
+        goal.focusWallet,
+      );
+    if (goal.kind === "debt" && !goal.owed)
+      return fail(`Escribe cuánto debes en "${goal.label}".`, goal.focusOwed);
+  }
+  const dailyCap = readCap();
   if (!dailyCap)
-    throw new Error("Escribe un tope diario válido, por ejemplo 20.000");
-  const rules = readRules().map((rule, index) => {
-    const position = `Regla ${index + 1}`;
-    if (
-      !Number.isFinite(rule.sharePercent) ||
-      rule.sharePercent < 0.01 ||
-      rule.sharePercent > MAX_TOTAL_PERCENT
-    ) {
-      throw new Error(
-        `${position}: el porcentaje debe estar entre 0,01 y ${MAX_TOTAL_PERCENT}`,
-      );
-    }
-    if (rule.kind === "debt" && !rule.outstanding) {
-      throw new Error(
-        `${position}: escribe el saldo por pagar, por ejemplo 300.000`,
-      );
-    }
-    const body = {
-      label: rule.label,
-      kind: rule.kind,
-      destination: rule.destination,
-      sharePercent: rule.sharePercent,
-    };
-    if (rule.kind === "debt") body.outstanding = rule.outstanding;
-    return body;
-  });
+    return fail("Escribe tu límite diario, por ejemplo 30.000.", () =>
+      $("cap-other").focus(),
+    );
+
   return {
-    name: nameInput.value.trim(),
-    wallet: walletInput.value.trim(),
+    name,
+    wallet: wallet.wallet,
     dailyCap,
-    rules,
+    rules: chosen.map((goal) => ({
+      label: goal.label,
+      kind: goal.kind,
+      destination: normalizeWallet(goal.wallet),
+      sharePercent: goal.percent,
+      ...(goal.kind === "debt" ? { outstanding: goal.owed } : {}),
+    })),
   };
 }
 
 form.addEventListener("input", () => {
   render();
-  showMessage(formError, "");
+  showMessage($("form-error"), "");
 });
-
-addButton.addEventListener("click", () => addRule({ kind: "savings" }));
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  showMessage(formError, "");
-  if (!form.reportValidity()) return;
-  if (render().overLimit) {
-    showMessage(
-      formError,
-      `La suma de porcentajes no puede pasar de ${MAX_TOTAL_PERCENT}%.`,
-    );
-    return;
-  }
-  let body;
+  showMessage($("form-error"), "");
   try {
-    body = collect();
-  } catch (error) {
-    showMessage(formError, error.message);
-    return;
-  }
-  try {
-    await withBusy(submitButton, "Conectando con tu wallet…", async () => {
+    await withBusy($("submit"), "Abriendo tu billetera…", async () => {
+      const body = await collect();
+      if (!body) return;
       const { merchant, redirectUrl } = await postJson("/api/merchants", body);
       remember.set(STORAGE_KEYS.merchantId, merchant.id);
       remember.set(STORAGE_KEYS.merchantWallet, body.wallet);
       window.location.href = redirectUrl;
     });
   } catch (error) {
-    showMessage(formError, error.message);
+    showMessage($("form-error"), error.message);
   }
 });
 
-walletInput.value = remember.get(STORAGE_KEYS.merchantWallet);
-addRule({
-  label: "Microcrédito",
-  kind: "debt",
-  sharePercent: 15,
-  outstanding: "300000",
-});
-addRule({ label: "Fondo de emergencia", kind: "savings", sharePercent: 5 });
+const savedWallet = remember.get(STORAGE_KEYS.merchantWallet);
+if (savedWallet) {
+  walletInput.value = walletName(savedWallet);
+  verifyWallet();
+}
+render();
