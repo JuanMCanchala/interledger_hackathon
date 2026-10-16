@@ -57,7 +57,7 @@
 
           <form id="pay-form" class="stack" hidden>
             <label class="field">
-              <span>Tu wallet</span>
+              <span>¿Cuál es tu billetera?</span>
               <input
                 id="customer-wallet"
                 required
@@ -65,9 +65,17 @@
                 autocomplete="off"
                 spellcheck="false"
                 autocapitalize="off"
-                placeholder="$ilp.interledger-test.dev/tu-nombre"
+                placeholder="Ej: cliente-one"
               />
+              <small class="hint"
+                >Escribe solo el nombre de tu billetera.</small
+              >
             </label>
+            <p class="banner banner-info">
+              Te llevamos a tu billetera para que apruebes este pago. Entra con
+              tu cuenta y toca <strong>Aceptar</strong>. Nada se cobra sin tu
+              permiso.
+            </p>
             <button
               class="btn btn-primary btn-lg btn-block"
               type="submit"
@@ -75,10 +83,6 @@
             >
               Pagar
             </button>
-            <p class="hint">
-              Te llevamos a tu wallet para que apruebes este pago. Nada se cobra
-              sin tu autorización.
-            </p>
           </form>
 
           <div id="done" class="success" hidden>
