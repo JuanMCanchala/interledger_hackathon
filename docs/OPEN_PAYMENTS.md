@@ -20,23 +20,25 @@ The layer also handles:
 - reading the grant's spent amount;
 - a host allow list for wallet addresses.
 
-## 1. Set up the test wallet (once)
+## 1. Set up the test wallet (once) — Configuración por Equipo (5 Personas / 6 Wallets)
+
+> 📄 **Guía detallada en español para los 5 integrantes del equipo:** ver [`docs/TEAM_WALLETS.md`](TEAM_WALLETS.md).
 
 1. Sign up at <https://wallet.interledger-test.dev>. The KYC data can be fake, but use a real email.
-2. Create the accounts and wallet addresses the demo needs, and deposit test money:
+2. Create the accounts and wallet addresses the demo needs across the 5 team members, and deposit test money:
 
-   | Wallet address | Currency   | Role                                                          |
-   | -------------- | ---------- | ------------------------------------------------------------- |
-   | `miplante-app` | any        | MiPlante's own identity: it signs every Open Payments request |
-   | `tienda-rosa`  | COP        | The merchant: receives sales, pays the rules' shares          |
-   | `cliente`      | COP or USD | The customer. USD shows Interledger converting currencies     |
-   | `cooperativa`  | COP        | The microcredit lender                                        |
-   | `ahorro-rosa`  | COP        | The merchant's emergency fund                                 |
+   | Integrante | Rol en la Demo | Moneda | Wallet Address (`$` / `https://`) |
+   | :--- | :--- | :---: | :--- |
+   | **Persona 1** | 🏪 Tendero (Caja Principal + Developer Key) | `COP` | `$ilp.interledger-test.dev/tienda-billeticos` |
+   | **Persona 1** | 🐷 Tendero (Ahorro Emergencia) | `COP` | `$ilp.interledger-test.dev/ahorro-billeticos` |
+   | **Persona 2** | 🙋‍♂️ Cliente Local (COP / Efectivo) | `COP` | `$ilp.interledger-test.dev/cliente-one` |
+   | **Persona 3** | 🌎 Cliente Extranjero (Multidivisa USD) | `USD` | `$ilp.interledger-test.dev/extranjero-billeticos` |
+   | **Persona 4** | 🚚 Proveedor de Mercancía | `COP` | `$ilp.interledger-test.dev/proveedor-billeticos` |
+   | **Persona 5** | 🛡️ Fondo Microcrédito Anti-Gota | `COP` | `$ilp.interledger-test.dev/microcredito` |
 
-   Each wallet address holds a single currency. The consent screens ask you to log in as the owner,
-   so a second test wallet account for the customer makes the demo more realistic.
+   *(Total: **6 Wallet Addresses** repartidas entre los 5 integrantes. En Open Payments **no** necesitan generar 5 llaves privadas distintas: basta con generar 1 par de Developer Keys en la cuenta principal `tienda-billeticos` que actúa como cliente de la API).*
 
-3. On `miplante-app`: **Settings → Developer Keys → Generate**. Save `private.key` in the repository
+3. On the main app wallet (`tienda-billeticos`): **Settings → Developer Keys → Generate**. Save `private.key` in the repository
    root (it is git-ignored) and copy the **Key ID**.
 
 ## 2. Configure and check
@@ -44,7 +46,7 @@ The layer also handles:
 ```bash
 npm install
 cp env.example .env   # set OP_CLIENT_WALLET_ADDRESS and OP_KEY_ID
-npm run check:wallet -- '$ilp.interledger-test.dev/tienda-rosa' '$ilp.interledger-test.dev/cliente'
+npm run check:wallet -- '$ilp.interledger-test.dev/tienda-billeticos' '$ilp.interledger-test.dev/cliente-one' '$ilp.interledger-test.dev/extranjero-billeticos'
 ```
 
 `check:wallet` confirms that each wallet address exists, prints its currency, and verifies that the
