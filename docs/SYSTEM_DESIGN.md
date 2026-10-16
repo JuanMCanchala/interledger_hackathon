@@ -128,7 +128,7 @@ flowchart TB
 | :--- | :--- | :--- | :--- |
 | **1. Frontend** | Landing | **Angular** PWA + **GSAP** | The public landing and the brand's design system (colors, type, doodles, paper texture). |
 | **1. Frontend** | Proxy | **nginx** (production) / `ng serve` (development) | Puts the backend under the same domain: `/api/*`, the consent callbacks and the merchant and customer pages. |
-| **2. Backend** | Pages | Plain HTML + ES modules (`backend/public`) | Mobile-first Spanish UI for onboarding, the till and dashboard (with split editing), the QR checkout and the sandbox. |
+| **2. Backend** | Pages | Plain HTML + ES modules (`backend/public`) | Mobile-first Spanish UI for onboarding, the till and dashboard (with split editing), the QR checkout and the sandbox, in the landing's design system (`css/miplante.css`). |
 | **2. Backend** | API | **Express** + **zod** | REST endpoints, validation, error mapping and the GNAP interactive consent callbacks. |
 | **2. Backend** | Application & Domain | TypeScript services + pure `BigInt` | Onboarding, split rules, sales, basis-point allocation (`planAllocations`), exactly-once settlement and the background sweeper. |
 | **2. Backend** | Open Payments Adapter | `@interledger/open-payments` | Wallet discovery, interactive and non-interactive GNAP grants, quotes, incoming and outgoing payments, interaction hash verification and token rotation. |

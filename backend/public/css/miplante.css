@@ -1,70 +1,67 @@
-/* MiPlante: shared styles for every screen (no build step). */
+/* MiPlante: shared styles for the till, onboarding and checkout (no build step).
+ * Same design system as the landing (frontend/src/styles.scss): monte green paper, lima accents,
+ * papel cards, Lexend. Tokens are semantic and change with the context: on the green page, or on
+ * paper (cards, QR, banners). */
+
+@import url("https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;700;800&family=Playwrite+ES:wght@300;400&display=swap");
 
 :root {
-  --bg: #f5f4ec;
-  --surface: #ffffff;
-  --surface-2: #eef0e6;
-  --text: #17261c;
-  --muted: #5c6b60;
-  --border: #dfe2d5;
-  --brand: #1f7a4d;
-  --brand-strong: #155a38;
-  --brand-soft: #e2f2e8;
-  --on-brand: #ffffff;
-  --gold: #a8690f;
-  --gold-soft: #fbf0dc;
-  --danger: #b42318;
-  --danger-soft: #fdeceb;
-  --info: #2b6cb0;
-  --info-soft: #e6f0fa;
-  --shadow: 0 1px 2px rgb(23 38 28 / 6%), 0 10px 30px rgb(23 38 28 / 7%);
-  --radius: 18px;
+  /* Brand */
+  --monte: #094641;
+  --monte-hondo: #06332f;
+  --monte-claro: #135c55;
+  --lima: #ccf137;
+  --lima-hondo: #93b51c;
+  --papel: #fdfbfb;
+  --hoja: #f4f6ec;
+  --tinta: #181818;
+  --renglon: rgb(9 70 65 / 14%);
+  --sans: Garet, Lexend, system-ui, sans-serif;
+  --script: Marelle, "Playwrite ES", cursive;
+
+  /* On the green page */
+  --bg: var(--monte);
+  --surface: var(--papel);
+  --surface-2: var(--hoja);
+  --text: var(--papel);
+  --muted: rgb(253 251 251 / 72%);
+  --border: rgb(253 251 251 / 18%);
+  --brand: var(--lima);
+  --brand-strong: #dcff5c;
+  --brand-soft: rgb(204 241 55 / 16%);
+  --on-brand: var(--monte);
+  --gold: #f6c56b;
+  --gold-soft: rgb(246 197 107 / 16%);
+  --danger: #ff9a8a;
+  --danger-soft: rgb(255 154 138 / 16%);
+  --info: #a9e2db;
+  --info-soft: rgb(169 226 219 / 14%);
+  --shadow: 0 40px 80px -40px rgb(0 0 0 / 70%);
+  --radius: 28px;
   --radius-sm: 12px;
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0e1410;
-    --surface: #151d17;
-    --surface-2: #1b261f;
-    --text: #e6eee8;
-    --muted: #9fb3a5;
-    --border: #273529;
-    --brand: #3dcc8a;
-    --brand-strong: #74e0ab;
-    --brand-soft: #16301f;
-    --on-brand: #06140c;
-    --gold: #f2b65a;
-    --gold-soft: #33270f;
-    --danger: #ff8a7a;
-    --danger-soft: #3a1c18;
-    --info: #7cb4f0;
-    --info-soft: #172636;
-    --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 25%);
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #0e1410;
-  --surface: #151d17;
-  --surface-2: #1b261f;
-  --text: #e6eee8;
-  --muted: #9fb3a5;
-  --border: #273529;
-  --brand: #3dcc8a;
-  --brand-strong: #74e0ab;
-  --brand-soft: #16301f;
-  --on-brand: #06140c;
-  --gold: #f2b65a;
-  --gold-soft: #33270f;
-  --danger: #ff8a7a;
-  --danger-soft: #3a1c18;
-  --info: #7cb4f0;
-  --info-soft: #172636;
-  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 25%);
-  color-scheme: dark;
+/* On paper */
+.card,
+.qr-box,
+.banner {
+  --surface: var(--papel);
+  --surface-2: var(--hoja);
+  --text: var(--tinta);
+  --muted: #4b5d59;
+  --border: var(--renglon);
+  --brand: var(--monte);
+  --brand-strong: var(--monte-hondo);
+  --brand-soft: rgb(204 241 55 / 38%);
+  --on-brand: var(--lima);
+  --gold: #925400;
+  --gold-soft: #fbefd5;
+  --danger: #b42318;
+  --danger-soft: #fdeceb;
+  --info: var(--monte-claro);
+  --info-soft: rgb(19 92 85 / 10%);
+  color: var(--text);
 }
 
 *,
@@ -79,19 +76,16 @@ html {
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--bg) url(/img/paper.png);
   color: var(--text);
-  font:
-    16px/1.5 system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  font: 400 1rem/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
 
 a {
   color: var(--brand);
+  text-underline-offset: 3px;
 }
 
 img,
@@ -103,17 +97,20 @@ canvas {
 h1,
 h2,
 h3 {
-  letter-spacing: -0.015em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 h1 {
-  font-size: clamp(2rem, 6.5vw, 3.2rem);
-  line-height: 1.08;
+  font-size: clamp(2.2rem, 6.5vw, 3.6rem);
+  font-weight: 800;
+  line-height: 1.05;
   margin: 0 0 14px;
 }
 
 h2 {
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   margin: 0;
 }
 
@@ -184,9 +181,9 @@ main {
   place-items: center;
   width: 36px;
   height: 36px;
-  border-radius: 11px;
-  background: var(--brand);
-  color: var(--on-brand);
+  border-radius: 50%;
+  background: var(--lima);
+  color: var(--monte);
   flex: none;
 }
 
@@ -262,10 +259,10 @@ main {
 
 .eyebrow {
   color: var(--brand);
-  font-size: 0.85rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-family: var(--script);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.6;
 }
 
 .h1-sm {
@@ -345,8 +342,12 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
-  color: var(--text);
+  color: var(--tinta);
   font: inherit;
+}
+
+input::placeholder {
+  color: rgb(24 24 24 / 40%);
 }
 
 input[readonly] {
@@ -406,16 +407,17 @@ fieldset {
 
 .btn-primary:hover {
   background: var(--brand-strong);
+  transform: translateY(-2px);
 }
 
 .btn-secondary {
-  border-color: var(--border);
-  background: var(--surface);
+  border: 2px solid currentColor;
+  background: transparent;
   color: var(--text);
 }
 
 .btn-secondary:hover {
-  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .btn-ghost {
@@ -647,7 +649,7 @@ fieldset {
 }
 
 .seg-savings {
-  background: var(--info);
+  background: var(--lima-hondo);
 }
 
 /* Steps -------------------------------------------------------------------------------------- */
