@@ -7,6 +7,8 @@ no sales today, nothing is collected today.
 [![CI](https://github.com/JuanMCanchala/interledger_hackathon/actions/workflows/ci.yml/badge.svg)](https://github.com/JuanMCanchala/interledger_hackathon/actions/workflows/ci.yml)
 
 Built at the **Open Payments Hackathon by Interledger** (Ruta N, Medellín, October 16–17, 2026).
+
+**Live demo:** <https://frontend-production-4075.up.railway.app> (Interledger test network; deployment notes in [`docs/DEPLOY.md`](docs/DEPLOY.md)).
 _Plante_ is Colombian slang for the working capital a small business runs on.
 
 ## The problem
