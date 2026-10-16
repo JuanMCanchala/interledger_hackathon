@@ -13,7 +13,12 @@
     "check:wallet": "tsx scripts/check-wallet.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "db:up": "docker compose up -d db",
+    "prisma:generate": "npx prisma generate",
+    "prisma:push": "npx prisma db push"
   },
   "dependencies": {
     "@interledger/open-payments": "7.4.0",
