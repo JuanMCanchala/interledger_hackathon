@@ -1,0 +1,12 @@
+# Keep secrets, local state and host-built artifacts out of the build context
+.git
+.github
+node_modules
+frontend
+data
+prompts
+coverage
+.env
+.env.*
+*.key
+*.pem
