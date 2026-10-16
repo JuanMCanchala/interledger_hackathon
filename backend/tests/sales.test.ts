@@ -12,7 +12,7 @@ describe("checkout", () => {
       description: "Mercado",
     });
 
-    expect(payUrl).toBe(`${BASE_URL}/pay.html?sale=${sale.id}`);
+    expect(payUrl).toBe(`${BASE_URL}/pay?sale=${sale.id}`);
     expect(sale.payUrl).toBe(payUrl);
     expect(sale).toMatchObject({
       merchantName: "Tienda Doña Rosa",
@@ -48,7 +48,7 @@ describe("checkout", () => {
       customer: ALICE,
     });
     expect((await store.getPayment((await store.getSale(sale.id))!.paymentId!))?.returnTo).toBe(
-      `/pay.html?sale=${sale.id}`,
+      `/pay?sale=${sale.id}`,
     );
   });
 

@@ -88,7 +88,7 @@ export class MerchantService {
       maxAmount: input.dailyCap,
       interval: DAILY_INTERVAL,
       description: `MiPlante · ${input.name}`,
-      returnTo: `/merchant.html?id=${id}`,
+      returnTo: `/merchant?id=${id}`,
     });
     const timestamp = this.now().toISOString();
     const merchant = await this.store.saveMerchant({
@@ -187,7 +187,7 @@ export class MerchantService {
       ),
       interval: DAILY_INTERVAL,
       description: `MiPlante · ${merchant.name}`,
-      returnTo: `/merchant.html?id=${merchant.id}`,
+      returnTo: `/merchant?id=${merchant.id}`,
     });
     const updated = await this.store.saveMerchant({
       ...merchant,

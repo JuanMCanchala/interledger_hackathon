@@ -440,7 +440,7 @@ function resumeLatestSale(m) {
 
 function showSale(sale, payUrl) {
   const url = absoluteUrl(
-    payUrl || `/pay.html?sale=${encodeURIComponent(sale.id)}`,
+    payUrl || `/pay?sale=${encodeURIComponent(sale.id)}`,
   );
   current = { sale, payUrl: url };
   qrRenderedFor = null;
@@ -613,7 +613,7 @@ const rememberedId = remember.get(STORAGE_KEYS.merchantId);
 if (!merchantId && rememberedId) {
   // "Abrir mi caja" without a code: this device remembers the merchant it registered.
   window.location.replace(
-    `/merchant.html?id=${encodeURIComponent(rememberedId)}`,
+    `/merchant?id=${encodeURIComponent(rememberedId)}`,
   );
 } else if (!merchantId) {
   showMissing(

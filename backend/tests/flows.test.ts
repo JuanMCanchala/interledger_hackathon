@@ -421,9 +421,9 @@ describe("return page after consent", () => {
       sender: ALICE,
       receiver: BOB,
       amount: "10",
-      returnTo: "/pay.html?sale=abc",
+      returnTo: "/pay?sale=abc",
     });
-    expect(payment.returnTo).toBe("/pay.html?sale=abc");
+    expect(payment.returnTo).toBe("/pay?sale=abc");
 
     for (const returnTo of [
       "https://evil.example",

@@ -61,5 +61,5 @@ ${SHOP.name} registrada: 15% al microcrédito (saldo 300.000 COP), 5% al ahorro,
    ${body.redirectUrl}
 
 2. La caja de la demo:
-   ${API_URL}/merchant.html?id=${body.merchant.id}
+   ${API_URL}/merchant?id=${body.merchant.id}
 `);
