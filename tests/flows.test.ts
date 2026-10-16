@@ -413,3 +413,26 @@ describe("mandates", () => {
     });
   });
 });
+
+describe("return page after consent", () => {
+  it("stores a same-site return path and rejects anything else", async () => {
+    const { flows } = setup();
+    const { payment } = await flows.startPayment({
+      sender: ALICE,
+      receiver: BOB,
+      amount: "10",
+      returnTo: "/pay.html?sale=abc",
+    });
+    expect(payment.returnTo).toBe("/pay.html?sale=abc");
+
+    for (const returnTo of [
+      "https://evil.example",
+      "//evil.example",
+      "pay.html",
+    ]) {
+      await expect(
+        flows.startMandate({ sender: ALICE, maxAmount: "1", returnTo }),
+      ).rejects.toThrow("Ruta de regreso inválida");
+    }
+  });
+});

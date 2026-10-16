@@ -57,7 +57,11 @@ export function createApp({ flows, frontendUrl, corsOrigin }: AppOptions) {
       // The record keeps the error; the frontend shows it when it polls.
       console.error(`[callback] pago ${id}: ${describeError(error)}`);
     }
-    res.redirect(303, `${frontendUrl}/?payment=${encodeURIComponent(id)}`);
+    const fallback = `/?payment=${encodeURIComponent(id)}`;
+    res.redirect(
+      303,
+      `${frontendUrl}${returnPath(() => flows.getPayment(id).returnTo, fallback)}`,
+    );
   });
 
   // Mandates (recurring / capped consent) ---------------------------------------------------------
@@ -79,7 +83,11 @@ export function createApp({ flows, frontendUrl, corsOrigin }: AppOptions) {
     } catch (error) {
       console.error(`[callback] autorización ${id}: ${describeError(error)}`);
     }
-    res.redirect(303, `${frontendUrl}/?mandate=${encodeURIComponent(id)}`);
+    const fallback = `/?mandate=${encodeURIComponent(id)}`;
+    res.redirect(
+      303,
+      `${frontendUrl}${returnPath(() => flows.findMandate(id).returnTo, fallback)}`,
+    );
   });
 
   app.post("/api/mandates/:id/charges", async (req, res) => {
@@ -113,6 +121,15 @@ export function createApp({ flows, frontendUrl, corsOrigin }: AppOptions) {
   });
   app.use(errorHandler);
   return app;
+}
+
+/** Where to send the browser after a consent callback: the record's page, or the sandbox. */
+function returnPath(read: () => string | undefined, fallback: string): string {
+  try {
+    return read() ?? fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function errorHandler(

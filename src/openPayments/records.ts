@@ -27,6 +27,8 @@ export interface PaymentRecord {
   kind: "one-off" | "mandate-charge";
   status: PaymentStatus;
   description?: string;
+  /** Page where the browser lands after the consent screen. */
+  returnTo?: string;
   sender: string;
   receiver: string;
   mandateId?: string;
@@ -55,6 +57,8 @@ export interface MandateRecord {
   id: string;
   status: MandateStatus;
   description?: string;
+  /** Page where the browser lands after the consent screen. */
+  returnTo?: string;
   sender: string;
   maxAmount: Amount;
   interval?: string;

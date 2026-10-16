@@ -39,6 +39,8 @@ export interface StartPaymentInput {
   /** Decimal amount the receiver gets, in the receiver's currency. */
   amount: string;
   description?: string;
+  /** Page (path starting with "/") where the browser lands after the consent screen. */
+  returnTo?: string;
 }
 
 export interface StartMandateInput {
@@ -49,6 +51,8 @@ export interface StartMandateInput {
   interval?: string;
   repetitions?: number;
   description?: string;
+  /** Page (path starting with "/") where the browser lands after the consent screen. */
+  returnTo?: string;
 }
 
 export interface ChargeInput {
@@ -123,6 +127,7 @@ export class PaymentFlows {
       kind: "one-off",
       status: "awaiting-consent",
       description: input.description,
+      returnTo: assertReturnPath(input.returnTo),
       sender: sender.id,
       receiver: receiver.id,
       incomingPaymentUrl: incomingPayment.id,
@@ -234,6 +239,11 @@ export class PaymentFlows {
     return toPublicPayment(this.requirePayment(id));
   }
 
+  /** Stored view of a mandate, without calling the wallet. */
+  findMandate(id: string) {
+    return toPublicMandate(this.requireMandate(id));
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Mandate: recurring or capped consent
   // ---------------------------------------------------------------------------------------------
@@ -258,6 +268,7 @@ export class PaymentFlows {
       id,
       status: "awaiting-consent",
       description: input.description,
+      returnTo: assertReturnPath(input.returnTo),
       sender: sender.id,
       maxAmount,
       interval,
@@ -648,6 +659,15 @@ function checkCallback(
     };
   }
   return { approved: true, interactRef: params.interactRef };
+}
+
+/** Only same-site paths, so a stored redirect can never send the browser to another site. */
+function assertReturnPath(path: string | undefined): string | undefined {
+  if (path === undefined) return undefined;
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\")) {
+    throw new AppError(`Ruta de regreso inválida: ${path}`);
+  }
+  return path;
 }
 
 function quoteFields(quote: Quote) {
