@@ -77,6 +77,13 @@ The till and dashboard.
 }
 ```
 
+### `POST /api/merchants/:id/consent`
+
+Asks for the daily-capped consent again, with the same cap and rules, when the first attempt was
+never approved, was rejected (for example, the merchant logged in with another account) or was
+revoked. `201` → `{ "merchant": Merchant, "redirectUrl": "…" }`. Answers `409` if the consent is
+already active.
+
 ### `POST /api/merchants/:id/sales`
 
 `{ "amount": "10000", "description": "Mercado" }` → `201 { "sale": Sale, "payUrl": "…/pay.html?sale=<id>" }`.
