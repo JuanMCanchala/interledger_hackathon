@@ -13,6 +13,7 @@ describe("checkout", () => {
     });
 
     expect(payUrl).toBe(`${BASE_URL}/pay.html?sale=${sale.id}`);
+    expect(sale.payUrl).toBe(payUrl);
     expect(sale).toMatchObject({
       merchantName: "Tienda Doña Rosa",
       amount: cop("1000000"),

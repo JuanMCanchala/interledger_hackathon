@@ -63,7 +63,7 @@ export class SalesService {
     });
     return {
       sale: this.view(sale),
-      payUrl: `${this.options.frontendUrl}/pay.html?sale=${sale.id}`,
+      payUrl: this.payUrl(sale.id),
     };
   }
 
@@ -244,6 +244,11 @@ export class SalesService {
     return () => clearInterval(timer);
   }
 
+  /** Link the customer opens from the QR code. */
+  payUrl(saleId: string): string {
+    return `${this.options.frontendUrl}/pay.html?sale=${saleId}`;
+  }
+
   require(id: string): SaleRecord {
     const sale = this.store.getSale(id);
     if (!sale) throw new NotFoundError(`No existe la venta ${id}`);
@@ -269,6 +274,7 @@ export class SalesService {
         debitAmount: payment.debitAmount,
         receivedAmount: payment.receivedAmount,
       },
+      payUrl: this.payUrl(sale.id),
       settlement: sale.settlement,
       createdAt: sale.createdAt,
       updatedAt: sale.updatedAt,
