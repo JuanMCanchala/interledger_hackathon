@@ -1,4 +1,4 @@
-import { AppError } from "./errors.js";
+import { AppError } from "../shared/errors.js";
 
 /** ISO 8601 duration such as P1W, P1M, P15D or PT1M (one minute, handy for live demos). */
 export const DURATION_PATTERN =

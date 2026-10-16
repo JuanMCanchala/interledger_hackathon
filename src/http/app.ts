@@ -6,7 +6,8 @@ import express, {
   type Response,
 } from "express";
 import { z } from "zod";
-import { AppError, describeError } from "../openPayments/errors.js";
+import { describeError } from "../openPayments/errors.js";
+import { AppError } from "../shared/errors.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import * as schemas from "./schemas.js";
 

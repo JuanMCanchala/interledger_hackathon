@@ -9,7 +9,7 @@ import {
   type WalletAddress,
 } from "@interledger/open-payments";
 import { vi } from "vitest";
-import type { Amount } from "../src/openPayments/amounts.js";
+import type { Amount } from "../src/shared/money.js";
 import type {
   OutgoingPaymentOptions,
   PaymentOperations,

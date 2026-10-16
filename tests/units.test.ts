@@ -7,7 +7,7 @@ import {
   fromMinorUnits,
   toAmount,
   toMinorUnits,
-} from "../src/openPayments/amounts.js";
+} from "../src/shared/money.js";
 import {
   computeInteractHash,
   verifyInteractHash,

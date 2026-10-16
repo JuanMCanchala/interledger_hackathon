@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/http/app.js";
 import { PaymentFlows } from "../src/openPayments/flows.js";
-import { Store } from "../src/openPayments/store.js";
+import { Store } from "../src/storage/store.js";
 import { ALICE, BOB, createFakeOperations } from "./fakeOperations.js";
 
 const FRONTEND_URL = "http://localhost:5173";

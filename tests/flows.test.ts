@@ -2,7 +2,8 @@ import { OpenPaymentsClientError, mockQuote } from "@interledger/open-payments";
 import { describe, expect, it } from "vitest";
 import { PaymentFlows } from "../src/openPayments/flows.js";
 import { computeInteractHash } from "../src/openPayments/hash.js";
-import { Store, type Interaction } from "../src/openPayments/store.js";
+import type { Interaction } from "../src/openPayments/records.js";
+import { Store } from "../src/storage/store.js";
 import {
   ALICE,
   AUTH_SERVER,

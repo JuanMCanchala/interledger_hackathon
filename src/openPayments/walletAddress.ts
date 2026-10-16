@@ -1,4 +1,4 @@
-import { AppError } from "./errors.js";
+import { AppError } from "../shared/errors.js";
 
 /**
  * Accepts the "$ilp.interledger-test.dev/alice" payment pointer shown in the test wallet

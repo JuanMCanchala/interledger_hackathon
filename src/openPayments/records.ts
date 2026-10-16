@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname } from "node:path";
-import type { Amount } from "./amounts.js";
+import type { Amount } from "../shared/money.js";
 
 /** Pending interactive grant: what we need to finish it when the user comes back. */
 export interface Interaction {
@@ -73,58 +65,4 @@ export interface MandateRecord {
   interaction?: Interaction;
   token?: StoredToken;
   continuation?: { uri: string; accessToken: string };
-}
-
-interface StoreData {
-  payments: Record<string, PaymentRecord>;
-  mandates: Record<string, MandateRecord>;
-}
-
-/**
- * Minimal persistence for the hackathon: JSON file (or memory only when no file is given).
- * It holds access tokens, so the file must stay out of git (see .gitignore).
- */
-export class Store {
-  private readonly data: StoreData;
-
-  constructor(private readonly file?: string) {
-    this.data =
-      file && existsSync(file)
-        ? (JSON.parse(readFileSync(file, "utf8")) as StoreData)
-        : { payments: {}, mandates: {} };
-  }
-
-  getPayment(id: string): PaymentRecord | undefined {
-    return this.data.payments[id];
-  }
-
-  savePayment(record: PaymentRecord): PaymentRecord {
-    this.data.payments[record.id] = record;
-    this.persist();
-    return record;
-  }
-
-  listPayments(filter: { mandateId?: string } = {}): PaymentRecord[] {
-    return Object.values(this.data.payments)
-      .filter((p) => !filter.mandateId || p.mandateId === filter.mandateId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }
-
-  getMandate(id: string): MandateRecord | undefined {
-    return this.data.mandates[id];
-  }
-
-  saveMandate(record: MandateRecord): MandateRecord {
-    this.data.mandates[record.id] = record;
-    this.persist();
-    return record;
-  }
-
-  private persist(): void {
-    if (!this.file) return;
-    mkdirSync(dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    writeFileSync(tmp, JSON.stringify(this.data, null, 2), { mode: 0o600 });
-    renameSync(tmp, this.file);
-  }
 }

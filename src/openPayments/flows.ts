@@ -1,12 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Quote, WalletAddress } from "@interledger/open-payments";
-import { compareAmounts, toAmount, type Amount } from "./amounts.js";
-import {
-  AppError,
-  NotFoundError,
-  describeError,
-  isAuthError,
-} from "./errors.js";
+import { AppError, NotFoundError } from "../shared/errors.js";
+import { compareAmounts, toAmount, type Amount } from "../shared/money.js";
+import type { Store } from "../storage/store.js";
+import { describeError, isAuthError } from "./errors.js";
 import { verifyInteractHash } from "./hash.js";
 import { buildRepeatingInterval } from "./interval.js";
 import {
@@ -14,12 +11,7 @@ import {
   type OutgoingGrantLimits,
   type PaymentOperations,
 } from "./operations.js";
-import type {
-  Interaction,
-  MandateRecord,
-  PaymentRecord,
-  Store,
-} from "./store.js";
+import type { Interaction, MandateRecord, PaymentRecord } from "./records.js";
 import {
   assertAllowedWalletHost,
   normalizeWalletAddressUrl,

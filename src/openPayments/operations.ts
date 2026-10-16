@@ -10,9 +10,10 @@ import {
   type Quote,
   type WalletAddress,
 } from "@interledger/open-payments";
-import type { Amount } from "./amounts.js";
-import { AppError, isAuthError } from "./errors.js";
-import type { StoredToken } from "./store.js";
+import type { Amount } from "../shared/money.js";
+import { AppError } from "../shared/errors.js";
+import { isAuthError } from "./errors.js";
+import type { StoredToken } from "./records.js";
 
 export type OutgoingGrantLimits =
   | { debitAmount: Amount; interval?: string }

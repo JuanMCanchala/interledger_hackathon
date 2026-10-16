@@ -4,7 +4,7 @@ import { createOpenPaymentsClient } from "./openPayments/client.js";
 import { describeError } from "./openPayments/errors.js";
 import { PaymentFlows } from "./openPayments/flows.js";
 import { OpenPaymentsOperations } from "./openPayments/operations.js";
-import { Store } from "./openPayments/store.js";
+import { Store } from "./storage/store.js";
 
 try {
   process.loadEnvFile();
