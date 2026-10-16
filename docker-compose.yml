@@ -1,0 +1,79 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: miplante-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-miplante}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-miplante}
+      POSTGRES_DB: ${POSTGRES_DB:-miplante}
+    ports:
+      - "5432:5432"
+    volumes:
+      - miplante_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-miplante} -d ${POSTGRES_DB:-miplante}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: miplante-backend
+    restart: unless-stopped
+    # ./src is bind-mounted in development, which hides the client generated at build time:
+    # generate it again, apply pending migrations, then start in watch mode.
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run dev"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: 3000
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-miplante}:${POSTGRES_PASSWORD:-miplante}@db:5432/${POSTGRES_DB:-miplante}?schema=public
+      OP_CLIENT_WALLET_ADDRESS: ${OP_CLIENT_WALLET_ADDRESS:-https://ilp.interledger-test.dev/tienda-billeticos}
+      OP_ALLOWED_WALLET_HOSTS: ${OP_ALLOWED_WALLET_HOSTS:-ilp.interledger-test.dev}
+      # The developer key is never baked into the image; Compose mounts it read-only.
+      OP_PRIVATE_KEY_PATH: /run/secrets/op_private_key
+    secrets:
+      - op_private_key
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/public:/app/public
+      - ./backend/prisma:/app/prisma
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      # Development: `ng serve` with live reload over the bind-mounted sources; the final stage of
+      # the Dockerfile is the nginx production image.
+      target: dev
+    container_name: miplante-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      # proxy.conf.mjs sends the API and the till pages here.
+      BACKEND_INTERNAL_URL: http://backend:3000
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+
+volumes:
+  miplante_pgdata:
+
+secrets:
+  # Download it from the test wallet (Settings → Developer Keys) into the repository root.
+  op_private_key:
+    file: ./private.key

@@ -1,0 +1,157 @@
+// MiPlante persistence (ADR 0010). Money is integer minor units (BIGINT); the asset lives next to it.
+// Open Payments amounts that can be in another currency (quotes) and secrets are kept as JSONB.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Merchant {
+  id         String   @id @db.Uuid
+  name       String
+  wallet     String
+  assetCode  String   @map("asset_code")
+  assetScale Int      @map("asset_scale")
+  dailyCap   BigInt   @map("daily_cap")
+  mandateId  String   @unique @map("mandate_id") @db.Uuid
+  createdAt  DateTime @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
+
+  mandate Mandate @relation(fields: [mandateId], references: [id])
+  rules   Rule[]
+  sales   Sale[]
+
+  @@map("merchants")
+}
+
+/// Applied in `position` order, which is also their priority when the daily cap runs out.
+model Rule {
+  merchantId  String  @map("merchant_id") @db.Uuid
+  id          String  @db.Uuid
+  position    Int
+  label       String
+  kind        String
+  destination String
+  shareBps    Int     @map("share_bps")
+  /// Debt rules only: what is still owed.
+  outstanding BigInt?
+  repaid      BigInt  @default(0)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@id([merchantId, id])
+  @@unique([merchantId, position])
+  @@map("rules")
+}
+
+model Sale {
+  id               String    @id @db.Uuid
+  merchantId       String    @map("merchant_id") @db.Uuid
+  amount           BigInt
+  assetCode        String    @map("asset_code")
+  assetScale       Int       @map("asset_scale")
+  description      String?
+  status           String
+  customer         String?
+  paymentId        String?   @map("payment_id") @db.Uuid
+  error            String?
+  /// pending → running → done | skipped; moved to running atomically before any money moves.
+  settlementStatus String    @map("settlement_status")
+  settlementReason String?   @map("settlement_reason")
+  keptAmount       BigInt?   @map("kept_amount")
+  settledAt        DateTime? @map("settled_at") @db.Timestamptz(3)
+  paidAt           DateTime? @map("paid_at") @db.Timestamptz(3)
+  createdAt        DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  merchant Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payment  Payment?         @relation(fields: [paymentId], references: [id])
+  items    SettlementItem[]
+
+  @@index([merchantId, createdAt(sort: Desc)])
+  @@index([createdAt])
+  @@map("sales")
+}
+
+/// One rule's share of a sale, in the sale's asset.
+model SettlementItem {
+  saleId      String  @map("sale_id") @db.Uuid
+  position    Int
+  ruleId      String  @map("rule_id") @db.Uuid
+  label       String
+  kind        String
+  destination String
+  amount      BigInt
+  status      String
+  capped      Boolean
+  paymentId   String? @map("payment_id") @db.Uuid
+  error       String?
+
+  sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@id([saleId, position])
+  @@map("settlement_items")
+}
+
+model Mandate {
+  id           String   @id @db.Uuid
+  status       String
+  description  String?
+  returnTo     String?  @map("return_to")
+  sender       String
+  maxAmount    Json     @map("max_amount")
+  interval     String?
+  error        String?
+  createdAt    DateTime @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @map("updated_at") @db.Timestamptz(3)
+  /// Secrets: never returned by the API.
+  interaction  Json?
+  token        Json?
+  continuation Json?
+
+  merchant Merchant?
+  payments Payment[]
+
+  @@map("mandates")
+}
+
+model Payment {
+  id                 String    @id @db.Uuid
+  kind               String
+  status             String
+  description        String?
+  returnTo           String?   @map("return_to")
+  sender             String
+  receiver           String
+  mandateId          String?   @map("mandate_id") @db.Uuid
+  incomingPaymentUrl String    @map("incoming_payment_url")
+  quoteId            String?   @map("quote_id")
+  /// Kept verbatim as the wallet returned it.
+  quoteExpiresAt     String?   @map("quote_expires_at")
+  debitAmount        Json?     @map("debit_amount")
+  receiveAmount      Json?     @map("receive_amount")
+  receivedAmount     Json?     @map("received_amount")
+  outgoingPaymentUrl String?   @map("outgoing_payment_url")
+  authorizedAt       DateTime? @map("authorized_at") @db.Timestamptz(3)
+  error              String?
+  createdAt          DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @map("updated_at") @db.Timestamptz(3)
+  /// Secrets: never returned by the API.
+  interaction        Json?
+  incomingToken      String?   @map("incoming_token")
+  outgoingToken      String?   @map("outgoing_token")
+
+  mandate         Mandate?         @relation(fields: [mandateId], references: [id])
+  sales           Sale[]
+  settlementItems SettlementItem[]
+
+  @@index([mandateId, createdAt(sort: Desc)])
+  @@map("payments")
+}

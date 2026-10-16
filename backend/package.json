@@ -1,0 +1,41 @@
+{
+  "name": "miplante-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MiPlante Backend — Open Payments Hackathon by Interledger, Ruta N Medellín 2026",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "postinstall": "prisma generate",
+    "check:wallet": "tsx scripts/check-wallet.ts",
+    "demo:merchant": "tsx scripts/demo-merchant.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@interledger/open-payments": "7.4.0",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "express": "5.3.0",
+    "pg": "8.23.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "26.6.5",
+    "@types/pg": "8.23.1",
+    "@vitest/coverage-v8": "5.0.5",
+    "prisma": "7.10.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

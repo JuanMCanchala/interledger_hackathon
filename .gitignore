@@ -1,2 +1,23 @@
 # Prompt log: kept local during the hackathon, uploaded before final submission
 prompts/
+
+# Dependencies & Build artifacts
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+frontend/.next/
+.next/
+
+# Secrets: the repo is public, never commit keys or env files
+.env
+.env.*
+*.key
+*.pem
+
+# Generated Prisma client (npm install runs prisma generate)
+src/generated/
+backend/src/generated/
+
+# Local data from the old JSON store (holds access tokens)
+data/
+

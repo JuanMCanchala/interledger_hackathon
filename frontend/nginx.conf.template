@@ -1,0 +1,42 @@
+# Production server for the Angular landing (the official nginx image renders this template with
+# envsubst at start, so PORT and BACKEND_INTERNAL_URL are read at runtime, not at build time).
+# Everything that is not the landing is proxied to the backend; keep the list in sync with
+# proxy.conf.mjs, which does the same for `ng serve`.
+
+server {
+    listen ${PORT};
+    root /usr/share/nginx/html;
+    server_tokens off;
+
+    # Not in nginx's default MIME types; browsers want it to install the PWA.
+    types {
+        application/manifest+json webmanifest;
+    }
+    include /etc/nginx/mime.types;
+
+    location ^~ /api/ {
+        proxy_pass ${BACKEND_INTERNAL_URL};
+        include /etc/nginx/miplante-proxy.conf;
+    }
+
+    location ~ ^/(js/|onboard\.html$|merchant\.html$|pay\.html$|sandbox\.html$|styles\.css$|app\.js$|favicon\.svg$) {
+        proxy_pass ${BACKEND_INTERNAL_URL};
+        include /etc/nginx/miplante-proxy.conf;
+    }
+
+    # The service worker and its manifest must always be fresh, or a deploy never reaches phones.
+    location ~ ^/(ngsw-worker\.js|ngsw\.json|safety-worker\.js|worker-basic\.min\.js|index\.html)$ {
+        add_header Cache-Control "no-cache";
+        try_files $uri =404;
+    }
+
+    # Hashed bundles never change.
+    location ~* \.(?:js|css)$ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

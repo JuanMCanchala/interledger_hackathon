@@ -1,0 +1,8 @@
+# Host-built artifacts must not overwrite the image's own install and build
+node_modules
+dist
+.angular
+.env
+.env.*
+*.key
+*.pem

@@ -13,16 +13,20 @@ import { Logo } from '../../../../shared/brand/logo';
         <app-doodle class="closing-doodle" name="ahorro" />
         <h2 id="closing-title">Echada pa’ lante, como tú</h2>
         <p class="lead">
-          MiPlante está creciendo. Muy pronto vas a poder usarla en tu negocio, con el celular que ya
-          tienes.
+          Registra tu negocio con la billetera y el celular que ya tienes. Autorizas una sola vez y
+          desde la próxima venta todo se reparte solo.
         </p>
-        <a class="button" href="#caja">Volver a probar la caja</a>
+        <div class="actions">
+          <a class="button" href="/onboard.html">Registrar mi negocio</a>
+          <a class="button button-ghost" href="/merchant.html">Abrir mi caja</a>
+        </div>
       </div>
     </section>
     <footer class="footer">
       <div class="wrap footer-inner">
         <app-logo class="footer-logo" />
         <p>Hecho en Medellín para el Open Payments Hackathon 2026.</p>
+        <a class="footer-link" href="/sandbox.html">Sandbox para desarrolladores</a>
       </div>
     </footer>
   `,

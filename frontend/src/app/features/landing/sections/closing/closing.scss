@@ -14,6 +14,10 @@
   display: grid;
   justify-items: center;
   gap: 1.5rem;
+
+  .actions {
+    justify-content: center;
+  }
 }
 
 .closing-doodle {
@@ -34,6 +38,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.footer-link {
+  color: inherit;
+  opacity: 0.8;
+
+  &:hover {
+    opacity: 1;
+  }
 }
 
 .footer-logo {

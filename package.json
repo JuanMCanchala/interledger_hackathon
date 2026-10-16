@@ -1,0 +1,26 @@
+{
+  "name": "interledger-hackathon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open Payments Hackathon by Interledger, Ruta N Medellín 2026",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "npm --prefix backend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend start",
+    "start": "npm --prefix backend run start",
+    "check:wallet": "npm --prefix backend run check:wallet",
+    "demo:merchant": "npm --prefix backend run demo:merchant",
+    "typecheck": "npm --prefix backend run typecheck",
+    "test": "npm --prefix backend test",
+    "test:watch": "npm --prefix backend run test:watch",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "db:up": "docker compose up -d db",
+    "db:migrate": "npm --prefix backend run db:migrate",
+    "db:deploy": "npm --prefix backend run db:deploy",
+    "db:studio": "npm --prefix backend run db:studio"
+  }
+}
