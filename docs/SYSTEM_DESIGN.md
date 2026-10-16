@@ -45,16 +45,16 @@ flowchart LR
 
   subgraph MiPlante["🐳 Docker Desktop · docker-compose.yml (All 3 Services Containerized)"]
     subgraph Front["Container 1: Frontend (:3001)"]
-      frontend["Next.js (App Router)"]
+      frontend["Angular PWA landing<br/>+ proxy (nginx / ng serve)"]
     end
     subgraph Back["Container 2: Backend (:3000)"]
-      backend["NestJS API + @interledger/open-payments"]
-      prisma["Prisma ORM (PrismaService)"]
+      backend["Express API + till pages<br/>+ @interledger/open-payments"]
+      prisma["Prisma ORM (PrismaStore)"]
     end
     subgraph DockerDB["Container 3: Database (:5432)"]
       db[("PostgreSQL 16 Container<br/>Persistent Volume")]
     end
-    frontend -- "REST / JSON" --> backend
+    frontend -- "proxies /api and the pages<br/>(same domain)" --> backend
     backend --> prisma
     prisma -- "TCP :5432" --> db
   end
@@ -81,20 +81,25 @@ and tracks Open Payments resources with grants the wallet owners approved.
 
 ```mermaid
 flowchart TB
-  subgraph NextJS["1. Frontend Layer (Next.js)"]
+  subgraph Web["1. Frontend (Angular PWA, frontend/)"]
+    landing["/ · Landing (GSAP, brand system)"]
+    proxy["Proxy · nginx in production, ng serve in development"]
+  end
+
+  subgraph Pages["Merchant and customer pages (backend/public)"]
     ui_onboard["/onboard · Registro de Comercio y Reglas"]
-    ui_merchant["/merchant · Caja Registradora (POS) y Dashboard"]
+    ui_merchant["/merchant · Caja Registradora (POS), Dashboard y Repartos"]
     ui_pay["/pay · Checkout QR del Cliente (COP/USD)"]
     ui_sandbox["/sandbox · Inspector de Flujos Open Payments"]
   end
 
-  subgraph NestJS["2. Backend Layer (NestJS + Prisma ORM)"]
-    controllers["HTTP Controllers + Validation Pipes<br/>MerchantsController · SalesController · CallbacksController"]
-    merchants["MerchantsModule & SalesModule<br/>MerchantService · SalesService · SettlementSweeper"]
-    domain["Domain Module (Pure TypeScript)<br/>AllocationEngine (BigInt) · Bogotá Calendar"]
-    flows["OpenPaymentsModule · FlowsService<br/>One-off Payments · Daily-Cap Mandates · Split Charges"]
-    ops["OpenPaymentsModule · OperationsService<br/>Wallet Discovery · Grants · Quotes · Incoming/Outgoing · GNAP Hash"]
-    prisma["PrismaService (Prisma ORM)<br/>Transactional Repositories & Row Locks ($transaction)"]
+  subgraph Api["2. Backend (Express + Prisma ORM, backend/)"]
+    controllers["Express routes + zod validation<br/>merchants · sales · payments · mandates · callbacks"]
+    merchants["MerchantService · SalesService · DashboardService<br/>settlement sweeper"]
+    domain["Domain (pure TypeScript)<br/>planAllocations (BigInt) · Bogotá calendar"]
+    flows["PaymentFlows<br/>one-off payments · daily-cap mandates · split charges"]
+    ops["OpenPaymentsOperations<br/>wallet discovery · grants · quotes · incoming/outgoing · GNAP hash"]
+    prisma["PrismaStore (Store port)<br/>claimSettlement · transitionSale · recordRepayment"]
   end
 
   subgraph ExternalSDK["Interledger SDK"]
@@ -105,7 +110,9 @@ flowchart TB
     postgres[("PostgreSQL 16 Container (docker-compose)<br/>merchants · rules · sales · settlement_items · mandates · payments")]
   end
 
-  NextJS --> controllers
+  proxy --> controllers
+  proxy --> Pages
+  Pages -- "fetch /api" --> controllers
   controllers --> merchants
   controllers --> flows
   merchants --> domain
@@ -119,11 +126,13 @@ flowchart TB
 
 | Tier | Layer / Module | Technology | Responsibility |
 | :--- | :--- | :--- | :--- |
-| **1. Frontend** | Web Client | **Next.js** (React, App Router, TypeScript) | Mobile-first Spanish UI for merchant onboarding, POS till, QR customer checkout, and real-time split visualization. |
-| **2. Backend** | API & Controllers | **NestJS** Controllers & Pipes | REST endpoints, DTO validation, error mapping, and GNAP interactive consent callbacks (`/callbacks`). |
-| **2. Backend** | Application & Domain | **NestJS** Services + Pure `BigInt` | Use cases: merchant onboarding, sale creation, pure basis-point allocation (`planAllocations`), idempotent settlement orchestration, and background sweeper. |
-| **2. Backend** | Open Payments Adapter | **NestJS** + `@interledger/open-payments` | Wallet discovery, interactive/non-interactive GNAP grants, quotes, incoming/outgoing payments, SHA-256 interaction hash verification, and token rotation. |
-| **2. Backend** | Data Access (ORM) | **Prisma ORM** (`PrismaService`) | Type-safe schema, migrations, and atomic `$transaction` locks to guarantee exactly-once sale settlement. |
+| **1. Frontend** | Landing | **Angular** PWA + **GSAP** | The public landing and the brand's design system (colors, type, doodles, paper texture). |
+| **1. Frontend** | Proxy | **nginx** (production) / `ng serve` (development) | Puts the backend under the same domain: `/api/*`, the consent callbacks and the merchant and customer pages. |
+| **2. Backend** | Pages | Plain HTML + ES modules (`backend/public`) | Mobile-first Spanish UI for onboarding, the till and dashboard (with split editing), the QR checkout and the sandbox. |
+| **2. Backend** | API | **Express** + **zod** | REST endpoints, validation, error mapping and the GNAP interactive consent callbacks. |
+| **2. Backend** | Application & Domain | TypeScript services + pure `BigInt` | Onboarding, split rules, sales, basis-point allocation (`planAllocations`), exactly-once settlement and the background sweeper. |
+| **2. Backend** | Open Payments Adapter | `@interledger/open-payments` | Wallet discovery, interactive and non-interactive GNAP grants, quotes, incoming and outgoing payments, interaction hash verification and token rotation. |
+| **2. Backend** | Data Access (ORM) | **Prisma ORM** (`PrismaStore`) | Typed schema, migrations, and atomic conditional updates that settle each sale exactly once (ADR 0010). |
 | **3. Database** | Relational Storage | **PostgreSQL 16 (Docker)** | Containerized PostgreSQL instance orchestrated via `docker-compose.yml` storing `Merchant`, `Rule`, `Sale`, `SettlementItem`, `Mandate`, and `Payment` entities. |
 
 ## 5. Data model

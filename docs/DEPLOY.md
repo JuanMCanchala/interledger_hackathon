@@ -54,8 +54,8 @@ railway variables --service frontend --set "BACKEND_INTERNAL_URL=<BACKEND_URL>"
 cd frontend && railway up --service frontend --detach
 ```
 
-`BACKEND_INTERNAL_URL` is read when Next.js builds (the rewrites are compiled in), so redeploy the
-frontend whenever the backend URL changes. After creating the frontend domain, set it as
+The frontend image is nginx serving the Angular build; it reads `BACKEND_INTERNAL_URL` (and Railway's
+`PORT`) when the container starts, so a new backend URL only needs a restart, not a rebuild. After creating the frontend domain, set it as
 `PUBLIC_BASE_URL` and `FRONTEND_URL` on the backend; Railway redeploys it.
 
 ## 4. Check

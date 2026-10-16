@@ -5,6 +5,9 @@ Date: 2026-10-16
 ## Status
 
 Accepted (supersedes [ADR 0003](0003-modular-monolith-in-node-and-typescript.md), [ADR 0007](0007-json-file-persistence-for-the-hackathon.md), and [ADR 0008](0008-web-client-served-by-the-api.md) for the target architecture).
+Its frontend and backend frameworks are superseded by [ADR 0011](0011-angular-landing-behind-one-domain-with-an-express-backend.md):
+the frontend is Angular and the backend stayed on Express. The three containers, Prisma and
+PostgreSQL stand.
 
 ## Context
 

@@ -21,7 +21,8 @@ Living document: we update it as the project evolves during the Open Payments Ha
 
 ### 3. Application code
 
-- Not started yet. Each file or feature will be listed here with how AI was used.
+- `frontend/`: Claude Code scaffolded the Angular + GSAP PWA and wrote the landing page from the team's brief and brand kit. It also extracted the vector logo and the doodles from `Recursos Front/`.
+- Integration of the landing (ADR 0011): Claude Code replaced the Next.js scaffold with the Angular app, wrote the nginx and `ng serve` proxies to the backend, kept the service worker away from the wallet callbacks, and linked the landing to the real app.
 
 ## What We Did Ourselves
 

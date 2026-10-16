@@ -14,7 +14,8 @@ earlier one instead of editing it.
 | [0006](0006-settle-sales-by-polling-idempotently.md)          | Settle sales by polling, idempotently                       | Accepted |
 | [0007](0007-json-file-persistence-for-the-hackathon.md)       | JSON file persistence for the hackathon                     | Superseded by 0010 |
 | [0008](0008-web-client-served-by-the-api.md)                  | Mobile-first web client served by the API                   | Superseded by 0009 |
-| [0009](0009-adopt-nextjs-nestjs-prisma-and-postgresql-stack.md) | Adopt Next.js, NestJS, Prisma ORM, and PostgreSQL stack   | Accepted |
+| [0009](0009-adopt-nextjs-nestjs-prisma-and-postgresql-stack.md) | Adopt Next.js, NestJS, Prisma ORM, and PostgreSQL stack   | Partly superseded by 0011 |
 | [0010](0010-postgresql-through-prisma-with-atomic-transitions.md) | PostgreSQL through Prisma, with atomic state transitions | Accepted |
+| [0011](0011-angular-landing-behind-one-domain-with-an-express-backend.md) | Angular landing behind one domain, with an Express backend | Accepted |
 
 To add one, copy the structure of an existing ADR, take the next number and add it to this table.

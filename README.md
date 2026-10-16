@@ -66,38 +66,52 @@ Integration details: [`docs/OPEN_PAYMENTS.md`](docs/OPEN_PAYMENTS.md).
 
 ```mermaid
 flowchart LR
-  subgraph Docker["🐳 Docker Desktop · docker-compose.yml"]
-    subgraph Front["Container 1 · Frontend (Next.js :3001)"]
-      web["Next.js App Router<br/>POS Till · QR Checkout · Onboarding · Live Dashboard"]
+  subgraph Docker["🐳 docker-compose.yml · Railway in production"]
+    subgraph Front["Container 1 · Frontend (:3001)"]
+      web["Angular PWA + GSAP<br/>Landing and brand system"]
+      proxy["nginx in production · ng serve in development<br/>proxies /api and the till pages"]
     end
 
-    subgraph Back["Container 2 · Backend (NestJS + Prisma :3000)"]
-      controllers["NestJS Controllers<br/>REST API & GNAP Callbacks"]
-      services["Application Services<br/>MerchantsModule · SalesModule · SettlementSweeper"]
-      domain["Domain Layer<br/>Allocation Engine (Pure BigInt)"]
-      op["OpenPaymentsModule<br/>@interledger/open-payments SDK"]
-      prisma["Prisma ORM<br/>PrismaService & $transaction Locks"]
+    subgraph Back["Container 2 · Backend (Express + Prisma :3000)"]
+      pages["Till · Onboarding · QR checkout · Sandbox<br/>backend/public, no build step"]
+      routes["Express routes + zod<br/>REST API and GNAP callbacks"]
+      services["MerchantService · SalesService · sweeper"]
+      domain["Allocation engine (pure BigInt)"]
+      op["Open Payments adapter<br/>@interledger/open-payments SDK"]
+      store["PrismaStore<br/>atomic conditional UPDATEs"]
     end
 
-    subgraph DB["Container 3 · Database (PostgreSQL :5432)"]
-      pg[("PostgreSQL 16 Container<br/>Merchants · Rules · Sales · Mandates · Payments")]
+    subgraph DB["Container 3 · Database (PostgreSQL 16)"]
+      pg[("Merchants · Rules · Sales · Mandates · Payments")]
     end
   end
 
   subgraph ILP["Interledger Network (Open Payments)"]
-    wallets[("6 Official Wallets<br/>Tienda · Ahorro · Proveedor · Microcrédito · Clientes (COP/USD)")]
+    wallets[("6 team wallets<br/>Tienda · Ahorro · Proveedor · Microcrédito · Clientes (COP/USD)")]
   end
 
-  web -- "HTTP / JSON" --> controllers
-  controllers --> services
+  web --- proxy
+  proxy -- "same domain" --> routes
+  proxy -- "same domain" --> pages
+  routes --> services
   services --> domain
   services --> op
-  services --> prisma
-  prisma -- "TCP :5432" --> pg
-  op -- "GNAP Grants, Quotes &<br/>HTTP Message Signatures" --> wallets
+  services --> store
+  store -- "TCP :5432" --> pg
+  op -- "GNAP grants, quotes and<br/>HTTP message signatures" --> wallets
 ```
 
-All three tiers run inside **Docker Desktop** (`docker-compose.yml`): **Container 1: Frontend** (`Next.js`), **Container 2: Backend** (`NestJS` + `Prisma ORM` + `@interledger/open-payments`), and **Container 3: Database** (`PostgreSQL 16`). Key architecture decisions are recorded as ADRs:
+Three containers, the same in `docker-compose.yml` and on Railway:
+
+- **Frontend:** the Angular landing (PWA, GSAP, the brand's design system). It also puts the backend
+  under the same domain: nginx in production and `ng serve` in development proxy `/api/*` and the
+  till, onboarding, checkout and sandbox pages. People, QR codes and the wallets' consent callbacks
+  only ever use the frontend URL.
+- **Backend:** Express, zod, Prisma and `@interledger/open-payments`. It serves the API and the
+  merchant and customer pages.
+- **Database:** PostgreSQL 16.
+
+Key architecture decisions are recorded as ADRs:
 
 - [Build the Open Payments layer first](docs/adr/0002-build-the-open-payments-layer-first.md):
   the mandatory flow worked before the idea was chosen.
@@ -107,7 +121,8 @@ All three tiers run inside **Docker Desktop** (`docker-compose.yml`): **Containe
 - [Integer money and merchant-favorable rounding](docs/adr/0005-integer-money-and-merchant-favorable-rounding.md).
 - [Settle each sale exactly once, by polling](docs/adr/0006-settle-sales-by-polling-idempotently.md):
   Open Payments has no webhooks for client apps.
-- [Target Stack: Next.js, NestJS, Prisma ORM and PostgreSQL](docs/adr/0009-adopt-nextjs-nestjs-prisma-and-postgresql-stack.md).
+- [Containers, Prisma and PostgreSQL](docs/adr/0009-adopt-nextjs-nestjs-prisma-and-postgresql-stack.md),
+  refined by [an Angular landing behind one domain and an Express backend](docs/adr/0011-angular-landing-behind-one-domain-with-an-express-backend.md).
 - [PostgreSQL through Prisma, with atomic state transitions](docs/adr/0010-postgresql-through-prisma-with-atomic-transitions.md):
   a sale is split exactly once, even with concurrent polls or several instances.
 
@@ -160,7 +175,7 @@ backend/
   public/          Spanish, mobile-first web client (no build step)
   tests/           Vitest: domain, flows against an Open Payments fake, HTTP, PostgreSQL
   scripts/         check-wallet diagnostic, demo-merchant setup
-frontend/          Next.js App Router (landing, work in progress)
+frontend/          Angular PWA landing + the proxy (nginx / ng serve) to the backend
 docs/              problem, ideation, product brief, ADRs, system design, API, demo
 ```
 
