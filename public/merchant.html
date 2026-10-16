@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mi caja · MiPlante</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+      integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+      async
+    ></script>
+    <script type="module" src="/js/merchant.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <header class="site-header">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="22"
+              height="22"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 21v-9" />
+              <path d="M12 12c0-4 3-7 8-7 0 4-3 7-8 7z" />
+              <path d="M12 14c0-3-2.5-5.5-7-5.5 0 3 2.5 5.5 7 5.5z" />
+            </svg>
+          </span>
+          MiPlante
+        </a>
+        <span id="merchant-status"></span>
+      </header>
+
+      <main class="stack">
+        <section class="card stack" id="missing" hidden>
+          <h1 class="h1-sm">No encontramos tu caja</h1>
+          <p class="muted" id="missing-text">
+            Falta el ID de tu negocio en el enlace.
+          </p>
+          <div class="row">
+            <a class="btn btn-primary" href="/onboard.html"
+              >Registrar mi negocio</a
+            >
+            <a class="btn btn-secondary" href="/#abrir-caja">Abrir otra caja</a>
+          </div>
+        </section>
+
+        <p id="load-error" class="banner banner-bad" role="alert" hidden></p>
+
+        <div id="app" class="stack" hidden>
+          <div class="row between">
+            <div class="stack-sm" style="min-width: 0">
+              <p class="eyebrow">Mi caja</p>
+              <h1 class="h1-sm" id="merchant-name"></h1>
+              <p class="mono muted" id="merchant-wallet"></p>
+            </div>
+          </div>
+
+          <div id="status-banner" class="banner" role="status" hidden></div>
+
+          <div class="layout-caja">
+            <section class="card stack sticky" aria-labelledby="register-title">
+              <h2 id="register-title">Nueva venta</h2>
+
+              <form id="sale-form" class="stack">
+                <label class="field">
+                  <span>Monto</span>
+                  <input
+                    id="sale-amount"
+                    class="input-xl"
+                    required
+                    inputmode="decimal"
+                    autocomplete="off"
+                    placeholder="10.000"
+                  />
+                </label>
+                <label class="field">
+                  <span>Descripción (opcional)</span>
+                  <input
+                    id="sale-description"
+                    maxlength="120"
+                    autocomplete="off"
+                    placeholder="Arroz, huevos y gaseosa"
+                  />
+                </label>
+                <p
+                  id="sale-form-error"
+                  class="banner banner-bad"
+                  role="alert"
+                  hidden
+                ></p>
+                <button
+                  class="btn btn-primary btn-lg btn-block"
+                  type="submit"
+                  id="sale-submit"
+                >
+                  Cobrar
+                </button>
+                <p class="hint" id="sale-disabled-hint" hidden>
+                  Para cobrar, primero autoriza tu tope diario en la wallet.
+                </p>
+              </form>
+
+              <div id="sale-panel" class="stack" hidden aria-live="polite">
+                <div class="row between">
+                  <div style="min-width: 0">
+                    <p class="muted small" id="sale-caption">Venta</p>
+                    <p class="amount-xl" id="sale-amount-view"></p>
+                  </div>
+                  <span id="sale-status"></span>
+                </div>
+                <p class="muted small" id="sale-description-view" hidden></p>
+                <ol
+                  class="steps"
+                  id="sale-steps"
+                  aria-label="Progreso de la venta"
+                ></ol>
+
+                <div id="qr-block" class="stack">
+                  <div class="qr-box">
+                    <div id="qr" aria-hidden="true"></div>
+                    <p class="small">Escanea para pagar desde tu wallet</p>
+                  </div>
+                  <div class="copy-row">
+                    <input id="pay-url" readonly aria-label="Enlace de pago" />
+                    <button
+                      class="btn btn-secondary"
+                      id="copy-url"
+                      type="button"
+                    >
+                      Copiar
+                    </button>
+                  </div>
+                </div>
+
+                <p
+                  id="sale-error"
+                  class="banner banner-bad"
+                  role="alert"
+                  hidden
+                ></p>
+
+                <div id="split-block" class="stack-sm" hidden>
+                  <h3>Así se repartió esta venta</h3>
+                  <ul class="split" id="sale-split"></ul>
+                  <p class="hint" id="settlement-note" hidden></p>
+                </div>
+
+                <button
+                  class="btn btn-secondary btn-block"
+                  id="new-sale"
+                  type="button"
+                >
+                  Nueva venta
+                </button>
+              </div>
+            </section>
+
+            <div class="stack">
+              <section class="card stack" aria-labelledby="today-title">
+                <div class="row between">
+                  <h2 id="today-title">Hoy</h2>
+                  <span class="muted small" id="today-date"></span>
+                </div>
+                <div class="stats">
+                  <div class="stat">
+                    <p class="stat-label">Ventas</p>
+                    <p class="stat-value" id="today-count">0</p>
+                  </div>
+                  <div class="stat">
+                    <p class="stat-label">Vendido</p>
+                    <p class="stat-value" id="today-gross">—</p>
+                  </div>
+                  <div class="stat">
+                    <p class="stat-label">Te quedaste</p>
+                    <p class="stat-value" id="today-kept">—</p>
+                  </div>
+                  <div class="stat">
+                    <p class="stat-label">Repartido</p>
+                    <p class="stat-value" id="today-allocated">—</p>
+                  </div>
+                </div>
+                <ul class="list" id="today-by-rule"></ul>
+              </section>
+
+              <section class="card stack" aria-labelledby="cap-title">
+                <div class="row between">
+                  <h2 id="cap-title">Tope diario</h2>
+                  <span class="muted small" id="daily-cap"></span>
+                </div>
+                <p>
+                  <span class="amount-lg" id="spent-today">—</span>
+                  <span class="muted small">descontado hoy</span>
+                </p>
+                <div class="progress is-gold"><span id="cap-bar"></span></div>
+                <p class="hint">
+                  Nunca se descuenta más de este tope en un día. Lo aprobaste en
+                  tu wallet.
+                </p>
+              </section>
+
+              <section class="card stack" aria-labelledby="rules-title">
+                <h2 id="rules-title">Reglas de reparto</h2>
+                <ul class="list" id="rules"></ul>
+              </section>
+
+              <section class="card stack" aria-labelledby="history-title">
+                <div class="stack-sm">
+                  <h2 id="history-title">Pasaporte de ingresos</h2>
+                  <p class="muted small">
+                    Tus ventas de los últimos 7 días, listas para mostrar a un
+                    banco o a un arrendador.
+                  </p>
+                </div>
+                <ul class="bars" id="history"></ul>
+              </section>
+
+              <section class="card stack" aria-labelledby="sales-title">
+                <h2 id="sales-title">Últimas ventas</h2>
+                <ul class="list" id="sales"></ul>
+                <p class="muted small" id="no-sales">Todavía no hay ventas.</p>
+              </section>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="site-footer">
+        <span>Pagos con Open Payments sobre la red Interledger.</span>
+        <a href="/sandbox.html">Sandbox de Open Payments</a>
+      </footer>
+    </div>
+  </body>
+</html>
