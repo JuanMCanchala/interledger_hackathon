@@ -34,58 +34,97 @@ Product context: [`product/PRODUCT_BRIEF.md`](product/PRODUCT_BRIEF.md). Decisio
 | N5  | **Security.** Tokens and nonces never leave the server; callbacks are verified; only allow-listed wallet hosts are called; inputs are validated. |
 | N6  | **Demo reliability.** Runs on one laptop with `npm run dev`; state survives restarts.                                                            |
 
-## 3. Context
+## 3. Context & Technology Architecture (All-in-Docker)
+
+![MiPlante Docker Architecture](architecture-docker.svg)
 
 ```mermaid
 flowchart LR
-  customer([Customer<br/>phone browser])
-  merchant([Merchant<br/>till and dashboard])
-  subgraph MiPlante["MiPlante (single Node.js service)"]
-    api[HTTP API + web client]
+  customer(["Customer<br/>Phone Browser (COP / USD)"])
+  merchant(["Merchant<br/>Till & Dashboard"])
+
+  subgraph MiPlante["🐳 Docker Desktop · docker-compose.yml (All 3 Services Containerized)"]
+    subgraph Front["Container 1: Frontend (:3001)"]
+      frontend["Next.js (App Router)"]
+    end
+    subgraph Back["Container 2: Backend (:3000)"]
+      backend["NestJS API + @interledger/open-payments"]
+      prisma["Prisma ORM (PrismaService)"]
+    end
+    subgraph DockerDB["Container 3: Database (:5432)"]
+      db[("PostgreSQL 16 Container<br/>Persistent Volume")]
+    end
+    frontend -- "REST / JSON" --> backend
+    backend --> prisma
+    prisma -- "TCP :5432" --> db
   end
-  subgraph Wallets["Wallet providers (Open Payments: auth + resource servers)"]
-    cw[(Customer wallet)]
-    mw[(Merchant wallet)]
-    dw[(Lender / supplier /<br/>savings wallets)]
+
+  subgraph Wallets["Interledger Open Payments Network (Auth + Resource Servers)"]
+    cw[("Customer Wallets<br/>$ilp.../cliente-one (COP)<br/>$ilp.../extranjero-billeticos (USD)")]
+    mw[("Merchant Main Wallet<br/>$ilp.../tienda-billeticos (COP)")]
+    dw[("Split Destination Wallets<br/>$ilp.../proveedor-billeticos<br/>$ilp.../microcredito<br/>$ilp.../ahorro-billeticos")]
   end
-  customer -- scans QR, pays --> api
-  merchant -- onboards, creates sales --> api
-  api -- grants, quotes, payments<br/>signed HTTP --> Wallets
-  customer -. approves payment .-> cw
-  merchant -. approves daily cap .-> mw
-  cw == ILP ==> mw
-  mw == ILP ==> dw
+
+  customer -- "scans QR, pays" --> frontend
+  merchant -- "onboards, creates sales" --> frontend
+  backend -- "GNAP grants, quotes, payments<br/>(HTTP Message Signatures)" --> Wallets
+  customer -. "approves payment" .-> cw
+  merchant -. "approves daily cap" .-> mw
+  cw == "ILP (COP / USD → COP)" ==> mw
+  mw == "ILP Auto-Split" ==> dw
 ```
 
 MiPlante never holds money. Funds move between wallets over Interledger, and MiPlante only creates
 and tracks Open Payments resources with grants the wallet owners approved.
 
-## 4. Components
+## 4. Components & Technology Stack (Front, Back & Docker DB)
 
 ```mermaid
 flowchart TB
-  web[public/: onboarding, till, checkout, sandbox] --> http
-  http[http/: Express routes + zod schemas] --> merchants
-  http --> flows
-  merchants[merchants/: MerchantService, SalesService, sweeper] --> domain
+  subgraph NextJS["1. Frontend Layer (Next.js)"]
+    ui_onboard["/onboard · Registro de Comercio y Reglas"]
+    ui_merchant["/merchant · Caja Registradora (POS) y Dashboard"]
+    ui_pay["/pay · Checkout QR del Cliente (COP/USD)"]
+    ui_sandbox["/sandbox · Inspector de Flujos Open Payments"]
+  end
+
+  subgraph NestJS["2. Backend Layer (NestJS + Prisma ORM)"]
+    controllers["HTTP Controllers + Validation Pipes<br/>MerchantsController · SalesController · CallbacksController"]
+    merchants["MerchantsModule & SalesModule<br/>MerchantService · SalesService · SettlementSweeper"]
+    domain["Domain Module (Pure TypeScript)<br/>AllocationEngine (BigInt) · Bogotá Calendar"]
+    flows["OpenPaymentsModule · FlowsService<br/>One-off Payments · Daily-Cap Mandates · Split Charges"]
+    ops["OpenPaymentsModule · OperationsService<br/>Wallet Discovery · Grants · Quotes · Incoming/Outgoing · GNAP Hash"]
+    prisma["PrismaService (Prisma ORM)<br/>Transactional Repositories & Row Locks ($transaction)"]
+  end
+
+  subgraph ExternalSDK["Interledger SDK"]
+    sdk[("@interledger/open-payments")]
+  end
+
+  subgraph Docker["3. Database Layer (Docker Desktop)"]
+    postgres[("PostgreSQL 16 Container (docker-compose)<br/>merchants · rules · sales · settlement_items · mandates · payments")]
+  end
+
+  NextJS --> controllers
+  controllers --> merchants
+  controllers --> flows
+  merchants --> domain
   merchants --> flows
-  merchants --> storage
-  domain[domain/: allocation engine, calendar] --> shared
-  flows[openPayments/flows: one-off payments, mandates, charges] --> ops
-  flows --> storage
-  ops[openPayments/operations: one call per Open Payments step] --> sdk[(@interledger/open-payments)]
-  storage[storage/: JSON store] --> shared[shared/: money, errors]
+  merchants --> prisma
+  flows --> ops
+  flows --> prisma
+  ops --> sdk
+  prisma -- "DATABASE_URL (:5432)" --> postgres
 ```
 
-| Module          | Responsibility                                                                                                                                  |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shared/`       | `Amount` math on BigInt minor units; application errors with HTTP status.                                                                       |
-| `domain/`       | Pure rules: `planAllocations` (who gets what from a sale), rule validation, Bogotá calendar days.                                               |
-| `merchants/`    | Use cases: onboarding, sales, settlement, dashboard, background sweeper.                                                                        |
-| `openPayments/` | The adapter: wallet discovery, grants, quotes, incoming/outgoing payments, hash verification, token rotation. It knows nothing about merchants. |
-| `storage/`      | `Store`: payments, mandates, merchants and sales, persisted to `data/store.json`.                                                               |
-| `http/`         | REST API, input validation, error mapping, consent callbacks.                                                                                   |
-| `public/`       | Spanish, mobile-first static pages that only use the public API.                                                                                |
+| Tier | Layer / Module | Technology | Responsibility |
+| :--- | :--- | :--- | :--- |
+| **1. Frontend** | Web Client | **Next.js** (React, App Router, TypeScript) | Mobile-first Spanish UI for merchant onboarding, POS till, QR customer checkout, and real-time split visualization. |
+| **2. Backend** | API & Controllers | **NestJS** Controllers & Pipes | REST endpoints, DTO validation, error mapping, and GNAP interactive consent callbacks (`/callbacks`). |
+| **2. Backend** | Application & Domain | **NestJS** Services + Pure `BigInt` | Use cases: merchant onboarding, sale creation, pure basis-point allocation (`planAllocations`), idempotent settlement orchestration, and background sweeper. |
+| **2. Backend** | Open Payments Adapter | **NestJS** + `@interledger/open-payments` | Wallet discovery, interactive/non-interactive GNAP grants, quotes, incoming/outgoing payments, SHA-256 interaction hash verification, and token rotation. |
+| **2. Backend** | Data Access (ORM) | **Prisma ORM** (`PrismaService`) | Type-safe schema, migrations, and atomic `$transaction` locks to guarantee exactly-once sale settlement. |
+| **3. Database** | Relational Storage | **PostgreSQL 16 (Docker)** | Containerized PostgreSQL instance orchestrated via `docker-compose.yml` storing `Merchant`, `Rule`, `Sale`, `SettlementItem`, `Mandate`, and `Payment` entities. |
 
 ## 5. Data model
 

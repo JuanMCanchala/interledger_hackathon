@@ -58,19 +58,44 @@ Details and sources: [`docs/product/PROBLEM.md`](docs/product/PROBLEM.md).
 
 Integration details: [`docs/OPEN_PAYMENTS.md`](docs/OPEN_PAYMENTS.md).
 
-## Architecture
+## Architecture & Technology Stack (100% Dockerized)
+
+![MiPlante Docker Architecture](docs/architecture-docker.svg)
 
 ```mermaid
 flowchart LR
-  web[Web client<br/>till · checkout · onboarding] --> http[HTTP API]
-  http --> app[Merchants and sales<br/>application services]
-  app --> domain[Allocation engine<br/>pure, BigInt]
-  app --> op[Open Payments adapter<br/>official JS SDK]
-  app --> store[(JSON store)]
-  op --> wallets[(Wallets over<br/>Interledger)]
+  subgraph Docker["🐳 Docker Desktop · docker-compose.yml"]
+    subgraph Front["Container 1 · Frontend (Next.js :3001)"]
+      web["Next.js App Router<br/>POS Till · QR Checkout · Onboarding · Live Dashboard"]
+    end
+
+    subgraph Back["Container 2 · Backend (NestJS + Prisma :3000)"]
+      controllers["NestJS Controllers<br/>REST API & GNAP Callbacks"]
+      services["Application Services<br/>MerchantsModule · SalesModule · SettlementSweeper"]
+      domain["Domain Layer<br/>Allocation Engine (Pure BigInt)"]
+      op["OpenPaymentsModule<br/>@interledger/open-payments SDK"]
+      prisma["Prisma ORM<br/>PrismaService & $transaction Locks"]
+    end
+
+    subgraph DB["Container 3 · Database (PostgreSQL :5432)"]
+      pg[("PostgreSQL 16 Container<br/>Merchants · Rules · Sales · Mandates · Payments")]
+    end
+  end
+
+  subgraph ILP["Interledger Network (Open Payments)"]
+    wallets[("6 Official Wallets<br/>Tienda · Ahorro · Proveedor · Microcrédito · Clientes (COP/USD)")]
+  end
+
+  web -- "HTTP / JSON" --> controllers
+  controllers --> services
+  services --> domain
+  services --> op
+  services --> prisma
+  prisma -- "TCP :5432" --> pg
+  op -- "GNAP Grants, Quotes &<br/>HTTP Message Signatures" --> wallets
 ```
 
-A modular monolith in Node.js and strict TypeScript. The key decisions are recorded as ADRs:
+All three tiers run inside **Docker Desktop** (`docker-compose.yml`): **Container 1: Frontend** (`Next.js`), **Container 2: Backend** (`NestJS` + `Prisma ORM` + `@interledger/open-payments`), and **Container 3: Database** (`PostgreSQL 16`). Key architecture decisions are recorded as ADRs:
 
 - [Build the Open Payments layer first](docs/adr/0002-build-the-open-payments-layer-first.md):
   the mandatory flow worked before the idea was chosen.
@@ -80,6 +105,7 @@ A modular monolith in Node.js and strict TypeScript. The key decisions are recor
 - [Integer money and merchant-favorable rounding](docs/adr/0005-integer-money-and-merchant-favorable-rounding.md).
 - [Settle each sale exactly once, by polling](docs/adr/0006-settle-sales-by-polling-idempotently.md):
   Open Payments has no webhooks for client apps.
+- [Target Stack: Next.js, NestJS, Prisma ORM and PostgreSQL](docs/adr/0009-adopt-nextjs-nestjs-prisma-and-postgresql-stack.md).
 
 Full design: [`docs/SYSTEM_DESIGN.md`](docs/SYSTEM_DESIGN.md) · All decisions:
 [`docs/adr/`](docs/adr/README.md).
