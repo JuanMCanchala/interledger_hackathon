@@ -16,7 +16,7 @@ ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 
 EXPOSE 3000
 
-# ./src is bind-mounted in development, which hides the client generated at build time:
-# generate it again, apply pending migrations, then start.
-CMD ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && npm run dev"]
+# Production: apply pending migrations, then serve. The platform's PORT is honored by the config.
+# docker-compose overrides this command for development (watch mode over bind-mounted sources).
+CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
 

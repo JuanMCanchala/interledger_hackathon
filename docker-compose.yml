@@ -23,6 +23,9 @@ services:
       dockerfile: Dockerfile
     container_name: miplante-backend
     restart: unless-stopped
+    # ./src is bind-mounted in development, which hides the client generated at build time:
+    # generate it again, apply pending migrations, then start in watch mode.
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run dev"
     depends_on:
       db:
         condition: service_healthy
