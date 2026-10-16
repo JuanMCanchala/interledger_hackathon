@@ -1,0 +1,101 @@
+import { describe, expect, it } from "vitest";
+import {
+  AmountError,
+  compareAmounts,
+  formatAmount,
+  fromMinorUnits,
+  toAmount,
+  toMinorUnits,
+} from "../src/openPayments/amounts.js";
+import { buildRepeatingInterval } from "../src/openPayments/interval.js";
+import {
+  normalizeWalletAddressUrl,
+} from "../src/openPayments/walletAddress.js";
+
+describe("amounts", () => {
+  it("converts decimals to minor units with the asset scale", () => {
+    expect(toMinorUnits("12.5", 2)).toBe("1250");
+    expect(toMinorUnits("50000", 2)).toBe("5000000");
+    expect(toMinorUnits("0.01", 2)).toBe("1");
+    expect(toMinorUnits("7", 0)).toBe("7");
+  });
+
+  it("keeps precision for very large amounts", () => {
+    expect(toMinorUnits("123456789012345678.99", 2)).toBe(
+      "12345678901234567899",
+    );
+  });
+
+  it("rejects invalid, zero or over-precise amounts", () => {
+    expect(() => toMinorUnits("abc", 2)).toThrow(AmountError);
+    expect(() => toMinorUnits("-5", 2)).toThrow(AmountError);
+    expect(() => toMinorUnits("0", 2)).toThrow("mayor que cero");
+    expect(() => toMinorUnits("1.234", 2)).toThrow("más de 2 decimales");
+  });
+
+  it("formats minor units back to decimals", () => {
+    expect(fromMinorUnits("1250", 2)).toBe("12.50");
+    expect(fromMinorUnits("5", 2)).toBe("0.05");
+    expect(fromMinorUnits("42", 0)).toBe("42");
+    expect(
+      formatAmount(toAmount("50000", { assetCode: "COP", assetScale: 2 })),
+    ).toBe("50000.00 COP");
+  });
+
+  it("compares amounts of the same asset only", () => {
+    const usd = (value: string) => ({ value, assetCode: "USD", assetScale: 2 });
+    expect(compareAmounts(usd("100"), usd("99"))).toBe(1);
+    expect(compareAmounts(usd("100"), usd("100"))).toBe(0);
+    expect(compareAmounts(usd("1"), usd("100"))).toBe(-1);
+    expect(() =>
+      compareAmounts(usd("1"), { value: "1", assetCode: "EUR", assetScale: 2 }),
+    ).toThrow();
+  });
+});
+
+describe("repeating interval", () => {
+  const start = new Date("2026-10-16T15:00:00.123Z");
+
+  it("builds open-ended and limited intervals without milliseconds", () => {
+    expect(buildRepeatingInterval("P1W", { start })).toBe(
+      "R/2026-10-16T15:00:00Z/P1W",
+    );
+    expect(buildRepeatingInterval("PT1M", { start, repetitions: 10 })).toBe(
+      "R10/2026-10-16T15:00:00Z/PT1M",
+    );
+  });
+
+  it("rejects invalid durations and repetitions", () => {
+    expect(() => buildRepeatingInterval("1 week", { start })).toThrow(
+      "Duración ISO 8601 inválida",
+    );
+    expect(() => buildRepeatingInterval("P", { start })).toThrow();
+    expect(() =>
+      buildRepeatingInterval("P1D", { start, repetitions: 0 }),
+    ).toThrow();
+  });
+});
+
+describe("wallet addresses", () => {
+  it("turns payment pointers into https URLs", () => {
+    expect(normalizeWalletAddressUrl("$ilp.interledger-test.dev/alice")).toBe(
+      "https://ilp.interledger-test.dev/alice",
+    );
+    expect(
+      normalizeWalletAddressUrl(" https://ilp.interledger-test.dev/alice/ "),
+    ).toBe("https://ilp.interledger-test.dev/alice");
+    expect(normalizeWalletAddressUrl("$example.com")).toBe(
+      "https://example.com/.well-known/pay",
+    );
+  });
+
+  it("rejects non-https URLs, queries and garbage", () => {
+    expect(() =>
+      normalizeWalletAddressUrl("http://ilp.interledger-test.dev/alice"),
+    ).toThrow("https");
+    expect(() =>
+      normalizeWalletAddressUrl("https://ilp.interledger-test.dev/alice?x=1"),
+    ).toThrow();
+    expect(() => normalizeWalletAddressUrl("alice")).toThrow("inválida");
+  });
+});
