@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id         String   @id
+  name       String
+  wallet     String
+  assetCode  String
+  assetScale Int
+  dailyCap   String
+  mandateId  String   @unique
+  status     String
+  createdAt  DateTime @default(now())
+  rules      Rule[]
+  sales      Sale[]
+
+  @@map("merchants")
+}
+
+model Rule {
+  id          String  @id
+  merchantId  String
+  label       String
+  kind        String
+  destination String
+  shareBps    Int
+  outstanding String?
+  repaid      String  @default("0")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@map("rules")
+}
+
+model Sale {
+  id               String           @id
+  merchantId       String
+  amount           String
+  assetCode        String
+  assetScale       Int
+  description      String?
+  status           String
+  paymentId        String?
+  customerWallet   String?
+  settlementStatus String           @default("pending")
+  settlementReason String?
+  keptAmount       String?
+  createdAt        DateTime         @default(now())
+  paidAt           DateTime?
+  settledAt        DateTime?
+  items            SettlementItem[]
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, createdAt(sort: Desc)])
+  @@map("sales")
+}
+
+model SettlementItem {
+  id          String  @id @default(cuid())
+  saleId      String
+  ruleId      String
+  label       String
+  kind        String
+  destination String
+  amount      String
+  status      String
+  capped      Boolean @default(false)
+  paymentId   String?
+  error       String?
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@map("settlement_items")
+}
+
+model Mandate {
+  id         String   @id
+  sender     String
+  assetCode  String
+  assetScale Int
+  maxAmount  String
+  interval   String
+  status     String
+  payload    Json
+  createdAt  DateTime @default(now())
+
+  @@map("mandates")
+}
+
+model Payment {
+  id        String   @id
+  mandateId String?
+  status    String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@index([mandateId])
+  @@map("payments")
+}
