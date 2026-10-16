@@ -100,8 +100,10 @@ function renderMerchant(m) {
   $("merchant-name").textContent = m.name;
   $("merchant-wallet").textContent = `Billetera: ${walletName(m.wallet)}`;
   $("merchant-status").replaceChildren(statusBadge(MERCHANT_STATUS, m.status));
-  if (m.status !== lastStatus) renderStatusBanner(m.status, m.wallet);
-  lastStatus = m.status;
+  // An active consent from before QR payments asks to be renewed once.
+  const bannerState = m.status === "active" && !m.qrPayments ? "no-qr" : m.status;
+  if (bannerState !== lastStatus) renderStatusBanner(bannerState, m.wallet);
+  lastStatus = bannerState;
   syncSaleForm();
 
   $("today-date").textContent = new Date().toLocaleDateString("es-CO", {
@@ -160,6 +162,10 @@ function renderStatusBanner(status, wallet) {
       "Cancelaste la autorización, así que tus ventas ya no se reparten solas.",
     ],
     failed: ["bad", "No pudimos activar tu autorización."],
+    "no-qr": [
+      "info",
+      "Activa los cobros con QR: autoriza una vez más para que tu caja reconozca los pagos que llegan a tu billetera.",
+    ],
   };
   const entry = messages[status];
   if (!entry) {
@@ -438,10 +444,11 @@ function resumeLatestSale(m) {
   showSale(latest);
 }
 
+/** The QR carries the shop's wallet address (or the checkout); the checkout link is the fallback. */
 function showSale(sale, payUrl) {
-  const url = absoluteUrl(
-    payUrl || `/pay.html?sale=${encodeURIComponent(sale.id)}`,
-  );
+  const checkout = `/pay.html?sale=${encodeURIComponent(sale.id)}`;
+  const url = absoluteUrl(payUrl || sale.payUrl || checkout);
+  $("checkout-link").href = absoluteUrl(sale.checkoutUrl || checkout);
   current = { sale, payUrl: url };
   qrRenderedFor = null;
   const split = $("sale-split");
@@ -474,6 +481,11 @@ function startSalePolling() {
 
 function renderSale(sale) {
   $("sale-caption").textContent = `Venta · ${formatTime(sale.createdAt)}`;
+  // With the wallet address in the QR the customer types the amount on the provider's page.
+  const typesAmount = Boolean(sale.payUrl) && sale.payUrl !== sale.checkoutUrl;
+  $("qr-caption").textContent = typesAmount
+    ? `Escanea con la cámara, escribe ${formatAmount(sale.amount)} y paga desde tu billetera`
+    : "Escanea con la cámara del celular para pagar";
   $("sale-amount-view").textContent = formatAmount(sale.amount);
   $("sale-description-view").hidden = !sale.description;
   $("sale-description-view").textContent = sale.description || "";
@@ -496,7 +508,7 @@ function renderSale(sale) {
   showMessage(
     $("sale-error"),
     sale.status === "failed"
-      ? `El pago no se completó${sale.error ? `: ${sale.error}` : ""}. El cliente puede intentarlo de nuevo con el mismo QR.`
+      ? `El pago no se completó${sale.error ? `: ${sale.error}` : ""}. Toca "Nueva venta" para cobrar de nuevo.`
       : "",
   );
 
