@@ -150,11 +150,11 @@ from the repository root, and the backend applies the migrations when it starts.
 
 Then open:
 
-- `/onboard.html` to register a merchant (or `npm run demo:merchant` for the demo shop with the
+- `/onboard` to register a merchant (or `npm run demo:merchant` for the demo shop with the
   team's wallets);
-- `/merchant.html?id=…` for the till, where the shop can also change its splits;
-- `/pay.html?sale=…` for the customer, from the QR code;
-- `/sandbox.html` for the raw Open Payments flows.
+- `/merchant?id=…` for the till, where the shop can also change its splits;
+- `/pay?sale=…` for the customer, from the QR code;
+- `/sandbox` for the raw Open Payments flows.
 
 Setting up the test wallet, step by step:
 [`docs/OPEN_PAYMENTS.md`](docs/OPEN_PAYMENTS.md#1-set-up-the-test-wallet-once). Pitch and demo

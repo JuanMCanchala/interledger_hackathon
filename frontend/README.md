@@ -17,7 +17,7 @@ image: nginx serving the build.
 ## Proxy to the backend
 
 Everything that is not the landing lives in the backend: `/api/*` (including the wallets' consent
-callbacks), `/onboard.html`, `/merchant.html`, `/pay.html` and `/sandbox.html`, and their assets under
+callbacks), `/onboard`, `/merchant`, `/pay` and `/sandbox` (the old `.html` links redirect), and their assets under
 `/css/*`, `/js/*` and `/img/*` (plus `/favicon.svg`). Backend assets never go at the root: `ng serve`
 publishes its own `/styles.css` and would shadow them.
 
