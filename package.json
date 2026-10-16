@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm --prefix backend run dev",
     "dev:backend": "npm --prefix backend run dev",
-    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:frontend": "npm --prefix frontend start",
     "start": "npm --prefix backend run start",
     "check:wallet": "npm --prefix backend run check:wallet",
     "demo:merchant": "npm --prefix backend run demo:merchant",

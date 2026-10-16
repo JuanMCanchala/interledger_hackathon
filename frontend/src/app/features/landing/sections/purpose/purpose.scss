@@ -1,0 +1,90 @@
+.purpose {
+  position: relative;
+  background: var(--papel) url(/paper.png);
+  color: var(--monte);
+  padding-block: clamp(6rem, 14vw, 11rem);
+  overflow: hidden;
+}
+
+.margin-doodle {
+  position: absolute;
+  width: clamp(90px, 12vw, 160px);
+  color: var(--monte);
+  opacity: 0.18;
+
+  &.left {
+    left: 3vw;
+    top: 12%;
+    rotate: -12deg;
+  }
+
+  &.right {
+    right: 4vw;
+    bottom: 10%;
+    rotate: 10deg;
+  }
+}
+
+.inner {
+  display: grid;
+  gap: 2.5rem;
+  max-width: 1100px;
+}
+
+.title {
+  font-family: var(--script);
+  font-weight: 400;
+  font-size: clamp(1.3rem, 2.2vw, 1.7rem);
+  line-height: 1.4;
+}
+
+.manifesto {
+  font-size: clamp(1.7rem, 4.2vw, 3.4rem);
+  line-height: 1.22;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.figure {
+  --fill: 1;
+  position: relative;
+  display: inline;
+  padding: 0 0.15em;
+  border-radius: 0.2em;
+  text-decoration: none;
+  background: linear-gradient(var(--lima), var(--lima)) 0 100% / calc(var(--fill) * 100%) 100% no-repeat;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+
+  sup {
+    font-size: 0.4em;
+    margin-left: 0.1em;
+  }
+}
+
+.figure-doodle {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 2.2em;
+  color: var(--monte);
+  opacity: 0;
+  transform: translate(-50%, 0.4em) rotate(-10deg) scale(0.6);
+  transition: opacity 0.25s, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.figure:hover .figure-doodle,
+.figure:focus-visible .figure-doodle {
+  opacity: 1;
+  transform: translate(-50%, -0.1em) rotate(6deg) scale(1);
+}
+
+.sources {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: rgb(24 24 24 / 70%);
+  display: grid;
+  gap: 0.2rem;
+}

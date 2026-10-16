@@ -1,0 +1,117 @@
+.preview {
+  background: var(--monte);
+  padding-block: clamp(5rem, 12vw, 8rem);
+}
+
+.grid {
+  display: grid;
+  gap: clamp(3rem, 6vw, 6rem);
+  align-items: center;
+
+  @media (min-width: 900px) {
+    grid-template-columns: 1fr auto;
+  }
+}
+
+.copy {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.stage {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.9rem 1.1rem;
+  border-left: 3px solid rgb(253 251 251 / 18%);
+  opacity: 0.55;
+  transition: opacity 0.3s, border-color 0.3s;
+
+  strong {
+    font-size: 1.15rem;
+  }
+
+  &.active {
+    opacity: 1;
+    border-color: var(--lima);
+  }
+}
+
+.phone {
+  justify-self: center;
+  width: min(300px, 78vw);
+  padding: 12px;
+  border-radius: 44px;
+  background: var(--tinta);
+  box-shadow: 0 40px 80px -30px rgb(0 0 0 / 60%);
+}
+
+.screen {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  padding: 2rem 1.25rem 1.5rem;
+  border-radius: 34px;
+  background: var(--monte-hondo);
+  text-align: center;
+}
+
+.greeting {
+  font-family: var(--script);
+  font-size: 1.2rem;
+  color: var(--lima);
+}
+
+.day {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.plant {
+  width: 62%;
+  margin-block: 0.75rem 0.25rem;
+}
+
+.stage-label {
+  font-weight: 700;
+}
+
+.bars {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  gap: 0.6rem;
+  text-align: left;
+}
+
+.bar {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.bar-track {
+  height: 8px;
+  border-radius: 8px;
+  background: var(--monte-claro);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  width: calc(var(--goal) * 100%);
+  border-radius: inherit;
+  background: var(--lima);
+  transform-origin: left;
+}

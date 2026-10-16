@@ -54,20 +54,21 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        BACKEND_INTERNAL_URL: http://backend:3000
+      # Development: `ng serve` with live reload over the bind-mounted sources; the final stage of
+      # the Dockerfile is the nginx production image.
+      target: dev
     container_name: miplante-frontend
     restart: unless-stopped
-    # Development: hot reload over the bind-mounted sources instead of the production build.
-    command: npm run dev
     depends_on:
       - backend
     environment:
+      # proxy.conf.mjs sends the API and the till pages here.
       BACKEND_INTERNAL_URL: http://backend:3000
     ports:
       - "3001:3001"
     volumes:
       - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
 
 volumes:
   miplante_pgdata:
