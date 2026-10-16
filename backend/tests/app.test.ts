@@ -225,3 +225,28 @@ describe("MiPlante API", () => {
     expect((await fetch(`${baseUrl}/api/sales/nope`)).status).toBe(404);
   });
 });
+
+describe("clean page URLs", () => {
+  it("serves each page without the .html extension, with or without a trailing slash", async () => {
+    for (const path of [
+      "/onboard",
+      "/onboard/",
+      "/merchant",
+      "/pay",
+      "/sandbox/",
+    ]) {
+      const res = await fetch(`${baseUrl}${path}`);
+      expect(res.status, path).toBe(200);
+      expect(res.headers.get("content-type"), path).toContain("text/html");
+    }
+  });
+
+  it("redirects the old .html links permanently and keeps the query", async () => {
+    const res = await fetch(`${baseUrl}/pay.html?sale=abc`, {
+      redirect: "manual",
+    });
+
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("/pay?sale=abc");
+  });
+});
