@@ -105,7 +105,7 @@ describe("QR payments from the wallet provider's page", () => {
     const { sale, payUrl } = await env.sales.createSale(merchantId, {
       amount: "10000",
     });
-    expect(payUrl).toBe(`${BASE_URL}/pay.html?sale=${sale.id}`);
+    expect(payUrl).toBe(`${BASE_URL}/pay?sale=${sale.id}`);
 
     // The shop can renew it from the till although it is active.
     const { redirectUrl } = await env.merchants.renewConsent(merchantId);

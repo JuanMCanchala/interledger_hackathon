@@ -15,7 +15,7 @@ describe("checkout", () => {
     expect(payUrl).toBe(BOB);
     expect(sale.payUrl).toBe(payUrl);
     // MiPlante's own checkout stays available for typing the wallet name.
-    expect(checkoutUrl).toBe(`${BASE_URL}/pay.html?sale=${sale.id}`);
+    expect(checkoutUrl).toBe(`${BASE_URL}/pay?sale=${sale.id}`);
     expect(sale).toMatchObject({
       merchantName: "Tienda Doña Rosa",
       amount: cop("1000000"),
@@ -50,7 +50,7 @@ describe("checkout", () => {
       customer: ALICE,
     });
     expect((await store.getPayment((await store.getSale(sale.id))!.paymentId!))?.returnTo).toBe(
-      `/pay.html?sale=${sale.id}`,
+      `/pay?sale=${sale.id}`,
     );
   });
 

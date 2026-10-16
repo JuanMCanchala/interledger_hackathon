@@ -13,7 +13,7 @@ with its four steps: **payment request → authorization → execution → compl
       10,000 COP). Change them from **Editar repartos** if a rehearsal left them different.
 - [ ] Test balances are loaded: the customer can pay 10,000 COP or its USD equivalent.
 - [ ] The phone reaches the server: same network, or a tunnel set in `PUBLIC_BASE_URL`.
-- [ ] Two browser windows: the till on the laptop (`/merchant.html?id=…`) and the test wallet logged
+- [ ] Two browser windows: the till on the laptop (`/merchant?id=…`) and the test wallet logged
       in as the customer on the phone.
 - [ ] Backup: the recorded video of the full flow, in the repository or the team's Drive folder.
 

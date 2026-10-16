@@ -13,5 +13,5 @@ form.addEventListener("submit", (event) => {
     return;
   }
   remember.set(STORAGE_KEYS.merchantId, id);
-  window.location.href = `/merchant.html?id=${encodeURIComponent(id)}`;
+  window.location.href = `/merchant?id=${encodeURIComponent(id)}`;
 });

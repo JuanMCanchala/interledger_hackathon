@@ -160,7 +160,7 @@ describe("MiPlante API", () => {
     });
     expect(created.status).toBe(201);
     const { sale, payUrl } = await created.json();
-    expect(payUrl).toBe(`${FRONTEND_URL}/pay.html?sale=${sale.id}`);
+    expect(payUrl).toBe(`${FRONTEND_URL}/pay?sale=${sale.id}`);
 
     const paying = await postJson(`/api/sales/${sale.id}/pay`, {
       customerWallet: ALICE,
@@ -223,5 +223,30 @@ describe("MiPlante API", () => {
   it("answers 404 for unknown merchants and sales", async () => {
     expect((await fetch(`${baseUrl}/api/merchants/nope`)).status).toBe(404);
     expect((await fetch(`${baseUrl}/api/sales/nope`)).status).toBe(404);
+  });
+});
+
+describe("clean page URLs", () => {
+  it("serves each page without the .html extension, with or without a trailing slash", async () => {
+    for (const path of [
+      "/onboard",
+      "/onboard/",
+      "/merchant",
+      "/pay",
+      "/sandbox/",
+    ]) {
+      const res = await fetch(`${baseUrl}${path}`);
+      expect(res.status, path).toBe(200);
+      expect(res.headers.get("content-type"), path).toContain("text/html");
+    }
+  });
+
+  it("redirects the old .html links permanently and keeps the query", async () => {
+    const res = await fetch(`${baseUrl}/pay.html?sale=abc`, {
+      redirect: "manual",
+    });
+
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("/pay?sale=abc");
   });
 });

@@ -88,7 +88,7 @@ export class MerchantService {
       maxAmount: input.dailyCap,
       interval: DAILY_INTERVAL,
       description: `MiPlante · ${input.name}`,
-      returnTo: `/merchant.html?id=${id}`,
+      returnTo: `/merchant?id=${id}`,
       // Same consent: see the QR payments that reach the wallet, to match them to sales.
       watchIncoming: true,
     });
@@ -189,7 +189,7 @@ export class MerchantService {
       ),
       interval: DAILY_INTERVAL,
       description: `MiPlante · ${merchant.name}`,
-      returnTo: `/merchant.html?id=${merchant.id}`,
+      returnTo: `/merchant?id=${merchant.id}`,
       watchIncoming: true,
     });
     const updated = await this.store.saveMerchant({

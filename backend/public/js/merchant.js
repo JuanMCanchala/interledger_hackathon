@@ -446,7 +446,7 @@ function resumeLatestSale(m) {
 
 /** The QR carries the shop's wallet address (or the checkout); the checkout link is the fallback. */
 function showSale(sale, payUrl) {
-  const checkout = `/pay.html?sale=${encodeURIComponent(sale.id)}`;
+  const checkout = `/pay?sale=${encodeURIComponent(sale.id)}`;
   const url = absoluteUrl(payUrl || sale.payUrl || checkout);
   $("checkout-link").href = absoluteUrl(sale.checkoutUrl || checkout);
   current = { sale, payUrl: url };
@@ -625,7 +625,7 @@ const rememberedId = remember.get(STORAGE_KEYS.merchantId);
 if (!merchantId && rememberedId) {
   // "Abrir mi caja" without a code: this device remembers the merchant it registered.
   window.location.replace(
-    `/merchant.html?id=${encodeURIComponent(rememberedId)}`,
+    `/merchant?id=${encodeURIComponent(rememberedId)}`,
   );
 } else if (!merchantId) {
   showMissing(

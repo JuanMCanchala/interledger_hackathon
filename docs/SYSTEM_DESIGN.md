@@ -177,7 +177,7 @@ sequenceDiagram
   A->>A: verify hash (clientNonce, finish nonce, interact_ref, authServer)
   A->>W: grant continue (interact_ref)
   W-->>A: access token (manage URL, expires_in)
-  A-->>M: redirect to /merchant.html?id=…
+  A-->>M: redirect to /merchant?id=…
 ```
 
 ### 6.2 Sale: the four steps the demo must show

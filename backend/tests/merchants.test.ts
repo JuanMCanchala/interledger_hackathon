@@ -41,7 +41,7 @@ describe("merchant onboarding", () => {
     ]);
     const mandateId = (await store.getMerchant(merchant.id))!.mandateId;
     expect((await store.getMandate(mandateId))?.returnTo).toBe(
-      `/merchant.html?id=${merchant.id}`,
+      `/merchant?id=${merchant.id}`,
     );
   });
 

@@ -87,7 +87,7 @@ export class SalesService {
       description: sale.description
         ? `${merchant.name} · ${sale.description}`
         : merchant.name,
-      returnTo: `/pay.html?sale=${sale.id}`,
+      returnTo: `/pay?sale=${sale.id}`,
     });
     const updated = await this.store.transitionSale(
       sale.id,
@@ -339,7 +339,7 @@ export class SalesService {
 
   /** MiPlante's own checkout, where the customer types their wallet name. */
   payUrl(saleId: string): string {
-    return `${this.options.frontendUrl}/pay.html?sale=${saleId}`;
+    return `${this.options.frontendUrl}/pay?sale=${saleId}`;
   }
 
   async require(id: string): Promise<SaleRecord> {

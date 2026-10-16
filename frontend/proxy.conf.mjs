@@ -10,10 +10,11 @@ const BACKEND_PATHS = [
   '/css',
   '/js',
   '/img',
-  '/onboard.html',
-  '/merchant.html',
-  '/pay.html',
-  '/sandbox.html',
+  // Clean page URLs (/onboard, /onboard/) and the old .html links, which the backend redirects.
+  '/onboard',
+  '/merchant',
+  '/pay',
+  '/sandbox',
   '/favicon.svg',
 ];
 

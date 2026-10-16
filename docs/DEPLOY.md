@@ -65,7 +65,7 @@ curl https://<frontend>/api/health                       # {"ok":true}
 railway run --service backend npx tsx scripts/check-wallet.ts
 ```
 
-Then onboard the shop at `https://<frontend>/onboard.html`, approve in the wallet and pay a sale from
+Then onboard the shop at `https://<frontend>/onboard`, approve in the wallet and pay a sale from
 a phone by scanning the QR.
 
 ## Notes

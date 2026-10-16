@@ -55,7 +55,7 @@ Registers a merchant and starts the single consent MiPlante needs.
 
 `201` → `{ "merchant": Merchant, "redirectUrl": "…" }`. Send the browser to `redirectUrl`: the
 merchant approves a grant capped at `dailyCap` per day and comes back to
-`/merchant.html?id=<merchantId>`.
+`/merchant?id=<merchantId>`.
 
 ### `GET /api/merchants/:id`
 
@@ -114,7 +114,7 @@ consent is already active and includes it.
 ### `POST /api/merchants/:id/sales`
 
 `{ "amount": "10000", "description": "Mercado" }` →
-`201 { "sale": Sale, "payUrl": "https://ilp.interledger-test.dev/<shop>", "checkoutUrl": "…/pay.html?sale=<id>" }`.
+`201 { "sale": Sale, "payUrl": "https://ilp.interledger-test.dev/<shop>", "checkoutUrl": "…/pay?sale=<id>" }`.
 
 Show `payUrl` as a QR code:
 
@@ -138,8 +138,8 @@ Polls the customer's payment and settles the sale once it is paid. It is safe to
 {
   "id", "merchantId", "merchantName", "amount": Amount, "description"?,
   "status": "open" | "awaiting-consent" | "processing" | "paid" | "failed",
-  "payUrl": "https://ilp.interledger-test.dev/<shop>" | "…/pay.html?sale=<id>",
-  "checkoutUrl": "…/pay.html?sale=<id>", "paidByQr": boolean,
+  "payUrl": "https://ilp.interledger-test.dev/<shop>" | "…/pay?sale=<id>",
+  "checkoutUrl": "…/pay?sale=<id>", "paidByQr": boolean,
   "customer"?: "https://…", "error"?: "…", "paidAt"?: "…",
   "payment"?: { "status", "steps": { "request", "authorization", "execution", "completion" },
                 "debitAmount"?: Amount, "receivedAmount"?: Amount },
@@ -156,7 +156,7 @@ Polls the customer's payment and settles the sale once it is paid. It is safe to
 ### `POST /api/sales/:id/pay`
 
 `{ "customerWallet": "$ilp.interledger-test.dev/cliente" }` → `201 { "sale": Sale, "redirectUrl": "…" }`.
-The customer approves in their wallet and comes back to `/pay.html?sale=<id>`. Allowed while the
+The customer approves in their wallet and comes back to `/pay?sale=<id>`. Allowed while the
 sale is `open` or `failed`, so a customer who rejected can try again.
 
 If the merchant's authorization is not `active` (not approved yet, or revoked), the sale is still paid
@@ -164,7 +164,7 @@ to the merchant, but it is not split: its settlement is `skipped` with a reason.
 
 ## Open Payments sandbox
 
-Generic flows used by `/sandbox.html` and available to any client.
+Generic flows used by `/sandbox` and available to any client.
 
 | Method | Path                        | Body                                                                                                                             | Response                                                 |
 | ------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
