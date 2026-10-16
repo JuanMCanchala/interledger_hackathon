@@ -8,6 +8,7 @@ import express, {
 import { z } from "zod";
 import { describeError } from "../openPayments/errors.js";
 import { AppError } from "../shared/errors.js";
+import type { DashboardService } from "../merchants/dashboardService.js";
 import type { MerchantService } from "../merchants/merchantService.js";
 import type { SalesService } from "../merchants/salesService.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
@@ -17,6 +18,7 @@ export interface AppOptions {
   flows: PaymentFlows;
   merchants: MerchantService;
   sales: SalesService;
+  dashboard: DashboardService;
   /** Where the browser lands after the consent screen. */
   frontendUrl: string;
   /** Origin allowed to call /api from another host (e.g. a Vite or Next.js dev server). */
@@ -29,6 +31,7 @@ export function createApp({
   flows,
   merchants,
   sales,
+  dashboard,
   frontendUrl,
   corsOrigin,
 }: AppOptions) {
@@ -135,7 +138,7 @@ export function createApp({
   });
 
   app.get("/api/merchants/:id", async (req, res) => {
-    res.json(merchants.view(merchants.require(req.params.id)));
+    res.json(await dashboard.get(req.params.id));
   });
 
   app.post("/api/merchants/:id/sales", async (req, res) => {

@@ -1,5 +1,6 @@
 import { loadConfig } from "./config.js";
 import { createApp } from "./http/app.js";
+import { DashboardService } from "./merchants/dashboardService.js";
 import { MerchantService } from "./merchants/merchantService.js";
 import { SalesService } from "./merchants/salesService.js";
 import { createOpenPaymentsClient } from "./openPayments/client.js";
@@ -31,6 +32,7 @@ try {
     flows,
     merchants,
     sales,
+    dashboard: new DashboardService(flows, merchants, sales, store),
     frontendUrl: config.frontendUrl,
     corsOrigin:
       frontendOrigin === new URL(config.publicBaseUrl).origin
