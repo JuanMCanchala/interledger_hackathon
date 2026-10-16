@@ -3,6 +3,6 @@
  * the frontend proxies it (proxy.conf.mjs, nginx.conf.template), so the links stay relative.
  */
 export const APP_LINKS = {
-  register: '/onboard.html',
-  till: '/merchant.html',
+  register: '/onboard',
+  till: '/merchant',
 } as const;
