@@ -60,7 +60,7 @@ async function loadMerchant() {
   } catch (error) {
     if (error.status === 404) {
       showMissing(
-        "No existe un negocio con ese ID. Revisa el enlace o registra tu negocio.",
+        "No encontramos esa caja. Revisa el enlace o registra tu negocio.",
       );
       return false;
     }
@@ -509,8 +509,16 @@ window.addEventListener("load", () => {
   }
 });
 
-if (!merchantId) {
-  showMissing("Falta el ID de tu negocio en el enlace.");
+const rememberedId = remember.get(STORAGE_KEYS.merchantId);
+if (!merchantId && rememberedId) {
+  // "Abrir mi caja" without a code: this device remembers the merchant it registered.
+  window.location.replace(
+    `/merchant.html?id=${encodeURIComponent(rememberedId)}`,
+  );
+} else if (!merchantId) {
+  showMissing(
+    "Este celular o computador no tiene una caja guardada. Registra tu negocio o abre el enlace de tu caja.",
+  );
 } else {
   poll(loadMerchant, 5000);
 }
