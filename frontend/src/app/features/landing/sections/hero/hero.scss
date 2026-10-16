@@ -1,51 +1,109 @@
 .hero {
+  position: relative;
   min-height: 100svh;
-  padding-block: clamp(6.5rem, 14vh, 9rem) 4rem;
-  display: flex;
-  align-items: center;
+  padding-block: clamp(6rem, 13vh, 8rem) 3rem;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 3rem;
+  overflow: hidden;
+  background: radial-gradient(ellipse 60% 50% at 78% 62%, rgb(204 241 55 / 16%), transparent 70%);
 }
 
-.grid {
-  display: grid;
-  gap: clamp(2.5rem, 5vw, 4.5rem);
-  align-items: center;
+.floaters {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 
-  @media (min-width: 900px) {
-    grid-template-columns: 1.15fr 0.85fr;
+.floater {
+  position: absolute;
+  width: calc(var(--size) * 1px);
+  translate: -50% 0;
+
+  @media (max-width: 899px) {
+    width: calc(var(--size) * 0.6px);
+
+    &:nth-child(-n + 3),
+    &:nth-child(5) {
+      display: none;
+    }
   }
 }
 
-.copy {
+.floater-doodle {
+  display: block;
+  width: 100%;
+  color: var(--lima);
+  opacity: 0.55;
+}
+
+.layout {
+  position: relative;
   display: grid;
-  gap: 1.75rem;
-  justify-items: start;
+  gap: clamp(2rem, 4vw, 3rem) clamp(2rem, 5vw, 5rem);
+  align-content: center;
+
+  @media (min-width: 900px) {
+    grid-template-columns: 1fr minmax(380px, 0.62fr);
+    grid-template-areas:
+      'headline till'
+      'aside till';
+    align-items: end;
+
+    .headline {
+      grid-area: headline;
+    }
+
+    .aside {
+      grid-area: aside;
+    }
+
+    .till-stage {
+      grid-area: till;
+    }
+  }
 }
 
 .headline {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.5rem;
   font-weight: 500;
 }
 
 .sentence {
-  font-size: clamp(1.5rem, 3.4vw, 2.5rem);
+  font-size: clamp(1.5rem, 3.4vw, 2.6rem);
   line-height: 1.15;
   letter-spacing: -0.01em;
-  max-width: 16em;
   text-wrap: balance;
 }
 
 .word {
-  width: min(100%, 640px);
+  width: 100%;
+  filter: drop-shadow(0 18px 30px rgb(0 0 0 / 25%));
+}
+
+.aside {
+  display: grid;
+  gap: 1.75rem;
+  justify-items: start;
+  align-self: start;
+}
+
+.till-stage {
+  align-self: center;
+  perspective: 1200px;
 }
 
 .till {
-  background: var(--monte-claro);
+  background: var(--monte-claro) url(/paper.png);
   border-radius: var(--radius-lg);
-  padding: clamp(1.25rem, 3vw, 2rem);
+  padding: clamp(1.25rem, 3vw, 1.75rem);
   display: grid;
-  gap: 1.25rem;
-  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 50%);
+  gap: 1.1rem;
+  box-shadow:
+    0 0 0 1px rgb(204 241 55 / 25%),
+    0 40px 80px -30px rgb(0 0 0 / 70%);
+  transform-style: preserve-3d;
 }
 
 .till-head {
@@ -78,6 +136,10 @@
     transform: translateY(-2px);
   }
 
+  &:active {
+    transform: scale(0.95);
+  }
+
   &[aria-pressed='true'] {
     background: var(--lima);
     border-color: var(--lima);
@@ -92,7 +154,7 @@
   gap: 0.75rem;
   padding: 0.9rem 1.1rem;
   border-radius: var(--radius-sm);
-  background: var(--papel);
+  background: var(--papel) url(/paper.png);
   color: var(--monte);
   font-weight: 500;
 }
@@ -112,7 +174,7 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: clamp(0.4rem, 1.5vw, 0.9rem);
+  gap: clamp(0.4rem, 1.5vw, 0.8rem);
 }
 
 .pocket {
@@ -141,14 +203,14 @@
 }
 
 .jar-doodle {
-  width: clamp(40px, 9vw, 56px);
+  width: clamp(40px, 9vw, 52px);
   color: var(--lima);
 }
 
 .jar {
   position: relative;
   width: 100%;
-  height: clamp(110px, 18vh, 150px);
+  height: clamp(100px, 16vh, 130px);
   border-radius: 10px 10px 22px 22px;
   background: var(--monte-hondo);
   overflow: hidden;
@@ -177,9 +239,32 @@
   color: var(--lima);
 }
 
-.till-note {
-  font-family: var(--script);
-  font-size: 1.15rem;
-  color: var(--lima);
-  text-align: center;
+.ticker {
+  position: relative;
+  background: var(--lima);
+  color: var(--monte);
+  padding-block: 1rem;
+  overflow: hidden;
+  rotate: -1.5deg;
+  margin-inline: -4rem;
+}
+
+.ticker-track {
+  display: flex;
+  width: max-content;
+}
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding-right: 1.5rem;
+  font-size: clamp(1.2rem, 2.4vw, 1.8rem);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ticker-star {
+  width: 1.1em;
+  fill: var(--monte);
 }

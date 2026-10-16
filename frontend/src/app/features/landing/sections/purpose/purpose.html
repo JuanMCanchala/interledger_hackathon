@@ -1,23 +1,27 @@
 <section class="purpose" id="proposito" aria-labelledby="purpose-title">
-  <div class="wrap grid">
-    <div class="intro">
-      <h2 id="purpose-title">Que la plata del día a día deje de ser un enredo</h2>
-      <p class="lead">
-        MiPlante ayuda a quienes trabajan por su cuenta y a los dueños de micronegocios en Colombia
-        a manejar su dinero de forma sencilla: deudas, pensión, pagos a proveedores y gastos. Así
-        un mal día no se convierte en un mal mes.
-      </p>
-      <app-doodle class="intro-doodle" name="calculadora" />
-    </div>
+  <app-doodle class="margin-doodle left" name="calculadora" data-speed="0.85" />
+  <app-doodle class="margin-doodle right" name="peso" data-speed="1.15" />
 
-    <ol class="ledger">
-      @for (stat of stats; track stat.text) {
-        <li class="row">
-          <strong class="figure">
-            {{ stat.prefix }}<span class="count" [attr.data-value]="stat.value" [attr.data-decimals]="stat.decimals ?? 0">{{ format(stat.value, stat.decimals) }}</span>{{ stat.suffix }}
-          </strong>
-          <p class="text">{{ stat.text }}</p>
-          <p class="source">Fuente: {{ stat.source }}</p>
+  <div class="wrap inner">
+    <h2 id="purpose-title" class="title">Por qué existe MiPlante</h2>
+
+    <p class="manifesto">
+      @for (segment of manifesto; track $index) {
+        @if (isFigure(segment)) {
+          <a class="figure" [href]="'#fuente-' + segment.source" data-cursor="Fuente"
+            ><span class="figure-value">{{ segment.value }}</span><sup>{{ segment.source }}</sup
+            ><app-doodle class="figure-doodle" [name]="segment.doodle"
+          /></a>
+        } @else {
+          <span class="text">{{ segment }}</span>
+        }
+      }
+    </p>
+
+    <ol class="sources" aria-label="Fuentes">
+      @for (source of sources; track source.url; let i = $index) {
+        <li [id]="'fuente-' + (i + 1)">
+          <a [href]="source.url" target="_blank" rel="noopener">{{ source.label }}</a>
         </li>
       }
     </ol>

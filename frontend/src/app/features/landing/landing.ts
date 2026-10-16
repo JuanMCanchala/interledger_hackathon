@@ -1,7 +1,10 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { animate, ScrollTrigger } from '../../core/motion';
-import { Logo } from '../../shared/brand/logo';
+import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { MOTION, animate, scrollToSection, ScrollSmoother } from '../../core/motion';
+import { Cursor } from '../../shared/ui/cursor';
+import { Loader } from './loader/loader';
+import { Nav } from './nav/nav';
 import { Closing } from './sections/closing/closing';
+import { Features } from './sections/features/features';
 import { Hero } from './sections/hero/hero';
 import { Preview } from './sections/preview/preview';
 import { Purpose } from './sections/purpose/purpose';
@@ -9,17 +12,34 @@ import { Story } from './sections/story/story';
 
 @Component({
   selector: 'app-landing',
-  imports: [Logo, Hero, Purpose, Story, Preview, Closing],
+  imports: [Loader, Cursor, Nav, Hero, Purpose, Story, Features, Preview, Closing],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(document:click)': 'followHashLink($event)' },
   templateUrl: './landing.html',
-  styleUrl: './landing.scss',
 })
 export default class Landing {
+  protected readonly revealed = signal(false);
+
   constructor() {
     animate((mm) =>
-      mm.add('all', () => {
-        ScrollTrigger.create({ start: 80, end: 'max', toggleClass: { targets: '.nav', className: 'scrolled' } });
+      mm.add(MOTION, () => {
+        const smoother = ScrollSmoother.create({
+          wrapper: '#smooth-wrapper',
+          content: '#smooth-content',
+          smooth: 1.1,
+          effects: true,
+          smoothTouch: false,
+        });
+        return () => smoother.kill();
       }),
     );
+  }
+
+  protected followHashLink(event: MouseEvent): void {
+    const link = (event.target as Element).closest<HTMLAnchorElement>('a[href^="#"]');
+    if (!link) return;
+    event.preventDefault();
+    scrollToSection(link.hash);
+    history.replaceState(null, '', link.hash);
   }
 }

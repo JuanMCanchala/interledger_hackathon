@@ -31,11 +31,15 @@ html {
 
 body {
   margin: 0;
-  background: var(--monte);
+  background: var(--monte) url(/paper.png);
   color: var(--papel);
   font: 400 1.0625rem/1.6 var(--sans);
   -webkit-font-smoothing: antialiased;
   overflow-x: clip;
+}
+
+.is-loading {
+  overflow: hidden;
 }
 
 h1,

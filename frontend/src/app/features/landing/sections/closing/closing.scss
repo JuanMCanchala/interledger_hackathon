@@ -22,8 +22,8 @@
 }
 
 .footer {
-  background: var(--papel);
-  color: var(--monte);
+  background: var(--monte-hondo) url(/paper.png);
+  color: var(--papel);
   padding-block: 2.5rem;
   font-size: 0.9rem;
 }
@@ -37,7 +37,6 @@
 }
 
 .footer-logo {
-  --logo-ink: var(--monte);
-  --logo-cut: var(--papel);
+  --logo-cut: var(--monte-hondo);
   width: 150px;
 }

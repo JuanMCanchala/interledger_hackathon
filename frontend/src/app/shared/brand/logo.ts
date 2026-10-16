@@ -5,7 +5,7 @@ import { LOGO } from './logo.paths';
   selector: 'app-logo',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <svg viewBox="56 96 836 170" role="img" aria-label="MiPlante">
+    <svg viewBox="56 96 836 170" role="img" aria-label="MiPlante" [class.palante]="settled()">
       <g class="mi">
         <path [attr.d]="paths.m" />
         <path [attr.d]="paths.i" />
@@ -33,12 +33,19 @@ import { LOGO } from './logo.paths';
   styles: `
     :host { display: block; }
     svg { display: block; width: 100%; height: auto; overflow: visible; fill: var(--logo-ink, var(--papel)); }
-    .mi, .l, .pa-apostrophe { fill: var(--lima); }
+    .mi, .l, .pa-apostrophe { fill: var(--logo-accent, var(--lima)); }
     .cut { fill: var(--logo-cut, var(--monte)); }
     .pa { opacity: 0; }
+    .palante .mi { opacity: 0; }
+    .palante .p { transform: translateX(-228px); }
+    .palante .lante { transform: translateX(-30px); }
+    .palante .pa { opacity: 1; }
   `,
 })
 export class Logo {
+  /** Renders the extra «a'» used to turn «MiPlante» into «Pa' lante». */
   readonly wordplay = input(false);
+  /** Shows the finished «Pa' lante» word without animating. */
+  readonly settled = input(false);
   protected readonly paths = LOGO;
 }

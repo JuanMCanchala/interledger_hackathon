@@ -50,7 +50,7 @@ export class Preview {
           .to('.seed', { scale: 0, transformOrigin: '50% 50%', duration: 0.1 }, 0.2)
           .from('.leaf-left', { scale: 0, transformOrigin: '100% 50%', duration: 0.15, ease: 'back.out(2)' }, 0.3)
           .from('.leaf-right', { scale: 0, transformOrigin: '0% 50%', duration: 0.15, ease: 'back.out(2)' }, 0.42)
-          .from('.flower', { scale: 0, rotation: -90, transformOrigin: '50% 72%', duration: 0.2, ease: 'back.out(1.6)' }, 0.75)
+          .from('.flower', { scale: 0, rotation: -90, svgOrigin: '100 70', duration: 0.2, ease: 'back.out(1.6)' }, 0.75)
           .from('.sparks path', { drawSVG: 0, opacity: 0, duration: 0.1 }, 0.92);
       }),
     );

@@ -1,21 +1,15 @@
-<header class="nav">
-  <div class="wrap nav-inner">
-    <a class="nav-logo" href="#inicio" aria-label="MiPlante, ir al inicio"><app-logo aria-hidden="true" /></a>
-    <nav aria-label="Secciones">
-      <ul class="links">
-        <li><a href="#caja">Cómo funciona</a></li>
-        <li><a href="#proposito">Propósito</a></li>
-        <li><a href="#historia">Doña Nelly</a></li>
-        <li><a href="#planta">Tu planta</a></li>
-      </ul>
-    </nav>
-    <a class="button nav-cta" href="#caja">Probar la caja</a>
+<app-loader (reveal)="revealed.set(true)" />
+<app-cursor />
+<app-nav />
+<div id="smooth-wrapper">
+  <div id="smooth-content">
+    <main>
+      <app-hero [revealed]="revealed()" />
+      <app-purpose />
+      <app-story />
+      <app-features />
+      <app-preview />
+    </main>
+    <app-closing />
   </div>
-</header>
-<main>
-  <app-hero />
-  <app-purpose />
-  <app-story />
-  <app-preview />
-</main>
-<app-closing />
+</div>

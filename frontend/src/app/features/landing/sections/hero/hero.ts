@@ -1,9 +1,21 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
-import { MOTION, ScrollTrigger, SplitText, animate, gsap } from '../../../../core/motion';
+import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from '@angular/core';
+import { FINE_POINTER, MOTION, ScrollTrigger, SplitText, animate, gsap } from '../../../../core/motion';
 import { formatCop } from '../../../../core/money';
-import { Doodle } from '../../../../shared/brand/doodle';
+import { Doodle, DoodleName } from '../../../../shared/brand/doodle';
 import { Logo } from '../../../../shared/brand/logo';
 import { POCKETS, splitSale } from '../../domain/pockets';
+
+interface Floater {
+  readonly name: DoodleName;
+  readonly x: number;
+  readonly y: number;
+  readonly size: number;
+  readonly depth: number;
+  readonly speed: number;
+}
+
+const TILT_DEGREES = 8;
+const PARALLAX_PX = 36;
 
 @Component({
   selector: 'app-hero',
@@ -13,8 +25,25 @@ import { POCKETS, splitSale } from '../../domain/pockets';
   styleUrl: './hero.scss',
 })
 export class Hero {
+  readonly revealed = input(false);
+
   protected readonly pockets = POCKETS;
   protected readonly amounts = [5000, 20000, 50000];
+  protected readonly phrases = [
+    'Si hoy no vendes, hoy no pagas',
+    'Cada venta se reparte solita',
+    'Tu efectivo se vuelve digital',
+    'Tu historial crece contigo',
+  ];
+  protected readonly floaters: readonly Floater[] = [
+    { name: 'peso', x: 4, y: 16, size: 70, depth: 1.4, speed: 0.8 },
+    { name: 'monedas', x: 52, y: 66, size: 80, depth: 0.8, speed: 0.9 },
+    { name: 'alcancia', x: 60, y: 12, size: 96, depth: 1.1, speed: 0.75 },
+    { name: 'planta', x: 2, y: 72, size: 90, depth: 0.9, speed: 1.15 },
+    { name: 'billetera', x: 38, y: 76, size: 74, depth: 1.6, speed: 1.2 },
+    { name: 'crecimiento', x: 95, y: 74, size: 84, depth: 1.2, speed: 1.1 },
+    { name: 'calculadora', x: 96, y: 42, size: 78, depth: 1.3, speed: 0.95 },
+  ];
   protected readonly sale = signal(20000);
   protected readonly format = formatCop;
   protected readonly summary = computed(() => {
@@ -26,26 +55,30 @@ export class Hero {
   private root!: HTMLElement;
   private reducedMotion = true;
   private running?: gsap.core.Timeline;
+  private intro?: () => void;
 
   constructor() {
     animate((mm, root) => {
       this.root = root;
+
       mm.add(MOTION, () => {
         this.reducedMotion = false;
-        this.intro().add(() =>
-          ScrollTrigger.create({
-            trigger: '.till',
-            start: 'center 80%',
-            once: true,
-            onEnter: () => this.splitTimeline(this.sale()),
-          }),
-        );
+        this.ticker();
+        this.idleFloat();
+        const words = SplitText.create('.sentence', { type: 'words', mask: 'words' }).words;
+        gsap.set([words, '.aside > *', '.till', '.floater-doodle'], { autoAlpha: 0 });
+        this.intro = () => this.playIntro(words);
+        if (this.revealed()) this.intro();
         return () => (this.reducedMotion = true);
       });
-      if (this.reducedMotion) {
-        this.showWordplay();
-        this.splitTimeline(this.sale()).progress(1);
-      }
+
+      mm.add(FINE_POINTER, () => this.followPointer());
+
+      if (this.reducedMotion) this.splitTimeline(this.sale()).progress(1);
+    });
+
+    effect(() => {
+      if (this.revealed()) this.intro?.();
     });
   }
 
@@ -55,38 +88,77 @@ export class Hero {
     if (this.reducedMotion) tl.progress(1);
   }
 
-  private intro(): gsap.core.Timeline {
-    const words = SplitText.create('.sentence', { type: 'words', mask: 'words' }).words;
-    return gsap
+  private playIntro(words: Element[]): void {
+    gsap
       .timeline({ defaults: { ease: 'power3.out' } })
-      .from('.word .mi, .word .p, .word .lante', { yPercent: 40, opacity: 0, stagger: 0.12, duration: 0.8 })
-      .from(words, { yPercent: 110, stagger: 0.07, duration: 0.6 }, '-=0.3')
-      .from('.lead, .copy .button', { y: 16, opacity: 0, stagger: 0.1, duration: 0.6 }, '<0.2')
-      .from('.till', { y: 40, opacity: 0, duration: 0.8 }, '<')
-      .add(this.wordplay(), '+=0.4');
+      .fromTo(words, { yPercent: 110, autoAlpha: 1 }, { yPercent: 0, stagger: 0.06, duration: 0.6 })
+      .fromTo('.aside > *', { y: 20 }, { y: 0, autoAlpha: 1, stagger: 0.1, duration: 0.6 }, '<0.2')
+      .fromTo('.till', { y: 80, rotationX: 25 }, { y: 0, rotationX: 0, autoAlpha: 1, duration: 1 }, '<')
+      .fromTo('.floater-doodle', { scale: 0 }, { scale: 1, autoAlpha: 1, stagger: 0.07, ease: 'back.out(2.5)', duration: 0.6 }, '<0.2')
+      .add(() =>
+        ScrollTrigger.create({
+          trigger: '.till',
+          start: 'center 80%',
+          once: true,
+          onEnter: () => this.splitTimeline(this.sale()),
+        }),
+      );
   }
 
-  private wordplay(): gsap.core.Timeline {
-    return gsap
-      .timeline({ defaults: { duration: 0.7, ease: 'back.inOut(1.4)' } })
-      .to('.word .mi', { y: -60, rotation: -8, opacity: 0, transformOrigin: '50% 100%', ease: 'power2.in', duration: 0.45 })
-      .to('.word .p', { x: -228 }, '<0.25')
-      .to('.word .lante', { x: -30 }, '<')
-      .fromTo('.word .pa', { opacity: 0, y: 40 }, { opacity: 1, y: 0, ease: 'back.out(2)' }, '<0.25');
+  private ticker(): void {
+    const loop = gsap.to('.ticker-track', { xPercent: -50, ease: 'none', duration: 28, repeat: -1 });
+    ScrollTrigger.create({
+      onUpdate: (self) => {
+        const boost = 1 + Math.min(Math.abs(self.getVelocity()) / 400, 4);
+        gsap.to(loop, { timeScale: boost, duration: 0.2, overwrite: true });
+        gsap.to(loop, { timeScale: 1, duration: 1, delay: 0.25 });
+      },
+    });
   }
 
-  private showWordplay(): void {
-    gsap.set('.word .mi', { opacity: 0 });
-    gsap.set('.word .p', { x: -228 });
-    gsap.set('.word .lante', { x: -30 });
-    gsap.set('.word .pa', { opacity: 1 });
+  private idleFloat(): void {
+    gsap.utils.toArray<HTMLElement>('.floater-doodle').forEach((el) =>
+      gsap.to(el, {
+        yPercent: gsap.utils.random(-12, 12),
+        rotation: gsap.utils.random(-10, 10),
+        duration: gsap.utils.random(2.4, 4.2),
+        ease: 'sine.inOut',
+        yoyo: true,
+        repeat: -1,
+      }),
+    );
+  }
+
+  private followPointer(): () => void {
+    const tilt = {
+      x: gsap.quickTo('.till', 'rotationX', { duration: 0.6 }),
+      y: gsap.quickTo('.till', 'rotationY', { duration: 0.6 }),
+    };
+    const floaters = gsap.utils.toArray<HTMLElement>('.floater-doodle').map((el) => ({
+      depth: Number(el.dataset['depth']),
+      x: gsap.quickTo(el, 'x', { duration: 1 }),
+      y: gsap.quickTo(el, 'y', { duration: 1 }),
+    }));
+
+    const move = (e: PointerEvent) => {
+      const dx = e.clientX / innerWidth - 0.5;
+      const dy = e.clientY / innerHeight - 0.5;
+      tilt.y(dx * TILT_DEGREES);
+      tilt.x(-dy * TILT_DEGREES);
+      floaters.forEach((f) => {
+        f.x(dx * PARALLAX_PX * f.depth);
+        f.y(dy * PARALLAX_PX * f.depth);
+      });
+    };
+    this.root.addEventListener('pointermove', move);
+    return () => this.root.removeEventListener('pointermove', move);
   }
 
   private splitTimeline(amount: number): gsap.core.Timeline {
     const q = gsap.utils.selector(this.root);
     const shares = splitSale(amount);
-    const ticket = q('.ticket')[0].getBoundingClientRect();
     this.running?.progress(1).kill();
+    const ticket = q('.ticket')[0].getBoundingClientRect();
     const tl = (this.running = gsap.timeline());
 
     tl.fromTo(q('.ticket'), { scale: 0.92 }, { scale: 1, duration: 0.5, ease: 'elastic.out(1, 0.5)' });
@@ -112,7 +184,7 @@ export class Hero {
       )
         .to(coin, { opacity: 0, duration: 0.15 })
         .to(pocket.querySelector('.fill'), { scaleY: 1, duration: 0.6, ease: 'power2.out' }, '<')
-        .fromTo(pocket.querySelector('.jar-doodle'), { y: 0 }, { y: -6, duration: 0.15, yoyo: true, repeat: 1 }, '<')
+        .fromTo(pocket.querySelector('.jar-doodle'), { y: 0 }, { y: -8, duration: 0.15, yoyo: true, repeat: 1 }, '<')
         .to(counter, {
           value: shares[i],
           duration: 0.6,
