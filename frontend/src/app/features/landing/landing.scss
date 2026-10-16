@@ -1,0 +1,53 @@
+.nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  padding-block: 1rem;
+  transition: background-color 0.3s, padding 0.3s;
+
+  &.scrolled {
+    --logo-cut: var(--monte-hondo);
+    padding-block: 0.6rem;
+    background: rgb(6 51 47 / 92%);
+    backdrop-filter: blur(8px);
+  }
+}
+
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.nav-logo {
+  width: clamp(110px, 14vw, 140px);
+}
+
+.links {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 1.75rem;
+
+  @media (min-width: 900px) {
+    display: flex;
+  }
+
+  a {
+    text-decoration: none;
+    font-weight: 500;
+    background: linear-gradient(var(--lima), var(--lima)) 0 100% / 0 2px no-repeat;
+    transition: background-size 0.25s;
+
+    &:hover {
+      background-size: 100% 2px;
+    }
+  }
+}
+
+.nav-cta {
+  min-height: 44px;
+  padding-block: 0.6rem;
+}

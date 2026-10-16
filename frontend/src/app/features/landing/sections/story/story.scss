@@ -1,0 +1,91 @@
+.story {
+  background: var(--monte-hondo);
+  overflow: hidden;
+}
+
+.track {
+  display: grid;
+  gap: 4rem;
+  padding: clamp(5rem, 12vw, 8rem) var(--gutter);
+
+  @media (min-width: 900px) {
+    display: flex;
+    align-items: center;
+    gap: 6vw;
+    width: max-content;
+    min-height: 100svh;
+    padding-block: 6rem;
+    padding-inline: max(var(--gutter), calc((100vw - var(--max)) / 2)) 10vw;
+  }
+}
+
+.panel {
+  display: grid;
+  gap: 1.25rem;
+  align-content: center;
+
+  @media (min-width: 900px) {
+    width: min(30rem, 38vw);
+  }
+}
+
+.opening {
+  @media (min-width: 900px) {
+    width: min(36rem, 45vw);
+  }
+}
+
+.chapter {
+  justify-items: start;
+}
+
+.chapter-doodle {
+  width: clamp(110px, 14vw, 160px);
+  color: var(--lima);
+}
+
+.chapter-title {
+  font-family: var(--script);
+  font-weight: 400;
+  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+  line-height: 1.35;
+  color: var(--lima);
+}
+
+.notebook {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0 1.25rem 0.6rem 3rem;
+  width: 100%;
+  border-radius: 6px;
+  color: var(--monte);
+  font-family: var(--script);
+  font-size: 1.05rem;
+  line-height: 2.4rem;
+  background:
+    linear-gradient(90deg, transparent 2.1rem, rgb(204 241 55 / 90%) 2.1rem 2.3rem, transparent 2.3rem),
+    repeating-linear-gradient(var(--hoja) 0 calc(2.4rem - 1px), var(--renglon) calc(2.4rem - 1px) 2.4rem);
+  rotate: -1.5deg;
+  box-shadow: 0 24px 40px -24px rgb(0 0 0 / 60%);
+}
+
+.crossed {
+  --strike: 1;
+  position: relative;
+  width: fit-content;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 50% -4px auto;
+    height: 3px;
+    border-radius: 3px;
+    background: var(--monte);
+    transform: scaleX(var(--strike));
+    transform-origin: left;
+  }
+}
+
+.ending .chapter-title {
+  color: var(--papel);
+}

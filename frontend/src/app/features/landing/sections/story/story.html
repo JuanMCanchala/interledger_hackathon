@@ -1,0 +1,23 @@
+<section class="story" id="historia" aria-labelledby="story-title">
+  <div class="track">
+    <header class="panel opening">
+      <h2 id="story-title">Esta es la historia de Doña Nelly</h2>
+      <p class="lead">Y la de miles de tenderos que viven al día.</p>
+    </header>
+
+    @for (chapter of chapters; track chapter.title; let last = $last) {
+      <article class="panel chapter" [class.ending]="last">
+        <app-doodle class="chapter-doodle" [name]="chapter.doodle" />
+        <h3 class="chapter-title">{{ chapter.title }}</h3>
+        <p>{{ chapter.text }}</p>
+        @if (chapter.notes; as notes) {
+          <ul class="notebook" aria-label="Notas del cuaderno de Doña Nelly">
+            @for (note of notes; track note.line) {
+              <li class="note" [class.crossed]="note.crossed">{{ note.line }}</li>
+            }
+          </ul>
+        }
+      </article>
+    }
+  </div>
+</section>

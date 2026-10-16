@@ -1,0 +1,58 @@
+<section class="hero" id="inicio">
+  <div class="wrap grid">
+    <div class="copy">
+      <h1 class="headline">
+        <span class="sentence">Con MiPlante llevamos tus finanzas</span>
+        <span class="sr-only">pa' lante</span>
+        <app-logo class="word" aria-hidden="true" [wordplay]="true" />
+      </h1>
+      <p class="lead">
+        Cada venta se reparte solita en tus bolsillos: lo tuyo, tus proveedores, tu préstamo y tu
+        ahorro. Sin cuadernos ni cuentas a mano.
+      </p>
+      <a class="button" href="#historia">Conoce a Doña Nelly</a>
+    </div>
+
+    <div class="till" id="caja" role="group" aria-labelledby="till-title">
+      <div class="till-head">
+        <p id="till-title" class="till-title">Así se reparte una venta</p>
+        <div class="chips" role="group" aria-label="Valor de la venta">
+          @for (amount of amounts; track amount) {
+            <button
+              type="button"
+              class="chip"
+              [attr.aria-pressed]="amount === sale()"
+              (click)="sell(amount)"
+            >
+              {{ format(amount) }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="ticket">
+        <app-doodle class="ticket-doodle" name="pago" />
+        <span>Te pagaron</span>
+        <strong class="ticket-amount">{{ format(sale()) }}</strong>
+      </div>
+
+      <ul class="pockets">
+        @for (pocket of pockets; track pocket.name) {
+          <li class="pocket">
+            <span class="coin" aria-hidden="true">$</span>
+            <app-doodle class="jar-doodle" [name]="pocket.doodle" />
+            <div class="jar">
+              <span class="fill" [style.--level]="pocket.percent / 100"></span>
+            </div>
+            <strong class="amount" aria-hidden="true">{{ format(0) }}</strong>
+            <span class="name">{{ pocket.name }}</span>
+            <span class="pct">{{ pocket.percent }} %</span>
+          </li>
+        }
+      </ul>
+
+      <p class="till-note">Si hoy no vendes, hoy no pagas.</p>
+      <p class="sr-only" aria-live="polite">{{ summary() }}</p>
+    </div>
+  </div>
+</section>

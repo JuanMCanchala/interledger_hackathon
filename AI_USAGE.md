@@ -21,7 +21,7 @@ Living document: we update it as the project evolves during the Open Payments Ha
 
 ### 3. Application code
 
-- Not started yet. Each file or feature will be listed here with how AI was used.
+- `frontend/` (branch `frontend`): Claude Code scaffolded the Angular + GSAP PWA and wrote the landing page from the team's brief and brand kit. It also extracted the vector logo and the doodles from `Recursos Front/`.
 
 ## What We Did Ourselves
 

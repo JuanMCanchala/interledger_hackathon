@@ -1,0 +1,25 @@
+<section class="purpose" id="proposito" aria-labelledby="purpose-title">
+  <div class="wrap grid">
+    <div class="intro">
+      <h2 id="purpose-title">Que la plata del día a día deje de ser un enredo</h2>
+      <p class="lead">
+        MiPlante ayuda a quienes trabajan por su cuenta y a los dueños de micronegocios en Colombia
+        a manejar su dinero de forma sencilla: deudas, pensión, pagos a proveedores y gastos. Así
+        un mal día no se convierte en un mal mes.
+      </p>
+      <app-doodle class="intro-doodle" name="calculadora" />
+    </div>
+
+    <ol class="ledger">
+      @for (stat of stats; track stat.text) {
+        <li class="row">
+          <strong class="figure">
+            {{ stat.prefix }}<span class="count" [attr.data-value]="stat.value" [attr.data-decimals]="stat.decimals ?? 0">{{ format(stat.value, stat.decimals) }}</span>{{ stat.suffix }}
+          </strong>
+          <p class="text">{{ stat.text }}</p>
+          <p class="source">Fuente: {{ stat.source }}</p>
+        </li>
+      }
+    </ol>
+  </div>
+</section>

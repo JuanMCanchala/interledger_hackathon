@@ -1,0 +1,134 @@
+:root {
+  --monte: #094641;
+  --monte-hondo: #06332f;
+  --monte-claro: #135c55;
+  --lima: #ccf137;
+  --papel: #fdfbfb;
+  --hoja: #f4f6ec;
+  --tinta: #181818;
+  --renglon: rgb(9 70 65 / 14%);
+
+  --sans: Garet, Lexend, system-ui, sans-serif;
+  --script: Marelle, 'Playwrite ES', cursive;
+
+  --gutter: clamp(1rem, 4vw, 3rem);
+  --max: 1200px;
+  --radius-lg: 28px;
+  --radius-sm: 12px;
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--monte);
+  color: var(--papel);
+  font: 400 1.0625rem/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h2 {
+  font-size: clamp(2rem, 5.2vw, 3.6rem);
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+h3 {
+  font-size: 1.35rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+:focus-visible {
+  outline: 3px solid var(--lima);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.wrap {
+  width: min(100% - 2 * var(--gutter), var(--max));
+  margin-inline: auto;
+}
+
+.lead {
+  font-size: clamp(1.1rem, 1.6vw, 1.3rem);
+  max-width: 34em;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  min-height: 48px;
+  padding: 0.75rem 1.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lima);
+  color: var(--monte);
+  font: 700 1rem/1 var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(1px) scale(0.98);
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

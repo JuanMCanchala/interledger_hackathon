@@ -1,0 +1,43 @@
+.closing {
+  background: var(--lima);
+  color: var(--monte);
+  padding-block: clamp(5rem, 12vw, 8rem);
+  text-align: center;
+
+  .button {
+    background: var(--monte);
+    color: var(--lima);
+  }
+}
+
+.inner {
+  display: grid;
+  justify-items: center;
+  gap: 1.5rem;
+}
+
+.closing-doodle {
+  width: clamp(120px, 18vw, 180px);
+  color: var(--monte);
+}
+
+.footer {
+  background: var(--papel);
+  color: var(--monte);
+  padding-block: 2.5rem;
+  font-size: 0.9rem;
+}
+
+.footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.footer-logo {
+  --logo-ink: var(--monte);
+  --logo-cut: var(--papel);
+  width: 150px;
+}

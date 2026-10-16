@@ -1,0 +1,36 @@
+<section class="preview" id="planta" aria-labelledby="preview-title">
+  <div class="wrap grid">
+    <div class="copy">
+      <h2 id="preview-title">Tu mes crece como una planta</h2>
+      <p class="lead">
+        En la aplicación, cada bolsillo que llenas hace crecer tu planta. Así sabes de un vistazo
+        cómo vas, sin números complicados.
+      </p>
+      <ol class="stages">
+        @for (stage of stages; track stage.name; let i = $index) {
+          <li class="stage" [class.active]="i === activeStage()">
+            <strong>{{ stage.name }}</strong>
+            <span>{{ stage.text }}</span>
+          </li>
+        }
+      </ol>
+    </div>
+
+    <div class="phone" aria-label="Vista previa de la aplicación MiPlante" role="img">
+      <div class="screen">
+        <p class="greeting">Hola, Nelly</p>
+        <p class="day">Día <span class="day-number">30</span> de 30</p>
+        <app-plant class="plant" />
+        <p class="stage-label">{{ stages[activeStage()].name }}</p>
+        <ul class="bars">
+          @for (goal of goals; track goal.name) {
+            <li class="bar">
+              <span class="bar-name">{{ goal.name }}</span>
+              <span class="bar-track"><span class="bar-fill" [style.--goal]="goal.reached"></span></span>
+            </li>
+          }
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>

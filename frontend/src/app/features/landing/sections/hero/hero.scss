@@ -1,0 +1,185 @@
+.hero {
+  min-height: 100svh;
+  padding-block: clamp(6.5rem, 14vh, 9rem) 4rem;
+  display: flex;
+  align-items: center;
+}
+
+.grid {
+  display: grid;
+  gap: clamp(2.5rem, 5vw, 4.5rem);
+  align-items: center;
+
+  @media (min-width: 900px) {
+    grid-template-columns: 1.15fr 0.85fr;
+  }
+}
+
+.copy {
+  display: grid;
+  gap: 1.75rem;
+  justify-items: start;
+}
+
+.headline {
+  display: grid;
+  gap: 0.6rem;
+  font-weight: 500;
+}
+
+.sentence {
+  font-size: clamp(1.5rem, 3.4vw, 2.5rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  max-width: 16em;
+  text-wrap: balance;
+}
+
+.word {
+  width: min(100%, 640px);
+}
+
+.till {
+  background: var(--monte-claro);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  display: grid;
+  gap: 1.25rem;
+  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 50%);
+}
+
+.till-head {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.till-title {
+  font-weight: 700;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 2px solid rgb(204 241 55 / 45%);
+  background: transparent;
+  color: var(--papel);
+  font: 500 0.95rem/1 var(--sans);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, transform 0.2s;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+
+  &[aria-pressed='true'] {
+    background: var(--lima);
+    border-color: var(--lima);
+    color: var(--monte);
+  }
+}
+
+.ticket {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--radius-sm);
+  background: var(--papel);
+  color: var(--monte);
+  font-weight: 500;
+}
+
+.ticket-doodle {
+  width: 40px;
+}
+
+.ticket-amount {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pockets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(0.4rem, 1.5vw, 0.9rem);
+}
+
+.pocket {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  text-align: center;
+  gap: 0.35rem;
+}
+
+.coin {
+  position: absolute;
+  top: 3.6rem;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--lima);
+  color: var(--monte);
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.jar-doodle {
+  width: clamp(40px, 9vw, 56px);
+  color: var(--lima);
+}
+
+.jar {
+  position: relative;
+  width: 100%;
+  height: clamp(110px, 18vh, 150px);
+  border-radius: 10px 10px 22px 22px;
+  background: var(--monte-hondo);
+  overflow: hidden;
+}
+
+.fill {
+  position: absolute;
+  inset: auto 0 0;
+  height: max(7%, calc(var(--level) * 100%));
+  background: var(--lima);
+  transform-origin: bottom;
+}
+
+.amount {
+  font-size: clamp(0.85rem, 2.6vw, 1.05rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.pct {
+  font-size: 0.8rem;
+  color: var(--lima);
+}
+
+.till-note {
+  font-family: var(--script);
+  font-size: 1.15rem;
+  color: var(--lima);
+  text-align: center;
+}
