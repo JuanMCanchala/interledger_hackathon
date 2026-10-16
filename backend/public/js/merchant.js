@@ -347,7 +347,7 @@ function openRulesEditor() {
       kind: rule.kind,
       sharePercent: rule.shareBps / 100,
       outstanding: toDecimal(rule.outstanding),
-      destination: rule.destination,
+      destination: walletName(rule.destination),
     });
   }
   showMessage($("rules-error"), "");

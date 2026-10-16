@@ -2,6 +2,7 @@ import {
   el,
   formatMoney,
   normalizeDecimal,
+  normalizeWallet,
   previewSplit,
   showMessage,
   toMinor,
@@ -199,7 +200,8 @@ export function createRulesEditor({
       const body = {
         label: rule.label,
         kind: rule.kind,
-        destination: rule.destination,
+        // "proveedor-billeticos" → "$ilp.interledger-test.dev/proveedor-billeticos", like onboarding.
+        destination: normalizeWallet(rule.destination),
         sharePercent: rule.sharePercent,
       };
       if (rule.id) body.id = rule.id;
