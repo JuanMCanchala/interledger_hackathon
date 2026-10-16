@@ -1,5 +1,6 @@
 import { loadConfig } from "./config.js";
 import { createApp } from "./http/app.js";
+import { MerchantService } from "./merchants/merchantService.js";
 import { createOpenPaymentsClient } from "./openPayments/client.js";
 import { describeError } from "./openPayments/errors.js";
 import { PaymentFlows } from "./openPayments/flows.js";
@@ -15,17 +16,16 @@ try {
 try {
   const config = loadConfig();
   const client = await createOpenPaymentsClient(config);
-  const flows = new PaymentFlows(
-    new OpenPaymentsOperations(client),
-    new Store(config.dataFile),
-    {
-      publicBaseUrl: config.publicBaseUrl,
-      allowedWalletHosts: config.allowedWalletHosts,
-    },
-  );
+  const store = new Store(config.dataFile);
+  const flows = new PaymentFlows(new OpenPaymentsOperations(client), store, {
+    publicBaseUrl: config.publicBaseUrl,
+    allowedWalletHosts: config.allowedWalletHosts,
+  });
+  const merchants = new MerchantService(flows, store);
   const frontendOrigin = new URL(config.frontendUrl).origin;
   const app = createApp({
     flows,
+    merchants,
     frontendUrl: config.frontendUrl,
     corsOrigin:
       frontendOrigin === new URL(config.publicBaseUrl).origin

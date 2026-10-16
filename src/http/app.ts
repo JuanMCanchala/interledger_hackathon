@@ -8,11 +8,13 @@ import express, {
 import { z } from "zod";
 import { describeError } from "../openPayments/errors.js";
 import { AppError } from "../shared/errors.js";
+import type { MerchantService } from "../merchants/merchantService.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import * as schemas from "./schemas.js";
 
 export interface AppOptions {
   flows: PaymentFlows;
+  merchants: MerchantService;
   /** Where the browser lands after the consent screen. */
   frontendUrl: string;
   /** Origin allowed to call /api from another host (e.g. a Vite or Next.js dev server). */
@@ -21,7 +23,12 @@ export interface AppOptions {
 
 const PUBLIC_DIR = fileURLToPath(new URL("../../public", import.meta.url));
 
-export function createApp({ flows, frontendUrl, corsOrigin }: AppOptions) {
+export function createApp({
+  flows,
+  merchants,
+  frontendUrl,
+  corsOrigin,
+}: AppOptions) {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "20kb" }));
@@ -114,6 +121,18 @@ export function createApp({ flows, frontendUrl, corsOrigin }: AppOptions) {
 
   app.delete("/api/mandates/:id", async (req, res) => {
     res.json(await flows.revokeMandate(req.params.id));
+  });
+
+  // MiPlante ---------------------------------------------------------------------------------------
+
+  app.post("/api/merchants", async (req, res) => {
+    res
+      .status(201)
+      .json(await merchants.onboard(schemas.onboardMerchant.parse(req.body)));
+  });
+
+  app.get("/api/merchants/:id", async (req, res) => {
+    res.json(merchants.view(merchants.require(req.params.id)));
   });
 
   app.use("/api", (_req, res) => {

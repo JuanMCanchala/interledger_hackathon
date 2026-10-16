@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/http/app.js";
+import { MerchantService } from "../src/merchants/merchantService.js";
 import { PaymentFlows } from "../src/openPayments/flows.js";
 import { Store } from "../src/storage/store.js";
 import { ALICE, BOB, createFakeOperations } from "./fakeOperations.js";
@@ -13,12 +14,14 @@ let baseUrl: string;
 
 beforeAll(async () => {
   const { ops } = createFakeOperations();
-  const flows = new PaymentFlows(ops, new Store(), {
+  const store = new Store();
+  const flows = new PaymentFlows(ops, store, {
     publicBaseUrl: "http://localhost:3000",
     allowedWalletHosts: ["ilp.interledger-test.dev"],
   });
   server = createApp({
     flows,
+    merchants: new MerchantService(flows, store),
     frontendUrl: FRONTEND_URL,
     corsOrigin: FRONTEND_URL,
   }).listen(0);

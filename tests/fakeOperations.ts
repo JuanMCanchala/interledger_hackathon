@@ -17,6 +17,9 @@ import type {
 
 export const ALICE = "https://ilp.interledger-test.dev/alice";
 export const BOB = "https://ilp.interledger-test.dev/bob";
+/** Destination wallets for MiPlante rules (COP). */
+export const COOP = "https://ilp.interledger-test.dev/coop";
+export const SAVINGS = "https://ilp.interledger-test.dev/ahorro";
 export const AUTH_SERVER = "https://auth.interledger-test.dev/tenant-1";
 export const NOW = new Date("2026-10-16T15:00:00Z");
 
@@ -30,6 +33,20 @@ const wallets: Record<string, WalletAddress> = {
   }),
   [BOB]: mockWalletAddress({
     id: BOB,
+    assetCode: "COP",
+    assetScale: 2,
+    authServer: AUTH_SERVER,
+    resourceServer: "https://ilp.interledger-test.dev",
+  }),
+  [COOP]: mockWalletAddress({
+    id: COOP,
+    assetCode: "COP",
+    assetScale: 2,
+    authServer: AUTH_SERVER,
+    resourceServer: "https://ilp.interledger-test.dev",
+  }),
+  [SAVINGS]: mockWalletAddress({
+    id: SAVINGS,
     assetCode: "COP",
     assetScale: 2,
     authServer: AUTH_SERVER,

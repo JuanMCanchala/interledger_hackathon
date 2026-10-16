@@ -58,3 +58,23 @@ export const callbackQuery = z
     hash: query.hash,
     result: query.result,
   }));
+
+// MiPlante -----------------------------------------------------------------------------------------
+
+export const onboardMerchant = z.object({
+  name: z.string().trim().min(1).max(80),
+  wallet: walletAddress,
+  dailyCap: decimalAmount,
+  rules: z
+    .array(
+      z.object({
+        label: z.string().trim().min(1).max(60),
+        kind: z.enum(["debt", "savings"]),
+        destination: walletAddress,
+        sharePercent: z.number().gt(0).max(50),
+        outstanding: decimalAmount.optional(),
+      }),
+    )
+    .min(1)
+    .max(5),
+});
