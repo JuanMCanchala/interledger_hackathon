@@ -37,6 +37,7 @@ try {
         ? undefined
         : frontendOrigin,
   });
+  sales.startSweeper();
   app.listen(config.port, () => {
     console.log(
       `Open Payments listo en ${config.publicBaseUrl} (wallet de la app: ${config.clientWalletAddress})`,

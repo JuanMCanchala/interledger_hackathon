@@ -6,7 +6,7 @@ import {
 } from "../domain/allocation.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
-import { toAmount } from "../shared/money.js";
+import { toAmount, type Amount } from "../shared/money.js";
 import type { Store } from "../storage/store.js";
 import type { MerchantRecord, MerchantRule } from "./types.js";
 
@@ -104,6 +104,33 @@ export class MerchantService {
     const merchant = this.store.getMerchant(id);
     if (!merchant) throw new NotFoundError(`No existe el comercio ${id}`);
     return merchant;
+  }
+
+  /** A rule's share left the merchant's wallet: count it as repaid and lower the debt. */
+  recordRepayment(merchantId: string, ruleId: string, amount: Amount): void {
+    const merchant = this.require(merchantId);
+    const add = (a: Amount, delta: bigint): Amount => ({
+      ...a,
+      value: (BigInt(a.value) + delta).toString(),
+    });
+    const rules = merchant.rules.map((rule) => {
+      if (rule.id !== ruleId) return rule;
+      const value = BigInt(amount.value);
+      const outstanding = rule.outstanding && add(rule.outstanding, -value);
+      return {
+        ...rule,
+        repaid: add(rule.repaid, value),
+        outstanding:
+          outstanding && BigInt(outstanding.value) < 0n
+            ? { ...outstanding, value: "0" }
+            : outstanding,
+      };
+    });
+    this.store.saveMerchant({
+      ...merchant,
+      rules,
+      updatedAt: this.now().toISOString(),
+    });
   }
 
   /** Public view. The consent status comes from the merchant's mandate. */
