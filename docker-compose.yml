@@ -36,6 +36,10 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-miplante}:${POSTGRES_PASSWORD:-miplante}@db:5432/${POSTGRES_DB:-miplante}?schema=public
       OP_CLIENT_WALLET_ADDRESS: ${OP_CLIENT_WALLET_ADDRESS:-https://ilp.interledger-test.dev/tienda-billeticos}
       OP_ALLOWED_WALLET_HOSTS: ${OP_ALLOWED_WALLET_HOSTS:-ilp.interledger-test.dev}
+      # The developer key is never baked into the image; Compose mounts it read-only.
+      OP_PRIVATE_KEY_PATH: /run/secrets/op_private_key
+    secrets:
+      - op_private_key
     ports:
       - "3000:3000"
     volumes:
@@ -61,3 +65,8 @@ services:
 
 volumes:
   miplante_pgdata:
+
+secrets:
+  # Download it from the test wallet (Settings → Developer Keys) into the repository root.
+  op_private_key:
+    file: ./private.key
