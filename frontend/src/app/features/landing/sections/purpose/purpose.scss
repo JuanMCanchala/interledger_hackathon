@@ -47,7 +47,6 @@
 
 .figure {
   --fill: 1;
-  position: relative;
   display: inline;
   padding: 0 0.15em;
   border-radius: 0.2em;
@@ -60,24 +59,6 @@
     font-size: 0.4em;
     margin-left: 0.1em;
   }
-}
-
-.figure-doodle {
-  position: absolute;
-  left: 50%;
-  bottom: 100%;
-  width: 2.2em;
-  color: var(--monte);
-  opacity: 0;
-  transform: translate(-50%, 0.4em) rotate(-10deg) scale(0.6);
-  transition: opacity 0.25s, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-  pointer-events: none;
-}
-
-.figure:hover .figure-doodle,
-.figure:focus-visible .figure-doodle {
-  opacity: 1;
-  transform: translate(-50%, -0.1em) rotate(6deg) scale(1);
 }
 
 .sources {
