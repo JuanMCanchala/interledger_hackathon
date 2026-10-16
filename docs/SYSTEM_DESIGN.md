@@ -223,6 +223,9 @@ the merchant keeps 8,000.00.
   creation fails, the balance is untouched and the item is marked `failed`.
 - **Restarts** are safe: records are persisted after every change, and the sweeper picks up any sale
   left in `processing` or `paid` with a pending settlement.
+- **Known limitation:** if the process dies in the middle of a settlement, the sale stays `running`
+  with every item sent so far recorded (items are persisted one by one). It is not resumed
+  automatically; a production version would resume from the recorded items under a database lock.
 
 ## 10. Security
 
