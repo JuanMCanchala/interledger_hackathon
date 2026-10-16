@@ -16,3 +16,4 @@ Read in this order; it follows how the project was thought through.
 8. [HTTP API](API.md): every endpoint, request and response.
 9. [Demo and pitch script](DEMO.md): the five-minute pitch, the recording checklist, expected
    questions.
+10. [Deploying to Railway](DEPLOY.md): services, variables and commands to put MiPlante online.
