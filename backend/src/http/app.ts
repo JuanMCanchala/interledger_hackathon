@@ -146,6 +146,10 @@ export function createApp({
     res.json(await merchants.updateRules(req.params.id, rules));
   });
 
+  app.post("/api/merchants/:id/consent", async (req, res) => {
+    res.status(201).json(await merchants.renewConsent(req.params.id));
+  });
+
   app.post("/api/merchants/:id/sales", async (req, res) => {
     res
       .status(201)

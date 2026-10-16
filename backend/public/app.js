@@ -19,12 +19,12 @@ export const PAYMENT_STEPS = [
 
 export const MERCHANT_STATUS = {
   "awaiting-consent": {
-    text: "Falta tu autorización en la wallet",
+    text: "Falta autorizar",
     tone: "wait",
   },
   active: { text: "Activo", tone: "ok" },
-  rejected: { text: "Autorización rechazada", tone: "bad" },
-  revoked: { text: "Autorización revocada", tone: "bad" },
+  rejected: { text: "Sin autorizar", tone: "bad" },
+  revoked: { text: "Autorización cancelada", tone: "bad" },
   failed: { text: "No se pudo activar", tone: "bad" },
 };
 
@@ -40,11 +40,11 @@ export const ITEM_STATUS = {
   processing: { text: "Enviando…", tone: "wait" },
   completed: { text: "Enviado", tone: "ok" },
   failed: { text: "Falló", tone: "bad" },
-  skipped: { text: "Tope diario alcanzado", tone: "neutral" },
+  skipped: { text: "Límite diario alcanzado", tone: "neutral" },
 };
 
 export const RULE_KIND = {
-  debt: "Crédito / proveedor",
+  debt: "Deuda",
   savings: "Ahorro",
 };
 
@@ -72,8 +72,10 @@ export async function api(path, options = {}) {
       ? body.details.join(" · ")
       : body.details || "";
     const message = body.error || friendlyStatus(res.status);
-    const error = new Error(details ? `${message}: ${details}` : message);
+    const technical = details ? `${message}: ${details}` : message;
+    const error = new Error(friendlyError(technical) || technical);
     error.status = res.status;
+    error.technical = technical;
     throw error;
   }
   return body;
@@ -83,11 +85,101 @@ export function postJson(path, body) {
   return api(path, { method: "POST", body: JSON.stringify(body) });
 }
 
+/**
+ * People using MiPlante are shopkeepers and their customers, not developers: technical messages
+ * from the API or the wallet become plain Spanish with a hint of what to do next.
+ */
+const FRIENDLY_ERRORS = [
+  [
+    /Could not get wallet address|wallet desconocida|Wallet address inválida/i,
+    "No encontramos esa billetera. Revisa que el nombre esté bien escrito.",
+  ],
+  [
+    /no está permitido/i,
+    "Esa billetera no es de la red de prueba de Interledger. Escribe solo su nombre, por ejemplo tienda-billeticos.",
+  ],
+  [
+    /debe usar https|query ni fragmento/i,
+    "Escribe solo el nombre de la billetera, por ejemplo tienda-billeticos.",
+  ],
+  [
+    /misma wallet del negocio/i,
+    "El dinero de un pago automático no puede ir a la misma billetera de tu negocio.",
+  ],
+  [
+    /como máximo pueden tomar el 50%/i,
+    "Entre todos los pagos automáticos no puedes pasar de la mitad de cada venta.",
+  ],
+  [
+    /ya se está pagando o ya fue pagada/i,
+    "Este cobro ya se está pagando. Espera un momento y recarga la página.",
+  ],
+  [
+    /Open Payments rechazó la solicitud/i,
+    "La billetera no aceptó la operación. Intenta de nuevo en un momento.",
+  ],
+];
+
+export function friendlyError(message) {
+  const match = FRIENDLY_ERRORS.find(([pattern]) => pattern.test(message));
+  return match ? match[1] : "";
+}
+
 function friendlyStatus(status) {
   if (status === 404) return "No encontramos lo que buscas";
   if (status >= 500)
     return "El servidor tuvo un problema. Intenta de nuevo en un momento";
   return `Algo salió mal (error ${status})`;
+}
+
+// Wallets -----------------------------------------------------------------------------------------
+
+/** All demo wallets live on the Interledger test network, so people only type the name. */
+export const WALLET_HOST = "ilp.interledger-test.dev";
+
+/**
+ * What a person types → what the API accepts:
+ * "tienda-billeticos" → "$ilp.interledger-test.dev/tienda-billeticos"; "$…" and "https://…" pass.
+ */
+export function normalizeWallet(input) {
+  const text = String(input ?? "").replace(/\s+/g, "");
+  if (!text) return "";
+  if (/^(\$|https?:\/\/)/i.test(text)) return text;
+  if (text.includes("/")) return `$${text}`;
+  return `$${WALLET_HOST}/${text.replace(/^@/, "")}`;
+}
+
+/** "https://ilp.interledger-test.dev/tienda-billeticos" → "tienda-billeticos" for display. */
+export function walletName(url) {
+  try {
+    const parsed = new URL(String(url).replace(/^\$/, "https://"));
+    const path = parsed.pathname.replace(/^\//, "");
+    return parsed.hostname === WALLET_HOST
+      ? path
+      : `${parsed.hostname}/${path}`;
+  } catch {
+    return String(url ?? "");
+  }
+}
+
+const CURRENCY_NAMES = {
+  COP: "pesos colombianos",
+  USD: "dólares",
+  EUR: "euros",
+};
+
+/** Looks the wallet up; resolves to { name, currency } or rejects with a friendly message. */
+export async function checkWallet(input) {
+  const wallet = normalizeWallet(input);
+  const info = await api(
+    `/api/wallet-address?url=${encodeURIComponent(wallet)}`,
+  );
+  return {
+    wallet,
+    name: walletName(info.id),
+    currency: CURRENCY_NAMES[info.assetCode] || info.assetCode,
+    assetCode: info.assetCode,
+  };
 }
 
 // Money -------------------------------------------------------------------------------------------
@@ -304,7 +396,7 @@ export function renderSplit(
           el("span", { text: RULE_KIND[item.kind] || item.kind }),
           statusBadge(ITEM_STATUS, item.status),
           item.capped && item.status !== "skipped"
-            ? badge("Tope diario alcanzado")
+            ? badge("Límite diario alcanzado")
             : null,
           item.error
             ? el("span", { class: "error-text", text: item.error })

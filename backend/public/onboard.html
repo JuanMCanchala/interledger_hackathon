@@ -30,95 +30,111 @@
           </span>
           MiPlante
         </a>
-        <a class="btn btn-ghost" href="/#abrir-caja">Abrir mi caja</a>
+        <a class="btn btn-ghost" href="/#abrir-caja">Ya tengo mi caja</a>
       </header>
 
-      <main class="stack">
+      <main class="narrow stack">
         <div class="stack-sm">
-          <p class="eyebrow">Registro</p>
-          <h1 class="h1-sm">Registra tu negocio</h1>
+          <p class="eyebrow">Registro · 1 minuto</p>
+          <h1 class="h1-sm">Registra tu negocio en 3 pasos</h1>
           <p class="lead">
-            Elige cómo se reparte cada venta. Al final te llevamos a tu wallet
-            para que autorices, una sola vez, el tope diario de descuentos.
+            Cada vez que vendas, una pequeña parte se va sola a pagar tus deudas
+            y a tu ahorro. Al final apruebas todo una sola vez en tu billetera.
           </p>
         </div>
 
-        <form id="onboard-form" class="stack">
-          <section class="card stack">
-            <h2>Tu negocio</h2>
+        <form id="onboard-form" class="stack" novalidate>
+          <!-- Paso 1 -->
+          <section class="card stack" aria-labelledby="step1-title">
+            <h2 class="step-title" id="step1-title">
+              <span class="step-number" aria-hidden="true">1</span> Tu negocio
+            </h2>
             <label class="field">
-              <span>Nombre del negocio</span>
+              <span>¿Cómo se llama tu negocio?</span>
               <input
                 id="business-name"
-                required
                 maxlength="80"
                 autocomplete="organization"
-                placeholder="Tienda Doña Rosa"
+                placeholder="Ej: Tienda Doña Rosa"
               />
             </label>
             <label class="field">
-              <span>Wallet del negocio</span>
+              <span>¿Cuál es tu billetera?</span>
               <input
                 id="business-wallet"
-                required
                 maxlength="300"
                 autocomplete="off"
                 spellcheck="false"
                 autocapitalize="off"
-                placeholder="$ilp.interledger-test.dev/mi-tienda"
+                placeholder="Ej: tienda-billeticos"
               />
               <small class="hint"
-                >Aquí te pagan tus clientes. Puede empezar con $ o con
-                https://</small
+                >Escribe solo el nombre de tu billetera. Ahí te pagan tus
+                clientes.</small
               >
-            </label>
-            <label class="field">
-              <span>Tope diario de descuentos</span>
-              <input
-                id="daily-cap"
-                required
-                inputmode="decimal"
-                autocomplete="off"
-                placeholder="20.000"
-              />
-              <small class="hint">
-                Lo máximo que MiPlante puede descontar de tu wallet en un día,
-                sumando todas las reglas. Lo apruebas en tu wallet y lo puedes
-                revocar cuando quieras.
-              </small>
+              <small class="check" id="wallet-check" aria-live="polite"></small>
             </label>
           </section>
 
-          <section class="card stack">
-            <div class="row between">
-              <h2>Reglas de reparto</h2>
-              <button type="button" class="btn btn-secondary" id="add-rule">
-                + Agregar regla
-              </button>
-            </div>
+          <!-- Paso 2 -->
+          <section class="card stack" aria-labelledby="step2-title">
+            <h2 class="step-title" id="step2-title">
+              <span class="step-number" aria-hidden="true">2</span> ¿Qué se paga
+              solo con tus ventas?
+            </h2>
             <p class="muted small">
-              Cada regla toma un porcentaje de cada venta y lo envía a otra
-              wallet. Una deuda deja de cobrarse sola cuando queda pagada.
+              Elige una o varias. De cada venta sale un pedacito para cada una.
             </p>
-            <div id="rules" class="stack"></div>
+            <div id="goals" class="stack"></div>
           </section>
 
-          <section class="card stack" aria-live="polite">
-            <h2>Así se reparte una venta</h2>
-            <p id="preview-sentence" class="small"></p>
+          <!-- Paso 3 -->
+          <section class="card stack" aria-labelledby="step3-title">
+            <h2 class="step-title" id="step3-title">
+              <span class="step-number" aria-hidden="true">3</span> Tu límite
+              diario
+            </h2>
+            <fieldset class="stack-sm fieldset-plain">
+              <legend class="field-legend">
+                ¿Máximo cuánto se puede descontar en un día?
+              </legend>
+              <div class="chips" id="cap-chips"></div>
+              <label class="field" id="cap-other-field" hidden>
+                <span>Otro valor</span>
+                <input
+                  id="cap-other"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  placeholder="Ej: 40.000"
+                />
+              </label>
+            </fieldset>
+            <p class="hint">
+              Aunque vendas mucho, nunca se descuenta más de esto en un día. Lo
+              puedes cancelar cuando quieras desde tu billetera.
+            </p>
+          </section>
+
+          <!-- Resumen -->
+          <section class="card stack summary-card" aria-live="polite">
+            <h2 id="summary-title">Así queda cada venta</h2>
             <div class="stacked-bar" id="preview-bar" aria-hidden="true"></div>
             <ul class="split" id="preview-list"></ul>
             <p id="preview-warning" class="banner banner-bad" hidden></p>
-            <p id="preview-cap" class="hint" hidden></p>
           </section>
 
+          <p class="banner banner-info" id="wallet-tip">
+            Ahora te llevamos a tu billetera. Entra con la cuenta dueña de tu
+            billetera y toca <strong>Aceptar</strong>. Después vuelves aquí
+            solo.
+          </p>
           <p id="form-error" class="banner banner-bad" role="alert" hidden></p>
           <button
             type="submit"
             class="btn btn-primary btn-lg btn-block"
             id="submit"
           >
-            Autorizar en mi wallet
+            Continuar a mi billetera →
           </button>
         </form>
       </main>
@@ -128,61 +144,5 @@
         <a href="/sandbox.html">Sandbox de Open Payments</a>
       </footer>
     </div>
-
-    <template id="rule-template">
-      <fieldset class="rule-row">
-        <legend class="sr-only">Regla de reparto</legend>
-        <label class="field">
-          <span>Nombre</span>
-          <input
-            data-field="label"
-            required
-            maxlength="60"
-            placeholder="Microcrédito"
-          />
-        </label>
-        <label class="field">
-          <span>Tipo</span>
-          <select data-field="kind">
-            <option value="debt">Crédito / proveedor</option>
-            <option value="savings">Ahorro</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>% de cada venta</span>
-          <input
-            data-field="sharePercent"
-            type="number"
-            required
-            min="0.01"
-            max="50"
-            step="0.01"
-            inputmode="decimal"
-          />
-        </label>
-        <label class="field outstanding-field">
-          <span>Saldo por pagar</span>
-          <input
-            data-field="outstanding"
-            inputmode="decimal"
-            autocomplete="off"
-            placeholder="300.000"
-          />
-        </label>
-        <label class="field destination-field">
-          <span>Wallet de destino</span>
-          <input
-            data-field="destination"
-            required
-            maxlength="300"
-            autocomplete="off"
-            spellcheck="false"
-            autocapitalize="off"
-            placeholder="$ilp.interledger-test.dev/cooperativa"
-          />
-        </label>
-        <button type="button" class="btn btn-danger remove-rule">Quitar</button>
-      </fieldset>
-    </template>
   </body>
 </html>

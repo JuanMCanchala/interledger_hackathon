@@ -6,7 +6,7 @@ import {
 } from "../domain/allocation.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
-import { toAmount, type Amount } from "../shared/money.js";
+import { fromMinorUnits, toAmount, type Amount } from "../shared/money.js";
 import type { RuleUpdate, Store } from "../storage/store.js";
 import type { MerchantRecord, MerchantRule } from "./types.js";
 
@@ -166,6 +166,35 @@ export class MerchantService {
 
     await this.store.updateRules(id, updates, this.now().toISOString());
     return this.view(await this.require(id));
+  }
+
+  /**
+   * Asks the merchant for the daily-capped consent again, with the same cap and rules, when the
+   * first attempt was never approved, was rejected, or was revoked. An active consent is kept.
+   */
+  async renewConsent(id: string) {
+    const merchant = await this.require(id);
+    if (
+      (await this.flows.findMandate(merchant.mandateId)).status === "active"
+    ) {
+      throw new AppError("Este negocio ya tiene su autorización activa", 409);
+    }
+    const { mandate, redirectUrl } = await this.flows.startMandate({
+      sender: merchant.wallet,
+      maxAmount: fromMinorUnits(
+        merchant.dailyCap.value,
+        merchant.dailyCap.assetScale,
+      ),
+      interval: DAILY_INTERVAL,
+      description: `MiPlante · ${merchant.name}`,
+      returnTo: `/merchant.html?id=${merchant.id}`,
+    });
+    const updated = await this.store.saveMerchant({
+      ...merchant,
+      mandateId: mandate.id,
+      updatedAt: this.now().toISOString(),
+    });
+    return { merchant: await this.view(updated), redirectUrl };
   }
 
   async require(id: string): Promise<MerchantRecord> {

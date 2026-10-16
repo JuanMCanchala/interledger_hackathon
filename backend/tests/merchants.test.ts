@@ -50,7 +50,9 @@ describe("merchant onboarding", () => {
 
     const id = await onboardRosa();
 
-    expect((await merchants.view(await merchants.require(id))).status).toBe("active");
+    expect((await merchants.view(await merchants.require(id))).status).toBe(
+      "active",
+    );
   });
 
   it("keeps the majority of every sale for the merchant", async () => {
@@ -96,6 +98,49 @@ describe("merchant onboarding", () => {
 
   it("answers 404 for unknown merchants", async () => {
     const { merchants } = setupMiPlante();
-    await expect(merchants.require("nope")).rejects.toThrow("No existe el comercio");
+    await expect(merchants.require("nope")).rejects.toThrow(
+      "No existe el comercio",
+    );
+  });
+
+  it("asks for the consent again when the first one was rejected", async () => {
+    const { merchants, flows, store, approveMandate, ops } = setupMiPlante();
+    const { merchant } = await merchants.onboard(ROSA);
+    const firstMandate = (await store.getMerchant(merchant.id))!.mandateId;
+    await flows.completeMandate(firstMandate, { result: "grant_rejected" });
+    expect(
+      (await merchants.view(await merchants.require(merchant.id))).status,
+    ).toBe("rejected");
+
+    const { merchant: renewed, redirectUrl } = await merchants.renewConsent(
+      merchant.id,
+    );
+
+    expect(redirectUrl).toBe("https://wallet.interledger-test.dev/consent/1");
+    expect(ops.requestOutgoingPaymentGrant).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: BOB }),
+      expect.objectContaining({
+        limits: {
+          debitAmount: cop("3000000"),
+          interval: "R/2026-10-16T15:00:00Z/P1D",
+        },
+      }),
+    );
+    const secondMandate = (await store.getMerchant(merchant.id))!.mandateId;
+    expect(secondMandate).not.toBe(firstMandate);
+    expect(renewed.status).toBe("awaiting-consent");
+    await approveMandate(secondMandate);
+    expect(
+      (await merchants.view(await merchants.require(merchant.id))).status,
+    ).toBe("active");
+  });
+
+  it("keeps an active consent instead of asking again", async () => {
+    const { merchants, onboardRosa } = setupMiPlante();
+    const id = await onboardRosa();
+
+    await expect(merchants.renewConsent(id)).rejects.toMatchObject({
+      status: 409,
+    });
   });
 });

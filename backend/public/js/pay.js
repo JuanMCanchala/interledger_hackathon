@@ -2,6 +2,7 @@ import {
   PAYMENT_STEPS,
   STORAGE_KEYS,
   api,
+  normalizeWallet,
   formatAmount,
   param,
   poll,
@@ -11,6 +12,7 @@ import {
   renderSteps,
   showMessage,
   statusBadge,
+  walletName,
   withBusy,
 } from "../app.js";
 
@@ -127,13 +129,13 @@ async function load() {
 $("pay-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   showMessage($("error"), "");
-  const wallet = $("customer-wallet").value.trim();
+  const wallet = normalizeWallet($("customer-wallet").value);
   if (!wallet) {
     $("customer-wallet").focus();
     return;
   }
   try {
-    await withBusy($("pay-button"), "Abriendo tu wallet…", async () => {
+    await withBusy($("pay-button"), "Abriendo tu billetera…", async () => {
       const { redirectUrl } = await postJson(
         `/api/sales/${encodeURIComponent(saleId)}/pay`,
         {
@@ -148,7 +150,9 @@ $("pay-form").addEventListener("submit", async (event) => {
   }
 });
 
-$("customer-wallet").value = remember.get(STORAGE_KEYS.customerWallet);
+$("customer-wallet").value = walletName(
+  remember.get(STORAGE_KEYS.customerWallet),
+);
 
 if (!saleId) {
   $("missing").hidden = false;

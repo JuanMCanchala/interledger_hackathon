@@ -33,6 +33,10 @@ const nextConfig = {
         destination: `${backendUrl}/app.js`,
       },
       {
+        source: "/favicon.svg",
+        destination: `${backendUrl}/favicon.svg`,
+      },
+      {
         source: "/js/:path*",
         destination: `${backendUrl}/js/:path*`,
       },
