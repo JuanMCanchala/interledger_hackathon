@@ -32,7 +32,7 @@ Product context: [`product/PRODUCT_BRIEF.md`](product/PRODUCT_BRIEF.md). Decisio
 | N3  | **Exact money.** Integer arithmetic only; the parts of a split add up exactly to the sale.                                                       |
 | N4  | **Exactly-once settlement.** A sale is split once, even with concurrent polls, reloads or restarts.                                              |
 | N5  | **Security.** Tokens and nonces never leave the server; callbacks are verified; only allow-listed wallet hosts are called; inputs are validated. |
-| N6  | **Demo reliability.** Runs on one laptop with `npm run dev`; state survives restarts.                                                            |
+| N6  | **Demo reliability.** Runs on one laptop (`docker compose up`); state lives in PostgreSQL and survives restarts.                                  |
 
 ## 3. Context & Technology Architecture (All-in-Docker)
 
@@ -256,15 +256,20 @@ the merchant keeps 8,000.00.
 
 - **Callbacks** run only while the record is `awaiting-consent` and clear the interaction once used,
   so a reload cannot continue a grant twice.
-- **Settlement** has a persisted state machine (`pending → running → done | skipped`) plus an
-  in-process lock per sale. The state is written to `running` before the first payment is created.
-- **Debt balances** are reduced when the repayment's outgoing payment is created successfully. If the
-  creation fails, the balance is untouched and the item is marked `failed`.
-- **Restarts** are safe: records are persisted after every change, and the sweeper picks up any sale
+- **Settlement** has a persisted state machine (`pending → running → done | skipped`). The move to
+  `running` is one conditional `UPDATE` (`claimSettlement`), done before the first payment is created,
+  so only one poll, sweeper or server instance can split a sale
+  ([ADR 0010](adr/0010-postgresql-through-prisma-with-atomic-transitions.md)).
+- **Payment status** changes on a sale (`transitionSale`) are conditional on the expected status and
+  never rewrite the settlement, so a slow poll cannot reopen a split that already started.
+- **Debt balances** are reduced when the repayment's outgoing payment is created successfully, in
+  one atomic `UPDATE` (`repaid + x`, `GREATEST(outstanding - x, 0)`). If the creation fails, the
+  balance is untouched and the item is marked `failed`.
+- **Restarts** are safe: records are persisted in PostgreSQL after every change, and the sweeper picks up any sale
   left in `processing` or `paid` with a pending settlement.
 - **Known limitation:** if the process dies in the middle of a settlement, the sale stays `running`
   with every item sent so far recorded (items are persisted one by one). It is not resumed
-  automatically; a production version would resume from the recorded items under a database lock.
+  automatically; a production version would resume from the recorded items.
 
 ## 10. Security
 
@@ -272,7 +277,7 @@ the merchant keeps 8,000.00.
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Forged consent callback                | GNAP interaction hash verified with a constant-time comparison; one-shot interactions                                          |
 | SSRF through user-supplied wallet URLs | Only hosts in `OP_ALLOWED_WALLET_HOSTS` are called (default `ilp.interledger-test.dev`); `https` only                          |
-| Token leakage                          | Tokens, nonces and continuation data are stripped from every API response; `data/` is git-ignored and written with mode `0600` |
+| Token leakage                          | Tokens, nonces and continuation data are stripped from every API response and stay in PostgreSQL, which is never exposed publicly |
 | Over-collection                        | Wallet-enforced daily cap (ADR 0004), debt ≤ outstanding, total shares ≤ 50%                                                   |
 | Malicious input                        | zod validation on every body and query; JSON limited to 20 kB; amounts validated against the asset scale                       |
 | Script injection in the UI             | Server data rendered with `textContent` only                                                                                   |
@@ -295,7 +300,7 @@ the merchant keeps 8,000.00.
 
 | Today (hackathon)          | Production                                                                                |
 | -------------------------- | ----------------------------------------------------------------------------------------- |
-| JSON file, single instance | PostgreSQL, tokens encrypted at rest, row-level settlement locks                          |
+| PostgreSQL in Docker, atomic settlement claims | Managed PostgreSQL, tokens encrypted at rest, automatic resume of interrupted settlements |
 | Polling every few seconds  | Backoff and batching; provider notifications where available                              |
 | Test-network wallets       | Colombian wallet providers adopting Open Payments; cash-in and cash-out at banking agents |
 | Rules set by the merchant  | Rules agreed with the lender, with a lender-side portal and reporting                     |
@@ -305,7 +310,9 @@ the merchant keeps 8,000.00.
 
 - **Unit:** money math, interaction hash, intervals, wallet address normalization, allocation engine.
 - **Flow:** Open Payments flows, merchants and sales against an in-memory fake of `PaymentOperations`
-  that records every call (no network).
+  that records every call (no network), on `MemoryStore`.
+- **Storage:** `tests/prismaStore.test.ts` runs record round trips, racing polls, racing claims and
+  concurrent repayments against a real PostgreSQL when `TEST_DATABASE_URL` is set (CI provides one).
 - **HTTP:** validation, error mapping, token redaction and callback redirects against a real Express
   server on a random port.
 - **Manual end-to-end:** the sandbox and the MiPlante screens against the Interledger test wallet

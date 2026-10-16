@@ -7,7 +7,7 @@ import { DashboardService } from "../src/merchants/dashboardService.js";
 import { MerchantService } from "../src/merchants/merchantService.js";
 import { SalesService } from "../src/merchants/salesService.js";
 import { PaymentFlows } from "../src/openPayments/flows.js";
-import { Store } from "../src/storage/store.js";
+import { MemoryStore } from "../src/storage/store.js";
 import {
   ALICE,
   BOB,
@@ -22,7 +22,7 @@ let baseUrl: string;
 
 beforeAll(async () => {
   const { ops } = createFakeOperations();
-  const store = new Store();
+  const store = new MemoryStore();
   const flows = new PaymentFlows(ops, store, {
     publicBaseUrl: "http://localhost:3000",
     allowedWalletHosts: ["ilp.interledger-test.dev"],

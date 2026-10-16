@@ -1,0 +1,430 @@
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Prisma, PrismaClient } from "../generated/prisma/client.js";
+import type {
+  MerchantRecord,
+  SaleRecord,
+  SaleStatus,
+  SettlementItem,
+} from "../merchants/types.js";
+import type {
+  Interaction,
+  MandateRecord,
+  PaymentRecord,
+  StoredToken,
+} from "../openPayments/records.js";
+import type { Amount, Asset } from "../shared/money.js";
+import type { SalePaymentChanges, Store } from "./store.js";
+
+const merchantInclude = { rules: { orderBy: { position: "asc" } } } as const;
+const saleInclude = { items: { orderBy: { position: "asc" } } } as const;
+
+type MerchantRow = Prisma.MerchantGetPayload<{
+  include: typeof merchantInclude;
+}>;
+type SaleRow = Prisma.SaleGetPayload<{ include: typeof saleInclude }>;
+type MandateRow = Prisma.MandateGetPayload<object>;
+type PaymentRow = Prisma.PaymentGetPayload<object>;
+
+/** PostgreSQL through Prisma (ADR 0010). Each save writes the whole record in one transaction. */
+export class PrismaStore implements Store {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  static connect(databaseUrl: string): PrismaStore {
+    return new PrismaStore(
+      new PrismaClient({
+        adapter: new PrismaPg({ connectionString: databaseUrl }),
+      }),
+    );
+  }
+
+  // Payments --------------------------------------------------------------------------------------
+
+  async getPayment(id: string) {
+    const row = await this.prisma.payment.findUnique({ where: { id } });
+    return row ? toPayment(row) : undefined;
+  }
+
+  async savePayment(record: PaymentRecord) {
+    const data = {
+      kind: record.kind,
+      status: record.status,
+      description: record.description ?? null,
+      returnTo: record.returnTo ?? null,
+      sender: record.sender,
+      receiver: record.receiver,
+      mandateId: record.mandateId ?? null,
+      incomingPaymentUrl: record.incomingPaymentUrl,
+      quoteId: record.quoteId ?? null,
+      quoteExpiresAt: record.quoteExpiresAt ?? null,
+      debitAmount: json(record.debitAmount),
+      receiveAmount: json(record.receiveAmount),
+      receivedAmount: json(record.receivedAmount),
+      outgoingPaymentUrl: record.outgoingPaymentUrl ?? null,
+      authorizedAt: date(record.authorizedAt),
+      error: record.error ?? null,
+      createdAt: new Date(record.createdAt),
+      updatedAt: new Date(record.updatedAt),
+      interaction: json(record.interaction),
+      incomingToken: record.incomingToken ?? null,
+      outgoingToken: record.outgoingToken ?? null,
+    };
+    await this.prisma.payment.upsert({
+      where: { id: record.id },
+      create: { id: record.id, ...data },
+      update: data,
+    });
+    return record;
+  }
+
+  async listPayments(filter: { mandateId?: string } = {}) {
+    const rows = await this.prisma.payment.findMany({
+      where: filter.mandateId ? { mandateId: filter.mandateId } : {},
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(toPayment);
+  }
+
+  // Mandates --------------------------------------------------------------------------------------
+
+  async getMandate(id: string) {
+    const row = await this.prisma.mandate.findUnique({ where: { id } });
+    return row ? toMandate(row) : undefined;
+  }
+
+  async saveMandate(record: MandateRecord) {
+    const data = {
+      status: record.status,
+      description: record.description ?? null,
+      returnTo: record.returnTo ?? null,
+      sender: record.sender,
+      maxAmount: record.maxAmount as unknown as Prisma.InputJsonValue,
+      interval: record.interval ?? null,
+      error: record.error ?? null,
+      createdAt: new Date(record.createdAt),
+      updatedAt: new Date(record.updatedAt),
+      interaction: json(record.interaction),
+      token: json(record.token),
+      continuation: json(record.continuation),
+    };
+    await this.prisma.mandate.upsert({
+      where: { id: record.id },
+      create: { id: record.id, ...data },
+      update: data,
+    });
+    return record;
+  }
+
+  // Merchants -------------------------------------------------------------------------------------
+
+  async getMerchant(id: string) {
+    const row = await this.prisma.merchant.findUnique({
+      where: { id },
+      include: merchantInclude,
+    });
+    return row ? toMerchant(row) : undefined;
+  }
+
+  async saveMerchant(record: MerchantRecord) {
+    const data = {
+      name: record.name,
+      wallet: record.wallet,
+      assetCode: record.asset.assetCode,
+      assetScale: record.asset.assetScale,
+      dailyCap: BigInt(record.dailyCap.value),
+      mandateId: record.mandateId,
+      createdAt: new Date(record.createdAt),
+      updatedAt: new Date(record.updatedAt),
+    };
+    await this.prisma.$transaction([
+      this.prisma.merchant.upsert({
+        where: { id: record.id },
+        create: { id: record.id, ...data },
+        update: data,
+      }),
+      this.prisma.rule.deleteMany({ where: { merchantId: record.id } }),
+      this.prisma.rule.createMany({
+        data: record.rules.map((rule, position) => ({
+          merchantId: record.id,
+          id: rule.id,
+          position,
+          label: rule.label,
+          kind: rule.kind,
+          destination: rule.destination,
+          shareBps: rule.shareBps,
+          outstanding: rule.outstanding ? BigInt(rule.outstanding.value) : null,
+          repaid: BigInt(rule.repaid.value),
+        })),
+      }),
+    ]);
+    return record;
+  }
+
+  async recordRepayment(
+    merchantId: string,
+    ruleId: string,
+    value: string,
+    updatedAt: string,
+  ) {
+    const delta = BigInt(value);
+    // One statement, so concurrent settlements of the same merchant never lose a repayment.
+    await this.prisma.$transaction([
+      this.prisma.$executeRaw`
+        UPDATE rules
+        SET repaid = repaid + ${delta},
+            outstanding = CASE WHEN outstanding IS NULL THEN NULL
+                               ELSE GREATEST(outstanding - ${delta}, 0) END
+        WHERE merchant_id = ${merchantId}::uuid AND id = ${ruleId}::uuid`,
+      this.prisma.merchant.update({
+        where: { id: merchantId },
+        data: { updatedAt: new Date(updatedAt) },
+      }),
+    ]);
+  }
+
+  // Sales -----------------------------------------------------------------------------------------
+
+  async getSale(id: string) {
+    const row = await this.prisma.sale.findUnique({
+      where: { id },
+      include: saleInclude,
+    });
+    return row ? toSale(row) : undefined;
+  }
+
+  async saveSale(record: SaleRecord) {
+    const { settlement } = record;
+    const data = {
+      merchantId: record.merchantId,
+      amount: BigInt(record.amount.value),
+      assetCode: record.amount.assetCode,
+      assetScale: record.amount.assetScale,
+      description: record.description ?? null,
+      status: record.status,
+      customer: record.customer ?? null,
+      paymentId: record.paymentId ?? null,
+      error: record.error ?? null,
+      settlementStatus: settlement.status,
+      settlementReason: settlement.reason ?? null,
+      keptAmount: settlement.kept ? BigInt(settlement.kept.value) : null,
+      settledAt: date(settlement.settledAt),
+      paidAt: date(record.paidAt),
+      createdAt: new Date(record.createdAt),
+      updatedAt: new Date(record.updatedAt),
+    };
+    await this.prisma.$transaction([
+      this.prisma.sale.upsert({
+        where: { id: record.id },
+        create: { id: record.id, ...data },
+        update: data,
+      }),
+      this.prisma.settlementItem.deleteMany({ where: { saleId: record.id } }),
+      this.prisma.settlementItem.createMany({
+        data: settlement.items.map((item, position) => ({
+          saleId: record.id,
+          position,
+          ruleId: item.ruleId,
+          label: item.label,
+          kind: item.kind,
+          destination: item.destination,
+          amount: BigInt(item.amount.value),
+          status: item.status,
+          capped: item.capped,
+          paymentId: item.paymentId ?? null,
+          error: item.error ?? null,
+        })),
+      }),
+    ]);
+    return record;
+  }
+
+  async listSales(
+    filter: { merchantId?: string; createdSince?: string } = {},
+  ) {
+    const rows = await this.prisma.sale.findMany({
+      where: {
+        ...(filter.merchantId && { merchantId: filter.merchantId }),
+        ...(filter.createdSince && {
+          createdAt: { gte: new Date(filter.createdSince) },
+        }),
+      },
+      include: saleInclude,
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(toSale);
+  }
+
+  async transitionSale(
+    saleId: string,
+    from: SaleStatus[],
+    changes: SalePaymentChanges,
+    updatedAt: string,
+  ) {
+    const data: Prisma.SaleUncheckedUpdateManyInput = {
+      updatedAt: new Date(updatedAt),
+    };
+    if ("status" in changes) data.status = changes.status;
+    if ("customer" in changes) data.customer = changes.customer ?? null;
+    if ("paymentId" in changes) data.paymentId = changes.paymentId ?? null;
+    if ("error" in changes) data.error = changes.error ?? null;
+    if ("paidAt" in changes) data.paidAt = date(changes.paidAt);
+    const { count } = await this.prisma.sale.updateMany({
+      where: { id: saleId, status: { in: from } },
+      data,
+    });
+    return count === 1 ? this.getSale(saleId) : undefined;
+  }
+
+  async claimSettlement(saleId: string, updatedAt: string) {
+    const { count } = await this.prisma.sale.updateMany({
+      where: { id: saleId, status: "paid", settlementStatus: "pending" },
+      data: { settlementStatus: "running", updatedAt: new Date(updatedAt) },
+    });
+    return count === 1;
+  }
+
+  async close() {
+    await this.prisma.$disconnect();
+  }
+
+  /** Empties every table. Only for the integration tests' throwaway database. */
+  async truncateForTests() {
+    await this.prisma.$executeRawUnsafe(
+      "TRUNCATE settlement_items, sales, rules, merchants, payments, mandates",
+    );
+  }
+}
+
+// Row → record ------------------------------------------------------------------------------------
+
+function toPayment(row: PaymentRow): PaymentRecord {
+  return {
+    id: row.id,
+    kind: row.kind as PaymentRecord["kind"],
+    status: row.status as PaymentRecord["status"],
+    description: opt(row.description),
+    returnTo: opt(row.returnTo),
+    sender: row.sender,
+    receiver: row.receiver,
+    mandateId: opt(row.mandateId),
+    incomingPaymentUrl: row.incomingPaymentUrl,
+    quoteId: opt(row.quoteId),
+    quoteExpiresAt: opt(row.quoteExpiresAt),
+    debitAmount: fromJson<Amount>(row.debitAmount),
+    receiveAmount: fromJson<Amount>(row.receiveAmount),
+    receivedAmount: fromJson<Amount>(row.receivedAmount),
+    outgoingPaymentUrl: opt(row.outgoingPaymentUrl),
+    authorizedAt: iso(row.authorizedAt),
+    error: opt(row.error),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    interaction: fromJson<Interaction>(row.interaction),
+    incomingToken: opt(row.incomingToken),
+    outgoingToken: opt(row.outgoingToken),
+  };
+}
+
+function toMandate(row: MandateRow): MandateRecord {
+  return {
+    id: row.id,
+    status: row.status as MandateRecord["status"],
+    description: opt(row.description),
+    returnTo: opt(row.returnTo),
+    sender: row.sender,
+    maxAmount: row.maxAmount as unknown as Amount,
+    interval: opt(row.interval),
+    error: opt(row.error),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    interaction: fromJson<Interaction>(row.interaction),
+    token: fromJson<StoredToken>(row.token),
+    continuation: fromJson<MandateRecord["continuation"]>(row.continuation),
+  };
+}
+
+function toMerchant(row: MerchantRow): MerchantRecord {
+  const asset: Asset = { assetCode: row.assetCode, assetScale: row.assetScale };
+  return {
+    id: row.id,
+    name: row.name,
+    wallet: row.wallet,
+    asset,
+    dailyCap: amount(row.dailyCap, asset),
+    rules: row.rules.map((rule) => ({
+      id: rule.id,
+      label: rule.label,
+      kind: rule.kind as MerchantRecord["rules"][number]["kind"],
+      destination: rule.destination,
+      shareBps: rule.shareBps,
+      outstanding:
+        rule.outstanding === null ? undefined : amount(rule.outstanding, asset),
+      repaid: amount(rule.repaid, asset),
+    })),
+    mandateId: row.mandateId,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function toSale(row: SaleRow): SaleRecord {
+  const asset: Asset = { assetCode: row.assetCode, assetScale: row.assetScale };
+  return {
+    id: row.id,
+    merchantId: row.merchantId,
+    amount: amount(row.amount, asset),
+    description: opt(row.description),
+    status: row.status as SaleRecord["status"],
+    customer: opt(row.customer),
+    paymentId: opt(row.paymentId),
+    error: opt(row.error),
+    settlement: {
+      status: row.settlementStatus as SaleRecord["settlement"]["status"],
+      reason: opt(row.settlementReason),
+      items: row.items.map(
+        (item): SettlementItem => ({
+          ruleId: item.ruleId,
+          label: item.label,
+          kind: item.kind as SettlementItem["kind"],
+          destination: item.destination,
+          amount: amount(item.amount, asset),
+          status: item.status as SettlementItem["status"],
+          capped: item.capped,
+          paymentId: opt(item.paymentId),
+          error: opt(item.error),
+        }),
+      ),
+      kept: row.keptAmount === null ? undefined : amount(row.keptAmount, asset),
+      settledAt: iso(row.settledAt),
+    },
+    paidAt: iso(row.paidAt),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+// Helpers -----------------------------------------------------------------------------------------
+
+function amount(value: bigint, asset: Asset): Amount {
+  return { value: value.toString(), ...asset };
+}
+
+function opt<T>(value: T | null): T | undefined {
+  return value ?? undefined;
+}
+
+function date(value: string | undefined): Date | null {
+  return value === undefined ? null : new Date(value);
+}
+
+function iso(value: Date | null): string | undefined {
+  return value?.toISOString();
+}
+
+function json(value: object | undefined) {
+  return value === undefined
+    ? Prisma.DbNull
+    : (value as unknown as Prisma.InputJsonValue);
+}
+
+function fromJson<T>(value: Prisma.JsonValue): T | undefined {
+  return value === null ? undefined : (value as unknown as T);
+}

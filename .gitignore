@@ -13,5 +13,9 @@ frontend/.next/
 *.key
 *.pem
 
-# Local data (holds access tokens)
+# Generated Prisma client (npm install runs prisma generate)
+src/generated/
+
+# Local data from the old JSON store (holds access tokens)
 data/
+

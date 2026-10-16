@@ -16,12 +16,12 @@ function setup() {
   );
   /** A 10,000 COP sale, paid and settled. */
   const sell = async (merchantId: string) => {
-    const { sale } = env.sales.createSale(merchantId, { amount: "10000" });
+    const { sale } = await env.sales.createSale(merchantId, { amount: "10000" });
     await env.sales.pay(sale.id, { customerWallet: ALICE });
-    const paymentId = env.store.getSale(sale.id)!.paymentId!;
+    const paymentId = (await env.store.getSale(sale.id))!.paymentId!;
     await env.approvePayment(paymentId);
     env.deliver(
-      env.store.getPayment(paymentId)!.incomingPaymentUrl,
+      (await env.store.getPayment(paymentId))!.incomingPaymentUrl,
       cop("1000000"),
     );
     await env.sales.refresh(sale.id);
@@ -36,7 +36,7 @@ describe("merchant dashboard", () => {
     const merchantId = await env.onboardRosa();
     await env.sell(merchantId);
     env.clock.now = new Date(env.clock.now.getTime() + 60_000);
-    env.sales.createSale(merchantId, { amount: "5000" }); // not paid yet
+    await env.sales.createSale(merchantId, { amount: "5000" }); // not paid yet
 
     const view = await env.dashboard.get(merchantId);
 

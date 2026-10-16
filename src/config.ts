@@ -24,7 +24,10 @@ const envSchema = z.object({
   OP_PRIVATE_KEY_PATH: z.string().default("private.key"),
   OP_ALLOWED_WALLET_HOSTS: z.string().default("ilp.interledger-test.dev"),
   OP_LOG_LEVEL: z.enum(LOG_LEVELS).default("warn"),
-  DATA_FILE: z.string().default("data/store.json"),
+  DATABASE_URL: z
+    .string()
+    .regex(/^postgres(ql)?:\/\//, "debe ser una URL postgresql://")
+    .default("postgresql://miplante:miplante@localhost:5432/miplante?schema=public"),
 });
 
 export interface Config {
@@ -39,7 +42,8 @@ export interface Config {
   privateKey: string;
   allowedWalletHosts: string[] | "*";
   logLevel: (typeof LOG_LEVELS)[number];
-  dataFile: string;
+  /** PostgreSQL connection string (ADR 0010). */
+  databaseUrl: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -60,7 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     privateKey: resolvePrivateKey(e.OP_PRIVATE_KEY, e.OP_PRIVATE_KEY_PATH),
     allowedWalletHosts: parseHosts(e.OP_ALLOWED_WALLET_HOSTS),
     logLevel: e.OP_LOG_LEVEL,
-    dataFile: e.DATA_FILE,
+    databaseUrl: e.DATABASE_URL,
   };
 }
 

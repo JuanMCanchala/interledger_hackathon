@@ -8,12 +8,12 @@ async function paidSale(
   env: ReturnType<typeof setupMiPlante>,
   merchantId: string,
 ) {
-  const { sale } = env.sales.createSale(merchantId, { amount: "10000" });
+  const { sale } = await env.sales.createSale(merchantId, { amount: "10000" });
   await env.sales.pay(sale.id, { customerWallet: ALICE });
-  const paymentId = env.store.getSale(sale.id)!.paymentId!;
+  const paymentId = (await env.store.getSale(sale.id))!.paymentId!;
   await env.approvePayment(paymentId);
   env.deliver(
-    env.store.getPayment(paymentId)!.incomingPaymentUrl,
+    (await env.store.getPayment(paymentId))!.incomingPaymentUrl,
     cop("1000000"),
   );
   return sale.id;
@@ -54,7 +54,7 @@ describe("settlement", () => {
         debitAmount: cop("150000"),
       },
     );
-    const [microcredit, savings] = env.merchants.require(merchantId).rules;
+    const [microcredit, savings] = (await env.merchants.require(merchantId)).rules;
     expect(microcredit).toMatchObject({
       repaid: cop("150000"),
       outstanding: cop("29850000"),
@@ -103,7 +103,7 @@ describe("settlement", () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();
     const saleId = await paidSale(env, merchantId);
-    await env.flows.revokeMandate(env.merchants.require(merchantId).mandateId);
+    await env.flows.revokeMandate((await env.merchants.require(merchantId)).mandateId);
 
     const sale = await env.sales.refresh(saleId);
 
@@ -133,7 +133,7 @@ describe("settlement", () => {
     ]);
     expect(sale.settlement.items[0]?.error).toContain("insufficient grant");
     expect(sale.settlement.kept).toEqual(cop("950000"));
-    expect(env.merchants.require(merchantId).rules[0]).toMatchObject({
+    expect((await env.merchants.require(merchantId)).rules[0]).toMatchObject({
       repaid: cop("0"),
       outstanding: cop("30000000"),
     });
@@ -147,7 +147,7 @@ describe("settlement", () => {
 
     for (const item of settled.settlement.items) {
       env.deliver(
-        env.store.getPayment(item.paymentId!)!.incomingPaymentUrl,
+        (await env.store.getPayment(item.paymentId!))!.incomingPaymentUrl,
         cop("5000000"),
       );
     }
@@ -166,7 +166,7 @@ describe("settlement", () => {
 
     await env.sales.sweep();
 
-    expect(env.store.getSale(saleId)?.settlement.status).toBe("done");
+    expect((await env.store.getSale(saleId))?.settlement.status).toBe("done");
   });
 
   it("collects nothing on a day without sales", async () => {

@@ -4,7 +4,7 @@ import { describeError } from "../openPayments/errors.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
 import { fromMinorUnits, toAmount, type Amount } from "../shared/money.js";
-import type { Store } from "../storage/store.js";
+import type { SalePaymentChanges, Store } from "../storage/store.js";
 import type { MerchantService } from "./merchantService.js";
 import type {
   MerchantRecord,
@@ -13,7 +13,7 @@ import type {
   SettlementItemStatus,
 } from "./types.js";
 
-type PublicPayment = ReturnType<PaymentFlows["getPayment"]>;
+type PublicPayment = Awaited<ReturnType<PaymentFlows["getPayment"]>>;
 
 export interface SalesOptions {
   /** Base URL of the web client, used for the customer's pay link. */
@@ -32,7 +32,6 @@ const SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
  */
 export class SalesService {
   private readonly now: () => Date;
-  private readonly settling = new Set<string>();
   private sweeping = false;
 
   constructor(
@@ -45,13 +44,13 @@ export class SalesService {
   }
 
   /** The merchant types the amount; the till shows `payUrl` as a QR code. */
-  createSale(
+  async createSale(
     merchantId: string,
     input: { amount: string; description?: string },
   ) {
-    const merchant = this.merchants.require(merchantId);
+    const merchant = await this.merchants.require(merchantId);
     const timestamp = this.timestamp();
-    const sale = this.store.saveSale({
+    const sale = await this.store.saveSale({
       id: randomUUID(),
       merchantId,
       amount: toAmount(input.amount, merchant.asset),
@@ -62,18 +61,18 @@ export class SalesService {
       updatedAt: timestamp,
     });
     return {
-      sale: this.view(sale),
+      sale: await this.view(sale),
       payUrl: this.payUrl(sale.id),
     };
   }
 
   /** The customer enters their wallet; returns the URL where they approve the payment. */
   async pay(saleId: string, input: { customerWallet: string }) {
-    const sale = this.require(saleId);
+    const sale = await this.require(saleId);
     if (sale.status !== "open" && sale.status !== "failed") {
       throw new AppError("Esta venta ya se está pagando o ya fue pagada", 409);
     }
-    const merchant = this.merchants.require(sale.merchantId);
+    const merchant = await this.merchants.require(sale.merchantId);
     const { payment, redirectUrl } = await this.flows.startPayment({
       sender: input.customerWallet,
       receiver: merchant.wallet,
@@ -83,139 +82,147 @@ export class SalesService {
         : merchant.name,
       returnTo: `/pay.html?sale=${sale.id}`,
     });
-    const updated = this.update(sale, {
-      status: "awaiting-consent",
-      customer: payment.sender,
-      paymentId: payment.id,
-      error: undefined,
-    });
-    return { sale: this.view(updated), redirectUrl };
+    const updated = await this.store.transitionSale(
+      sale.id,
+      ["open", "failed"],
+      {
+        status: "awaiting-consent",
+        customer: payment.sender,
+        paymentId: payment.id,
+        error: undefined,
+      },
+      this.timestamp(),
+    );
+    // Two customers paying at once: the first one wins, the other consent is never used.
+    if (!updated) {
+      throw new AppError("Esta venta ya se está pagando o ya fue pagada", 409);
+    }
+    return { sale: await this.view(updated), redirectUrl };
   }
 
   /** Reads the payment's progress from Open Payments. Polled by both screens. */
   async refresh(saleId: string) {
-    let sale = this.require(saleId);
+    let sale = await this.require(saleId);
     if (
       sale.paymentId &&
       (sale.status === "awaiting-consent" || sale.status === "processing")
     ) {
       const payment = await this.flows.refreshPayment(sale.paymentId);
-      sale = this.update(sale, this.statusFrom(payment));
+      sale =
+        (await this.store.transitionSale(
+          sale.id,
+          [sale.status],
+          this.statusFrom(payment),
+          this.timestamp(),
+        )) ?? (await this.require(saleId));
     }
     if (sale.status === "paid" && sale.settlement.status === "pending") {
       await this.settle(sale.id);
     } else if (
+      sale.settlement.status === "done" &&
       sale.settlement.items.some((item) => item.status === "processing")
     ) {
+      // Only once settle() has finished writing, so this never overwrites a running settlement.
       await this.refreshSettlement(sale.id);
     }
-    return this.view(this.require(saleId));
+    return this.view(await this.require(saleId));
   }
 
   /**
-   * Splits a paid sale by the merchant's rules. The state moves to "running" before any money moves
-   * and an in-process lock stops concurrent polls from settling the same sale twice.
+   * Splits a paid sale by the merchant's rules. The settlement is claimed in the database
+   * (pending → running, one atomic update) before any money moves, so concurrent polls, the
+   * sweeper or another server instance can never split the same sale twice (ADR 0006).
    */
   async settle(saleId: string): Promise<void> {
-    if (this.settling.has(saleId)) return;
-    this.settling.add(saleId);
-    try {
-      let sale = this.require(saleId);
-      if (sale.status !== "paid" || sale.settlement.status !== "pending")
-        return;
-      sale = this.update(sale, {
-        settlement: { ...sale.settlement, status: "running" },
-      });
+    if (!(await this.store.claimSettlement(saleId, this.timestamp()))) return;
+    let sale = await this.require(saleId);
 
-      const merchant = this.merchants.require(sale.merchantId);
-      if (this.flows.findMandate(merchant.mandateId).status !== "active") {
-        this.update(sale, {
-          settlement: {
-            status: "skipped",
-            reason: "La autorización diaria del comercio no está activa",
-            items: [],
-            kept: sale.amount,
-            settledAt: this.timestamp(),
-          },
-        });
-        return;
-      }
-
-      const plan = planAllocations(
-        sale.amount,
-        merchant.rules,
-        await this.remainingCap(merchant),
-      );
-      const items: SettlementItem[] = [];
-      for (const allocation of plan.allocations) {
-        const rule = merchant.rules.find((r) => r.id === allocation.ruleId)!;
-        const base = {
-          ruleId: rule.id,
-          label: rule.label,
-          kind: rule.kind,
-          destination: rule.destination,
-          amount: allocation.amount,
-          capped: allocation.capped,
-        };
-        if (allocation.amount.value === "0") {
-          items.push({ ...base, status: "skipped" });
-          continue;
-        }
-        try {
-          const payment = await this.flows.chargeMandate(merchant.mandateId, {
-            receiver: rule.destination,
-            amount: fromMinorUnits(
-              allocation.amount.value,
-              allocation.amount.assetScale,
-            ),
-            amountType: "send",
-            description: `MiPlante · ${rule.label}`,
-          });
-          items.push({
-            ...base,
-            status: itemStatus(payment.status),
-            paymentId: payment.id,
-          });
-          this.merchants.recordRepayment(
-            merchant.id,
-            rule.id,
-            allocation.amount,
-          );
-        } catch (error) {
-          // The debt balance stays untouched when the repayment could not be sent.
-          items.push({
-            ...base,
-            status: "failed",
-            error: describeError(error),
-          });
-        }
-        // Persist progress after every item, so a crash never hides money that already moved.
-        sale = this.update(this.require(saleId), {
-          settlement: {
-            ...sale.settlement,
-            status: "running",
-            items: [...items],
-          },
-        });
-      }
-
-      const sent = items
-        .filter((item) => item.status !== "failed" && item.status !== "skipped")
-        .reduce((total, item) => total + BigInt(item.amount.value), 0n);
-      this.update(this.require(saleId), {
+    const merchant = await this.merchants.require(sale.merchantId);
+    if ((await this.flows.findMandate(merchant.mandateId)).status !== "active") {
+      await this.update(sale, {
         settlement: {
-          status: "done",
-          items,
-          kept: {
-            ...sale.amount,
-            value: (BigInt(sale.amount.value) - sent).toString(),
-          },
+          status: "skipped",
+          reason: "La autorización diaria del comercio no está activa",
+          items: [],
+          kept: sale.amount,
           settledAt: this.timestamp(),
         },
       });
-    } finally {
-      this.settling.delete(saleId);
+      return;
     }
+
+    const plan = planAllocations(
+      sale.amount,
+      merchant.rules,
+      await this.remainingCap(merchant),
+    );
+    const items: SettlementItem[] = [];
+    for (const allocation of plan.allocations) {
+      const rule = merchant.rules.find((r) => r.id === allocation.ruleId)!;
+      const base = {
+        ruleId: rule.id,
+        label: rule.label,
+        kind: rule.kind,
+        destination: rule.destination,
+        amount: allocation.amount,
+        capped: allocation.capped,
+      };
+      if (allocation.amount.value === "0") {
+        items.push({ ...base, status: "skipped" });
+        continue;
+      }
+      try {
+        const payment = await this.flows.chargeMandate(merchant.mandateId, {
+          receiver: rule.destination,
+          amount: fromMinorUnits(
+            allocation.amount.value,
+            allocation.amount.assetScale,
+          ),
+          amountType: "send",
+          description: `MiPlante · ${rule.label}`,
+        });
+        items.push({
+          ...base,
+          status: itemStatus(payment.status),
+          paymentId: payment.id,
+        });
+        await this.merchants.recordRepayment(
+          merchant.id,
+          rule.id,
+          allocation.amount,
+        );
+      } catch (error) {
+        // The debt balance stays untouched when the repayment could not be sent.
+        items.push({
+          ...base,
+          status: "failed",
+          error: describeError(error),
+        });
+      }
+      // Persist progress after every item, so a crash never hides money that already moved.
+      sale = await this.update(await this.require(saleId), {
+        settlement: {
+          ...sale.settlement,
+          status: "running",
+          items: [...items],
+        },
+      });
+    }
+
+    const sent = items
+      .filter((item) => item.status !== "failed" && item.status !== "skipped")
+      .reduce((total, item) => total + BigInt(item.amount.value), 0n);
+    await this.update(await this.require(saleId), {
+      settlement: {
+        status: "done",
+        items,
+        kept: {
+          ...sale.amount,
+          value: (BigInt(sale.amount.value) - sent).toString(),
+        },
+        settledAt: this.timestamp(),
+      },
+    });
   }
 
   /** Background pass (ADR 0006): moves sales forward even when nobody has their page open. */
@@ -223,9 +230,12 @@ export class SalesService {
     if (this.sweeping) return;
     this.sweeping = true;
     try {
-      const since = this.now().getTime() - SWEEP_WINDOW_MS;
-      for (const sale of this.store.listSales()) {
-        if (Date.parse(sale.createdAt) < since || !needsWork(sale)) continue;
+      const since = new Date(this.now().getTime() - SWEEP_WINDOW_MS);
+      const sales = await this.store.listSales({
+        createdSince: since.toISOString(),
+      });
+      for (const sale of sales) {
+        if (!needsWork(sale)) continue;
         try {
           await this.refresh(sale.id);
         } catch (error) {
@@ -249,20 +259,21 @@ export class SalesService {
     return `${this.options.frontendUrl}/pay.html?sale=${saleId}`;
   }
 
-  require(id: string): SaleRecord {
-    const sale = this.store.getSale(id);
+  async require(id: string): Promise<SaleRecord> {
+    const sale = await this.store.getSale(id);
     if (!sale) throw new NotFoundError(`No existe la venta ${id}`);
     return sale;
   }
 
-  view(sale: SaleRecord) {
-    const payment = sale.paymentId
-      ? this.flows.getPayment(sale.paymentId)
-      : undefined;
+  async view(sale: SaleRecord) {
+    const [payment, merchant] = await Promise.all([
+      sale.paymentId ? this.flows.getPayment(sale.paymentId) : undefined,
+      this.store.getMerchant(sale.merchantId),
+    ]);
     return {
       id: sale.id,
       merchantId: sale.merchantId,
-      merchantName: this.store.getMerchant(sale.merchantId)?.name,
+      merchantName: merchant?.name,
       amount: sale.amount,
       description: sale.description,
       status: sale.status,
@@ -282,7 +293,10 @@ export class SalesService {
     };
   }
 
-  private update(sale: SaleRecord, changes: Partial<SaleRecord>): SaleRecord {
+  private update(
+    sale: SaleRecord,
+    changes: Partial<SaleRecord>,
+  ): Promise<SaleRecord> {
     return this.store.saveSale({
       ...sale,
       ...changes,
@@ -313,7 +327,7 @@ export class SalesService {
   }
 
   private async refreshSettlement(saleId: string): Promise<void> {
-    const sale = this.require(saleId);
+    const sale = await this.require(saleId);
     const items = await Promise.all(
       sale.settlement.items.map(async (item) => {
         if (item.status !== "processing" || !item.paymentId) return item;
@@ -325,12 +339,12 @@ export class SalesService {
         };
       }),
     );
-    this.update(this.require(saleId), {
+    await this.update(await this.require(saleId), {
       settlement: { ...sale.settlement, items },
     });
   }
 
-  private statusFrom(payment: PublicPayment): Partial<SaleRecord> {
+  private statusFrom(payment: PublicPayment): SalePaymentChanges {
     switch (payment.status) {
       case "completed":
         return { status: "paid", paidAt: this.timestamp(), error: undefined };

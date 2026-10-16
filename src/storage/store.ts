@@ -1,102 +1,184 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname } from "node:path";
-import type { MerchantRecord, SaleRecord } from "../merchants/types.js";
+import type {
+  MerchantRecord,
+  SaleRecord,
+  SaleStatus,
+} from "../merchants/types.js";
 import type { MandateRecord, PaymentRecord } from "../openPayments/records.js";
 
-interface StoreData {
-  payments: Record<string, PaymentRecord>;
-  mandates: Record<string, MandateRecord>;
-  merchants: Record<string, MerchantRecord>;
-  sales: Record<string, SaleRecord>;
-}
-
-const EMPTY: StoreData = {
-  payments: {},
-  mandates: {},
-  merchants: {},
-  sales: {},
-};
+/** Customer-payment fields of a sale; changing them never touches its settlement. */
+export type SalePaymentChanges = Partial<
+  Pick<SaleRecord, "status" | "customer" | "paymentId" | "error" | "paidAt">
+>;
 
 /**
- * Minimal persistence for the hackathon (ADR 0007): records in memory, written atomically to a JSON
- * file after every change, or memory only when no file is given (tests).
- * It holds access tokens, so the file must stay out of git (see .gitignore).
+ * Persistence port (ADR 0010). PostgreSQL through Prisma in the server (`PrismaStore`), memory in
+ * tests (`MemoryStore`). Records hold access tokens, so they never leave the server as they are.
  */
-export class Store {
-  private readonly data: StoreData;
-
-  constructor(private readonly file?: string) {
-    const saved =
-      file && existsSync(file)
-        ? (JSON.parse(readFileSync(file, "utf8")) as Partial<StoreData>)
-        : {};
-    this.data = { ...structuredClone(EMPTY), ...saved };
-  }
-
-  getPayment(id: string): PaymentRecord | undefined {
-    return this.data.payments[id];
-  }
-
-  savePayment(record: PaymentRecord): PaymentRecord {
-    this.data.payments[record.id] = record;
-    this.persist();
-    return record;
-  }
-
-  listPayments(filter: { mandateId?: string } = {}): PaymentRecord[] {
-    return Object.values(this.data.payments)
-      .filter((p) => !filter.mandateId || p.mandateId === filter.mandateId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }
-
-  getMandate(id: string): MandateRecord | undefined {
-    return this.data.mandates[id];
-  }
-
-  saveMandate(record: MandateRecord): MandateRecord {
-    this.data.mandates[record.id] = record;
-    this.persist();
-    return record;
-  }
-
-  getMerchant(id: string): MerchantRecord | undefined {
-    return this.data.merchants[id];
-  }
-
-  saveMerchant(record: MerchantRecord): MerchantRecord {
-    this.data.merchants[record.id] = record;
-    this.persist();
-    return record;
-  }
-
-  getSale(id: string): SaleRecord | undefined {
-    return this.data.sales[id];
-  }
-
-  saveSale(record: SaleRecord): SaleRecord {
-    this.data.sales[record.id] = record;
-    this.persist();
-    return record;
-  }
-
+export interface Store {
+  getPayment(id: string): Promise<PaymentRecord | undefined>;
+  savePayment(record: PaymentRecord): Promise<PaymentRecord>;
   /** Newest first. */
-  listSales(filter: { merchantId?: string } = {}): SaleRecord[] {
-    return Object.values(this.data.sales)
-      .filter((s) => !filter.merchantId || s.merchantId === filter.merchantId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  listPayments(filter?: { mandateId?: string }): Promise<PaymentRecord[]>;
+
+  getMandate(id: string): Promise<MandateRecord | undefined>;
+  saveMandate(record: MandateRecord): Promise<MandateRecord>;
+
+  getMerchant(id: string): Promise<MerchantRecord | undefined>;
+  saveMerchant(record: MerchantRecord): Promise<MerchantRecord>;
+
+  getSale(id: string): Promise<SaleRecord | undefined>;
+  saveSale(record: SaleRecord): Promise<SaleRecord>;
+  /** Newest first. */
+  listSales(filter?: {
+    merchantId?: string;
+    createdSince?: string;
+  }): Promise<SaleRecord[]>;
+
+  /**
+   * Applies `changes` only while the sale is still in one of the `from` statuses, in one atomic
+   * step. Returns the updated sale, or undefined when another request moved it first. A slow poll
+   * can therefore never overwrite a settlement that started meanwhile.
+   */
+  transitionSale(
+    saleId: string,
+    from: SaleStatus[],
+    changes: SalePaymentChanges,
+    updatedAt: string,
+  ): Promise<SaleRecord | undefined>;
+
+  /**
+   * Moves a paid sale's settlement from "pending" to "running" in one atomic step (ADR 0006).
+   * Returns false when the sale is not paid or someone else already claimed it, so a sale is split
+   * exactly once even across concurrent polls or several server instances.
+   */
+  claimSettlement(saleId: string, updatedAt: string): Promise<boolean>;
+
+  /**
+   * Adds a repayment to a rule atomically: `repaid += value` and, for debts,
+   * `outstanding = max(outstanding - value, 0)`.
+   */
+  recordRepayment(
+    merchantId: string,
+    ruleId: string,
+    value: string,
+    updatedAt: string,
+  ): Promise<void>;
+
+  close(): Promise<void>;
+}
+
+/** In-memory store for tests. Copies on the way in and out, like a database would. */
+export class MemoryStore implements Store {
+  private readonly payments = new Map<string, PaymentRecord>();
+  private readonly mandates = new Map<string, MandateRecord>();
+  private readonly merchants = new Map<string, MerchantRecord>();
+  private readonly sales = new Map<string, SaleRecord>();
+
+  async getPayment(id: string) {
+    return copy(this.payments.get(id));
   }
 
-  private persist(): void {
-    if (!this.file) return;
-    mkdirSync(dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    writeFileSync(tmp, JSON.stringify(this.data, null, 2), { mode: 0o600 });
-    renameSync(tmp, this.file);
+  async savePayment(record: PaymentRecord) {
+    this.payments.set(record.id, copy(record));
+    return record;
   }
+
+  async listPayments(filter: { mandateId?: string } = {}) {
+    return [...this.payments.values()]
+      .filter((p) => !filter.mandateId || p.mandateId === filter.mandateId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(copy);
+  }
+
+  async getMandate(id: string) {
+    return copy(this.mandates.get(id));
+  }
+
+  async saveMandate(record: MandateRecord) {
+    this.mandates.set(record.id, copy(record));
+    return record;
+  }
+
+  async getMerchant(id: string) {
+    return copy(this.merchants.get(id));
+  }
+
+  async saveMerchant(record: MerchantRecord) {
+    this.merchants.set(record.id, copy(record));
+    return record;
+  }
+
+  async getSale(id: string) {
+    return copy(this.sales.get(id));
+  }
+
+  async saveSale(record: SaleRecord) {
+    this.sales.set(record.id, copy(record));
+    return record;
+  }
+
+  async listSales(
+    filter: { merchantId?: string; createdSince?: string } = {},
+  ) {
+    return [...this.sales.values()]
+      .filter((s) => !filter.merchantId || s.merchantId === filter.merchantId)
+      .filter(
+        (s) =>
+          !filter.createdSince ||
+          Date.parse(s.createdAt) >= Date.parse(filter.createdSince),
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(copy);
+  }
+
+  async transitionSale(
+    saleId: string,
+    from: SaleStatus[],
+    changes: SalePaymentChanges,
+    updatedAt: string,
+  ) {
+    const sale = this.sales.get(saleId);
+    if (!sale || !from.includes(sale.status)) return undefined;
+    Object.assign(sale, changes, { updatedAt });
+    return copy(sale);
+  }
+
+  async claimSettlement(saleId: string, updatedAt: string) {
+    const sale = this.sales.get(saleId);
+    if (!sale || sale.status !== "paid" || sale.settlement.status !== "pending")
+      return false;
+    sale.settlement.status = "running";
+    sale.updatedAt = updatedAt;
+    return true;
+  }
+
+  async recordRepayment(
+    merchantId: string,
+    ruleId: string,
+    value: string,
+    updatedAt: string,
+  ) {
+    const merchant = this.merchants.get(merchantId);
+    const rule = merchant?.rules.find((r) => r.id === ruleId);
+    if (!merchant || !rule) return;
+    const delta = BigInt(value);
+    rule.repaid = {
+      ...rule.repaid,
+      value: (BigInt(rule.repaid.value) + delta).toString(),
+    };
+    if (rule.outstanding) {
+      const left = BigInt(rule.outstanding.value) - delta;
+      rule.outstanding = {
+        ...rule.outstanding,
+        value: (left > 0n ? left : 0n).toString(),
+      };
+    }
+    merchant.updatedAt = updatedAt;
+  }
+
+  async close() {}
+}
+
+function copy<T>(value: T): T {
+  return value === undefined ? value : structuredClone(value);
 }

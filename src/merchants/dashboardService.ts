@@ -31,9 +31,9 @@ export class DashboardService {
   }
 
   async get(merchantId: string) {
-    const merchant = this.merchants.require(merchantId);
+    const merchant = await this.merchants.require(merchantId);
     const mandate = await this.flows.getMandate(merchant.mandateId);
-    const sales = this.store.listSales({ merchantId });
+    const sales = await this.store.listSales({ merchantId });
     const paid = sales.filter((sale) => sale.status === "paid" && sale.paidAt);
     const now = this.now();
     const startOfToday = startOfBogotaDay(now).getTime();
@@ -48,7 +48,7 @@ export class DashboardService {
     const spent = mandate.spent?.debitAmount;
 
     return {
-      ...this.merchants.view(merchant),
+      ...(await this.merchants.view(merchant)),
       status: mandate.status,
       /** Spent from the daily-capped grant in its current interval. */
       spentToday: spent && sameAsset(spent, merchant.asset) ? spent : null,
@@ -79,7 +79,9 @@ export class DashboardService {
           gross: money(sum(daySales.map((sale) => sale.amount))),
         };
       }),
-      sales: sales.slice(0, RECENT_SALES).map((sale) => this.sales.view(sale)),
+      sales: await Promise.all(
+        sales.slice(0, RECENT_SALES).map((sale) => this.sales.view(sale)),
+      ),
     };
   }
 }

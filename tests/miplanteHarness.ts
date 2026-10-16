@@ -6,7 +6,7 @@ import { SalesService } from "../src/merchants/salesService.js";
 import { PaymentFlows } from "../src/openPayments/flows.js";
 import { computeInteractHash } from "../src/openPayments/hash.js";
 import type { Interaction } from "../src/openPayments/records.js";
-import { Store } from "../src/storage/store.js";
+import { MemoryStore, type Store } from "../src/storage/store.js";
 import {
   AUTH_SERVER,
   COOP,
@@ -44,12 +44,11 @@ export const ROSA: OnboardInput = {
   ],
 };
 
-/** Wires the MiPlante services to the in-memory Open Payments fake. */
-export function setupMiPlante() {
+/** Wires the MiPlante services to the in-memory Open Payments fake (and memory storage by default). */
+export function setupMiPlante(store: Store = new MemoryStore()) {
   const clock = { now: NOW };
   const now = () => clock.now;
   const { ops, deliver } = createFakeOperations();
-  const store = new Store();
   const flows = new PaymentFlows(ops, store, {
     publicBaseUrl: BASE_URL,
     allowedWalletHosts: ["ilp.interledger-test.dev"],
@@ -71,21 +70,21 @@ export function setupMiPlante() {
       authServerUrl: AUTH_SERVER,
     }),
   });
-  const approveMandate = (mandateId: string) =>
+  const approveMandate = async (mandateId: string) =>
     flows.completeMandate(
       mandateId,
-      approve(store.getMandate(mandateId)!.interaction!),
+      approve((await store.getMandate(mandateId))!.interaction!),
     );
-  const approvePayment = (paymentId: string) =>
+  const approvePayment = async (paymentId: string) =>
     flows.completePayment(
       paymentId,
-      approve(store.getPayment(paymentId)!.interaction!),
+      approve((await store.getPayment(paymentId))!.interaction!),
     );
 
   /** Onboards Rosa and approves her daily-capped grant. */
   const onboardRosa = async (overrides: Partial<OnboardInput> = {}) => {
     const { merchant } = await merchants.onboard({ ...ROSA, ...overrides });
-    await approveMandate(store.getMerchant(merchant.id)!.mandateId);
+    await approveMandate((await store.getMerchant(merchant.id))!.mandateId);
     return merchant.id;
   };
 

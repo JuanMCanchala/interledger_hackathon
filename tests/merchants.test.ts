@@ -39,8 +39,8 @@ describe("merchant onboarding", () => {
       [COOP, 1500, "30000000"],
       [SAVINGS, 500, undefined],
     ]);
-    const mandateId = store.getMerchant(merchant.id)!.mandateId;
-    expect(store.getMandate(mandateId)?.returnTo).toBe(
+    const mandateId = (await store.getMerchant(merchant.id))!.mandateId;
+    expect((await store.getMandate(mandateId))?.returnTo).toBe(
       `/merchant.html?id=${merchant.id}`,
     );
   });
@@ -50,7 +50,7 @@ describe("merchant onboarding", () => {
 
     const id = await onboardRosa();
 
-    expect(merchants.view(merchants.require(id)).status).toBe("active");
+    expect((await merchants.view(await merchants.require(id))).status).toBe("active");
   });
 
   it("keeps the majority of every sale for the merchant", async () => {
@@ -94,8 +94,8 @@ describe("merchant onboarding", () => {
     expect(ops.requestOutgoingPaymentGrant).not.toHaveBeenCalled();
   });
 
-  it("answers 404 for unknown merchants", () => {
+  it("answers 404 for unknown merchants", async () => {
     const { merchants } = setupMiPlante();
-    expect(() => merchants.require("nope")).toThrow("No existe el comercio");
+    await expect(merchants.require("nope")).rejects.toThrow("No existe el comercio");
   });
 });

@@ -46,7 +46,6 @@ services:
       - ./src:/app/src
       - ./public:/app/public
       - ./prisma:/app/prisma
-      - ./data:/app/data
 
   frontend:
     build:

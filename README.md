@@ -106,22 +106,30 @@ All three tiers run inside **Docker Desktop** (`docker-compose.yml`): **Containe
 - [Settle each sale exactly once, by polling](docs/adr/0006-settle-sales-by-polling-idempotently.md):
   Open Payments has no webhooks for client apps.
 - [Target Stack: Next.js, NestJS, Prisma ORM and PostgreSQL](docs/adr/0009-adopt-nextjs-nestjs-prisma-and-postgresql-stack.md).
+- [PostgreSQL through Prisma, with atomic state transitions](docs/adr/0010-postgresql-through-prisma-with-atomic-transitions.md):
+  a sale is split exactly once, even with concurrent polls or several instances.
 
 Full design: [`docs/SYSTEM_DESIGN.md`](docs/SYSTEM_DESIGN.md) · All decisions:
 [`docs/adr/`](docs/adr/README.md).
 
 ## Quick start
 
-Requires Node.js 22 or later (developed on 26) and an account on the
+Requires Node.js 22 or later (developed on 26), Docker and an account on the
 [Interledger test wallet](https://wallet.interledger-test.dev).
 
 ```bash
-npm install
+npm install                          # also generates the Prisma client
 cp env.example .env                  # MiPlante's wallet address and developer key ID
 # put the downloaded private.key in the repository root (it is git-ignored)
 npm run check:wallet                 # verifies the wallet and the key
+npm run db:up                        # PostgreSQL 16 in Docker
+npm run db:deploy                    # applies the migrations in prisma/migrations
 npm run dev                          # http://localhost:3000
 ```
+
+Or run everything in containers with `npm run docker:up`; the backend applies the migrations when
+it starts. After changing `prisma/schema.prisma`, create a migration with
+`npm run db:migrate -- --name <change>`.
 
 Then open:
 
@@ -141,9 +149,10 @@ src/
   domain/          allocation engine and Bogotá calendar (pure functions)
   merchants/       onboarding, sales, settlement, dashboard
   openPayments/    adapter over the SDK: grants, quotes, payments, hash, tokens
-  storage/         JSON store
+  storage/         Store port: PostgreSQL through Prisma, in memory for tests
   shared/          money (BigInt minor units) and errors
   http/            Express routes and zod validation
+prisma/            schema and migrations
 public/            Spanish, mobile-first web client (no build step)
 tests/             Vitest: domain, flows against an Open Payments fake, HTTP
 docs/              problem, ideation, product brief, ADRs, system design, API, demo
@@ -154,11 +163,14 @@ scripts/           check-wallet diagnostic
 
 ```bash
 npm run typecheck    # strict TypeScript
-npm test             # 77 tests: domain, Open Payments flows, merchants, sales, settlement, HTTP
+npm test             # domain, Open Payments flows, merchants, sales, settlement, HTTP
+# plus the PostgreSQL storage tests, on a throwaway database they empty
+# (create it once: docker exec miplante-db createdb -U miplante miplante_test)
+TEST_DATABASE_URL=postgresql://miplante:miplante@localhost:5432/miplante_test npm test
 ```
 
 Tests run against an in-memory fake of the Open Payments operations, so they need no network. CI
-runs both commands on every push. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for branches and
+runs everything, PostgreSQL included, on every push. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for branches and
 conventions.
 
 ## Documentation

@@ -122,7 +122,7 @@ export class PaymentFlows {
       `/api/payments/${id}/callback`,
     );
     const timestamp = this.timestamp();
-    const record = this.store.savePayment({
+    const record = await this.store.savePayment({
       id,
       kind: "one-off",
       status: "awaiting-consent",
@@ -141,7 +141,7 @@ export class PaymentFlows {
   }
 
   async completePayment(id: string, params: CallbackParams) {
-    let record = this.requirePayment(id);
+    let record = await this.requirePayment(id);
     // Idempotent: reloading the callback URL must not pay twice.
     if (record.status !== "awaiting-consent" || !record.interaction) {
       return toPublicPayment(record);
@@ -149,12 +149,12 @@ export class PaymentFlows {
     const { interaction } = record;
     const check = checkCallback(interaction, params);
     if (!check.approved) {
-      this.updatePayment(record, {
+      await this.updatePayment(record, {
         status: check.status,
         error: check.error,
         interaction: undefined,
       });
-      return toPublicPayment(this.requirePayment(id));
+      return toPublicPayment(await this.requirePayment(id));
     }
     try {
       const grant = await this.ops.continueGrant(
@@ -164,7 +164,7 @@ export class PaymentFlows {
         },
         check.interactRef,
       );
-      record = this.updatePayment(record, {
+      record = await this.updatePayment(record, {
         authorizedAt: this.timestamp(),
         interaction: undefined,
       });
@@ -178,14 +178,14 @@ export class PaymentFlows {
           description: record.description,
         },
       );
-      this.updatePayment(record, {
+      await this.updatePayment(record, {
         ...quote,
         status: "processing",
         outgoingPaymentUrl: outgoing.id,
         outgoingToken: grant.access_token.value,
       });
     } catch (error) {
-      this.updatePayment(this.requirePayment(id), {
+      await this.updatePayment(await this.requirePayment(id), {
         status: "failed",
         error: describeError(error),
         interaction: undefined,
@@ -197,7 +197,7 @@ export class PaymentFlows {
 
   /** Reads the current state from Open Payments. Safe to poll from the frontend. */
   async refreshPayment(id: string) {
-    let record = this.requirePayment(id);
+    let record = await this.requirePayment(id);
     if (record.status !== "processing") return toPublicPayment(record);
     try {
       const receiver = await this.resolve(record.receiver);
@@ -214,7 +214,7 @@ export class PaymentFlows {
         incomingPayment.completed ||
         (record.receiveAmount !== undefined &&
           BigInt(received.value) >= BigInt(record.receiveAmount.value));
-      record = this.updatePayment(record, {
+      record = await this.updatePayment(record, {
         status: outgoingFailed
           ? "failed"
           : fullyReceived
@@ -235,13 +235,13 @@ export class PaymentFlows {
     return toPublicPayment(record);
   }
 
-  getPayment(id: string) {
-    return toPublicPayment(this.requirePayment(id));
+  async getPayment(id: string) {
+    return toPublicPayment(await this.requirePayment(id));
   }
 
   /** Stored view of a mandate, without calling the wallet. */
-  findMandate(id: string) {
-    return toPublicMandate(this.requireMandate(id));
+  async findMandate(id: string) {
+    return toPublicMandate(await this.requireMandate(id));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -264,7 +264,7 @@ export class PaymentFlows {
       `/api/mandates/${id}/callback`,
     );
     const timestamp = this.timestamp();
-    const record = this.store.saveMandate({
+    const record = await this.store.saveMandate({
       id,
       status: "awaiting-consent",
       description: input.description,
@@ -280,7 +280,7 @@ export class PaymentFlows {
   }
 
   async completeMandate(id: string, params: CallbackParams) {
-    const record = this.requireMandate(id);
+    const record = await this.requireMandate(id);
     if (record.status !== "awaiting-consent" || !record.interaction) {
       return toPublicMandate(record);
     }
@@ -288,7 +288,7 @@ export class PaymentFlows {
     const check = checkCallback(interaction, params);
     if (!check.approved) {
       return toPublicMandate(
-        this.updateMandate(record, {
+        await this.updateMandate(record, {
           status: check.status,
           error: check.error,
           interaction: undefined,
@@ -304,7 +304,7 @@ export class PaymentFlows {
         check.interactRef,
       );
       return toPublicMandate(
-        this.updateMandate(record, {
+        await this.updateMandate(record, {
           status: "active",
           token: toStoredToken(grant.access_token, this.now()),
           continuation: {
@@ -315,7 +315,7 @@ export class PaymentFlows {
         }),
       );
     } catch (error) {
-      this.updateMandate(record, {
+      await this.updateMandate(record, {
         status: "failed",
         error: describeError(error),
         interaction: undefined,
@@ -326,7 +326,7 @@ export class PaymentFlows {
 
   /** Pays from the sender's wallet under the mandate, without asking for consent again. */
   async chargeMandate(id: string, input: ChargeInput) {
-    const mandate = this.requireActiveMandate(id);
+    const mandate = await this.requireActiveMandate(id);
     const [sender, receiver] = await Promise.all([
       this.resolve(mandate.sender),
       this.resolve(input.receiver),
@@ -352,7 +352,7 @@ export class PaymentFlows {
           },
     );
     const timestamp = this.timestamp();
-    let record = this.store.savePayment({
+    let record = await this.store.savePayment({
       id: randomUUID(),
       kind: "mandate-charge",
       status: "processing",
@@ -374,9 +374,9 @@ export class PaymentFlows {
           description: input.description,
         }),
       );
-      record = this.updatePayment(record, { outgoingPaymentUrl: outgoing.id });
+      record = await this.updatePayment(record, { outgoingPaymentUrl: outgoing.id });
     } catch (error) {
-      this.updatePayment(record, {
+      await this.updatePayment(record, {
         status: "failed",
         error: describeError(error),
       });
@@ -390,7 +390,7 @@ export class PaymentFlows {
 
   /** Several charges under one mandate (e.g. a remittance split between mom, school and savings). */
   async splitMandate(id: string, input: SplitInput) {
-    this.requireActiveMandate(id);
+    await this.requireActiveMandate(id);
     const results: {
       receiver: string;
       payment?: ReturnType<typeof toPublicPayment>;
@@ -414,7 +414,7 @@ export class PaymentFlows {
   }
 
   async getMandate(id: string) {
-    const mandate = this.requireMandate(id);
+    const mandate = await this.requireMandate(id);
     let spent:
       { debitAmount: Amount | null; receiveAmount: Amount | null } | undefined;
     if (mandate.status === "active") {
@@ -434,20 +434,22 @@ export class PaymentFlows {
       }
     }
     return {
-      ...toPublicMandate(this.requireMandate(id)),
+      ...toPublicMandate(await this.requireMandate(id)),
       spent,
-      payments: this.store.listPayments({ mandateId: id }).map(toPublicPayment),
+      payments: (await this.store.listPayments({ mandateId: id })).map(
+        toPublicPayment,
+      ),
     };
   }
 
   async revokeMandate(id: string) {
-    const mandate = this.requireMandate(id);
+    const mandate = await this.requireMandate(id);
     if (mandate.status !== "active" || !mandate.continuation) {
       throw new AppError("Solo se puede revocar una autorización activa", 409);
     }
     await this.ops.cancelGrant(mandate.continuation);
     return toPublicMandate(
-      this.updateMandate(mandate, {
+      await this.updateMandate(mandate, {
         status: "revoked",
         token: undefined,
         continuation: undefined,
@@ -535,7 +537,7 @@ export class PaymentFlows {
     mandateId: string,
     fn: (token: string) => Promise<T>,
   ): Promise<T> {
-    let mandate = this.requireActiveMandate(mandateId);
+    let mandate = await this.requireActiveMandate(mandateId);
     if (!mandate.token)
       throw new AppError("La autorización no tiene un token activo", 409);
     const expiresAt = mandate.token.expiresAt
@@ -562,20 +564,20 @@ export class PaymentFlows {
     return this.updateMandate(mandate, { token });
   }
 
-  private requirePayment(id: string): PaymentRecord {
-    const record = this.store.getPayment(id);
+  private async requirePayment(id: string): Promise<PaymentRecord> {
+    const record = await this.store.getPayment(id);
     if (!record) throw new NotFoundError(`No existe el pago ${id}`);
     return record;
   }
 
-  private requireMandate(id: string): MandateRecord {
-    const record = this.store.getMandate(id);
+  private async requireMandate(id: string): Promise<MandateRecord> {
+    const record = await this.store.getMandate(id);
     if (!record) throw new NotFoundError(`No existe la autorización ${id}`);
     return record;
   }
 
-  private requireActiveMandate(id: string): MandateRecord {
-    const mandate = this.requireMandate(id);
+  private async requireActiveMandate(id: string): Promise<MandateRecord> {
+    const mandate = await this.requireMandate(id);
     if (mandate.status !== "active") {
       throw new AppError(
         `La autorización está en estado "${mandate.status}", no "active"`,
@@ -588,7 +590,7 @@ export class PaymentFlows {
   private updatePayment(
     record: PaymentRecord,
     changes: Partial<PaymentRecord>,
-  ): PaymentRecord {
+  ): Promise<PaymentRecord> {
     return this.store.savePayment({
       ...record,
       ...changes,
@@ -599,7 +601,7 @@ export class PaymentFlows {
   private updateMandate(
     record: MandateRecord,
     changes: Partial<MandateRecord>,
-  ): MandateRecord {
+  ): Promise<MandateRecord> {
     return this.store.saveMandate({
       ...record,
       ...changes,

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PaymentFlows } from "../src/openPayments/flows.js";
 import { computeInteractHash } from "../src/openPayments/hash.js";
 import type { Interaction } from "../src/openPayments/records.js";
-import { Store } from "../src/storage/store.js";
+import { MemoryStore } from "../src/storage/store.js";
 import {
   ALICE,
   AUTH_SERVER,
@@ -19,7 +19,7 @@ const cop = (value: string) => ({ value, assetCode: "COP", assetScale: 2 });
 function setup() {
   const clock = { now: NOW };
   const { ops, deliver } = createFakeOperations();
-  const store = new Store();
+  const store = new MemoryStore();
   const flows = new PaymentFlows(ops, store, {
     publicBaseUrl: BASE_URL,
     allowedWalletHosts: ["ilp.interledger-test.dev"],
@@ -35,8 +35,8 @@ function setup() {
       authServerUrl: AUTH_SERVER,
     }),
   });
-  const paymentInteraction = (id: string) => store.getPayment(id)!.interaction!;
-  const mandateInteraction = (id: string) => store.getMandate(id)!.interaction!;
+  const paymentInteraction = async (id: string) => (await store.getPayment(id))!.interaction!;
+  const mandateInteraction = async (id: string) => (await store.getMandate(id))!.interaction!;
   const activeMandate = async (interval?: string) => {
     const { mandate } = await flows.startMandate({
       sender: ALICE,
@@ -45,7 +45,7 @@ function setup() {
     });
     await flows.completeMandate(
       mandate.id,
-      approve(mandateInteraction(mandate.id)),
+      approve(await mandateInteraction(mandate.id)),
     );
     return mandate.id;
   };
@@ -95,7 +95,7 @@ describe("one-off payment", () => {
     });
     expect(payment).not.toHaveProperty("interaction");
     expect(payment).not.toHaveProperty("incomingToken");
-    expect(store.getPayment(payment.id)?.interaction?.authServer).toBe(
+    expect((await store.getPayment(payment.id))?.interaction?.authServer).toBe(
       AUTH_SERVER,
     );
   });
@@ -110,7 +110,7 @@ describe("one-off payment", () => {
 
     const processing = await flows.completePayment(
       payment.id,
-      approve(paymentInteraction(payment.id)),
+      approve(await paymentInteraction(payment.id)),
     );
     expect(ops.continueGrant).toHaveBeenCalledWith(
       { uri: `${AUTH_SERVER}/continue/1`, accessToken: "continue-token" },
@@ -147,7 +147,7 @@ describe("one-off payment", () => {
       receiver: BOB,
       amount: "10",
     });
-    const params = approve(paymentInteraction(payment.id));
+    const params = approve(await paymentInteraction(payment.id));
 
     await flows.completePayment(payment.id, params);
     await flows.completePayment(payment.id, params);
@@ -202,7 +202,7 @@ describe("one-off payment", () => {
 
     await flows.completePayment(
       payment.id,
-      approve(paymentInteraction(payment.id)),
+      approve(await paymentInteraction(payment.id)),
     );
 
     expect(ops.createQuote).toHaveBeenCalledTimes(2);
@@ -227,11 +227,11 @@ describe("one-off payment", () => {
     await expect(
       flows.completePayment(
         payment.id,
-        approve(paymentInteraction(payment.id)),
+        approve(await paymentInteraction(payment.id)),
       ),
     ).rejects.toThrow("supera el monto que autorizaste");
 
-    expect(store.getPayment(payment.id)?.status).toBe("failed");
+    expect((await store.getPayment(payment.id))?.status).toBe("failed");
     expect(ops.createOutgoingPayment).not.toHaveBeenCalled();
   });
 
@@ -273,11 +273,11 @@ describe("mandates", () => {
 
     const active = await flows.completeMandate(
       mandate.id,
-      approve(store.getMandate(mandate.id)!.interaction!),
+      approve((await store.getMandate(mandate.id))!.interaction!),
     );
     expect(active.status).toBe("active");
     expect(active).not.toHaveProperty("token");
-    expect(store.getMandate(mandate.id)?.token?.value).toBe("outgoing-token");
+    expect((await store.getMandate(mandate.id))?.token?.value).toBe("outgoing-token");
   });
 
   it("charges several times without asking for consent again", async () => {

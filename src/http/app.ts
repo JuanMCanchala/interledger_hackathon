@@ -73,7 +73,7 @@ export function createApp({
     const fallback = `/?payment=${encodeURIComponent(id)}`;
     res.redirect(
       303,
-      `${frontendUrl}${returnPath(() => flows.getPayment(id).returnTo, fallback)}`,
+      `${frontendUrl}${await returnPath(async () => (await flows.getPayment(id)).returnTo, fallback)}`,
     );
   });
 
@@ -99,7 +99,7 @@ export function createApp({
     const fallback = `/?mandate=${encodeURIComponent(id)}`;
     res.redirect(
       303,
-      `${frontendUrl}${returnPath(() => flows.findMandate(id).returnTo, fallback)}`,
+      `${frontendUrl}${await returnPath(async () => (await flows.findMandate(id)).returnTo, fallback)}`,
     );
   });
 
@@ -145,7 +145,10 @@ export function createApp({
     res
       .status(201)
       .json(
-        sales.createSale(req.params.id, schemas.createSale.parse(req.body)),
+        await sales.createSale(
+          req.params.id,
+          schemas.createSale.parse(req.body),
+        ),
       );
   });
 
@@ -167,9 +170,12 @@ export function createApp({
 }
 
 /** Where to send the browser after a consent callback: the record's page, or the sandbox. */
-function returnPath(read: () => string | undefined, fallback: string): string {
+async function returnPath(
+  read: () => Promise<string | undefined>,
+  fallback: string,
+): Promise<string> {
   try {
-    return read() ?? fallback;
+    return (await read()) ?? fallback;
   } catch {
     return fallback;
   }

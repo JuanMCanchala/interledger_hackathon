@@ -1,6 +1,6 @@
 # 7. JSON file persistence for the hackathon
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0010](0010-postgresql-through-prisma-with-atomic-transitions.md)
 - **Date:** 2026-10-16
 
 ## Context

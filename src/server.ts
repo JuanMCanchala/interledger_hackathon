@@ -7,7 +7,7 @@ import { createOpenPaymentsClient } from "./openPayments/client.js";
 import { describeError } from "./openPayments/errors.js";
 import { PaymentFlows } from "./openPayments/flows.js";
 import { OpenPaymentsOperations } from "./openPayments/operations.js";
-import { Store } from "./storage/store.js";
+import { PrismaStore } from "./storage/prismaStore.js";
 
 try {
   process.loadEnvFile();
@@ -18,7 +18,7 @@ try {
 try {
   const config = loadConfig();
   const client = await createOpenPaymentsClient(config);
-  const store = new Store(config.dataFile);
+  const store = PrismaStore.connect(config.databaseUrl);
   const flows = new PaymentFlows(new OpenPaymentsOperations(client), store, {
     publicBaseUrl: config.publicBaseUrl,
     allowedWalletHosts: config.allowedWalletHosts,
@@ -39,12 +39,18 @@ try {
         ? undefined
         : frontendOrigin,
   });
-  sales.startSweeper();
-  app.listen(config.port, () => {
+  const stopSweeper = sales.startSweeper();
+  const server = app.listen(config.port, () => {
     console.log(
       `Open Payments listo en ${config.publicBaseUrl} (wallet de la app: ${config.clientWalletAddress})`,
     );
   });
+  const shutdown = () => {
+    stopSweeper();
+    server.close(() => void store.close().finally(() => process.exit(0)));
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 } catch (error) {
   console.error(describeError(error));
   process.exit(1);
