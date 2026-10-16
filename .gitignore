@@ -3,6 +3,7 @@ prompts/
 
 # Dependencies & Build artifacts
 node_modules/
+backend/node_modules/
 frontend/node_modules/
 frontend/.next/
 .next/
@@ -15,6 +16,7 @@ frontend/.next/
 
 # Generated Prisma client (npm install runs prisma generate)
 src/generated/
+backend/src/generated/
 
 # Local data from the old JSON store (holds access tokens)
 data/

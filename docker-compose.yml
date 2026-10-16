@@ -19,8 +19,8 @@ services:
 
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: miplante-backend
     restart: unless-stopped
     depends_on:
@@ -43,9 +43,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./src:/app/src
-      - ./public:/app/public
-      - ./prisma:/app/prisma
+      - ./backend/src:/app/src
+      - ./backend/public:/app/public
+      - ./backend/prisma:/app/prisma
 
   frontend:
     build:
