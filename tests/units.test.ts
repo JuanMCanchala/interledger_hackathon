@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseHosts } from "../src/config.js";
 import {
   AmountError,
   compareAmounts,
@@ -13,6 +14,7 @@ import {
 } from "../src/openPayments/hash.js";
 import { buildRepeatingInterval } from "../src/openPayments/interval.js";
 import {
+  assertAllowedWalletHost,
   normalizeWalletAddressUrl,
 } from "../src/openPayments/walletAddress.js";
 
@@ -130,5 +132,18 @@ describe("wallet addresses", () => {
       normalizeWalletAddressUrl("https://ilp.interledger-test.dev/alice?x=1"),
     ).toThrow();
     expect(() => normalizeWalletAddressUrl("alice")).toThrow("inválida");
+  });
+
+  it("only allows the configured hosts", () => {
+    const hosts = parseHosts("ilp.interledger-test.dev, other.example");
+    expect(() =>
+      assertAllowedWalletHost("https://ilp.interledger-test.dev/a", hosts),
+    ).not.toThrow();
+    expect(() =>
+      assertAllowedWalletHost("https://evil.example/a", hosts),
+    ).toThrow("no está permitido");
+    expect(() =>
+      assertAllowedWalletHost("https://evil.example/a", parseHosts("*")),
+    ).not.toThrow();
   });
 });
