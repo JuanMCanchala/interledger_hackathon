@@ -38,7 +38,7 @@ export class Hero {
   protected readonly floaters: readonly Floater[] = [
     { name: 'peso', x: 4, y: 16, size: 70, depth: 1.4, speed: 0.8 },
     { name: 'monedas', x: 52, y: 66, size: 80, depth: 0.8, speed: 0.9 },
-    { name: 'alcancia', x: 60, y: 12, size: 96, depth: 1.1, speed: 0.75 },
+    { name: 'alcancia', x: 60, y: 7, size: 96, depth: 1.1, speed: 0.75 },
     { name: 'planta', x: 2, y: 72, size: 90, depth: 0.9, speed: 1.15 },
     { name: 'billetera', x: 38, y: 76, size: 74, depth: 1.6, speed: 1.2 },
     { name: 'crecimiento', x: 95, y: 74, size: 84, depth: 1.2, speed: 1.1 },

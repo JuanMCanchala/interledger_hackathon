@@ -9,9 +9,8 @@
       @for (segment of manifesto; track $index) {
         @if (isFigure(segment)) {
           <a class="figure" [href]="'#fuente-' + segment.source" data-cursor="Fuente"
-            ><span class="figure-value">{{ segment.value }}</span><sup>{{ segment.source }}</sup
-            ><app-doodle class="figure-doodle" [name]="segment.doodle"
-          /></a>
+            ><span class="figure-value">{{ segment.value }}</span><sup>{{ segment.source }}</sup></a
+          >
         } @else {
           <span class="text">{{ segment }}</span>
         }

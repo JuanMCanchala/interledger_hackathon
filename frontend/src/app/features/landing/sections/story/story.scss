@@ -89,10 +89,9 @@
 }
 
 .chapter-title {
-  font-family: var(--script);
-  font-weight: 400;
-  font-size: clamp(1.7rem, 3.6vw, 2.9rem);
-  line-height: 1.3;
+  font-size: clamp(1.8rem, 3.8vw, 3.1rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
   color: var(--lima);
   text-wrap: balance;
 }
