@@ -61,7 +61,7 @@
             <div class="stack-sm" style="min-width: 0">
               <p class="eyebrow">Mi caja</p>
               <h1 class="h1-sm" id="merchant-name"></h1>
-              <p class="mono muted" id="merchant-wallet"></p>
+              <p class="muted" id="merchant-wallet"></p>
             </div>
           </div>
 
@@ -106,7 +106,8 @@
                   Cobrar
                 </button>
                 <p class="hint" id="sale-disabled-hint" hidden>
-                  Para cobrar, primero autoriza tu tope diario en la wallet.
+                  Para cobrar, primero autoriza tu límite diario en tu
+                  billetera.
                 </p>
               </form>
 
@@ -128,7 +129,7 @@
                 <div id="qr-block" class="stack">
                   <div class="qr-box">
                     <div id="qr" aria-hidden="true"></div>
-                    <p class="small">Escanea para pagar desde tu wallet</p>
+                    <p class="small">Escanea con tu celular para pagar</p>
                   </div>
                   <div class="copy-row">
                     <input id="pay-url" readonly aria-label="Enlace de pago" />
@@ -194,7 +195,7 @@
 
               <section class="card stack" aria-labelledby="cap-title">
                 <div class="row between">
-                  <h2 id="cap-title">Tope diario</h2>
+                  <h2 id="cap-title">Límite diario</h2>
                   <span class="muted small" id="daily-cap"></span>
                 </div>
                 <p>
@@ -203,13 +204,13 @@
                 </p>
                 <div class="progress is-gold"><span id="cap-bar"></span></div>
                 <p class="hint">
-                  Nunca se descuenta más de este tope en un día. Lo aprobaste en
-                  tu wallet.
+                  Nunca se descuenta más de esto en un día. Lo aprobaste en tu
+                  billetera y lo puedes cancelar cuando quieras.
                 </p>
               </section>
 
               <section class="card stack" aria-labelledby="rules-title">
-                <h2 id="rules-title">Reglas de reparto</h2>
+                <h2 id="rules-title">Lo que se paga solo</h2>
                 <ul class="list" id="rules"></ul>
               </section>
 

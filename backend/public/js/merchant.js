@@ -23,6 +23,7 @@ import {
   showMessage,
   statusBadge,
   toNumber,
+  walletName,
   withBusy,
 } from "../app.js";
 
@@ -43,6 +44,7 @@ const RESUME_WINDOW_MS = 30 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);
 const merchantId = param("id");
+let lastStatus = null;
 
 let merchant = null;
 let current = null; // { sale, payUrl }
@@ -95,9 +97,10 @@ function renderMerchant(m) {
   $("missing").hidden = true;
   document.title = `${m.name} · MiPlante`;
   $("merchant-name").textContent = m.name;
-  $("merchant-wallet").textContent = m.wallet;
+  $("merchant-wallet").textContent = `Billetera: ${walletName(m.wallet)}`;
   $("merchant-status").replaceChildren(statusBadge(MERCHANT_STATUS, m.status));
-  renderStatusBanner(m.status);
+  if (m.status !== lastStatus) renderStatusBanner(m.status, m.wallet);
+  lastStatus = m.status;
   syncSaleForm();
 
   $("today-date").textContent = new Date().toLocaleDateString("es-CO", {
@@ -122,7 +125,7 @@ function renderMerchant(m) {
     );
   }
 
-  $("daily-cap").textContent = `Tope: ${formatAmount(m.dailyCap)}`;
+  $("daily-cap").textContent = `Límite: ${formatAmount(m.dailyCap)}`;
   if (m.spentToday) {
     $("spent-today").textContent = formatAmount(m.spentToday);
     const ratio =
@@ -140,40 +143,60 @@ function renderMerchant(m) {
   if (changed($("sales"), m.sales)) renderSales(m.sales);
 }
 
-function renderStatusBanner(status) {
+function renderStatusBanner(status, wallet) {
   const banner = $("status-banner");
   const messages = {
     "awaiting-consent": [
       "wait",
-      "Falta tu autorización en la wallet. Apruébala para que MiPlante pueda repartir tus ventas; si ya lo hiciste, esta página se actualiza sola.",
-      false,
+      "Falta tu autorización. Mientras no la apruebes, tus ventas no se reparten solas. Si ya la aprobaste, esta página se actualiza sola.",
     ],
     rejected: [
       "bad",
-      "Rechazaste la autorización en tu wallet, así que MiPlante no puede repartir tus ventas.",
-      true,
+      "La autorización no se completó. A veces pasa si entraste a la billetera con otra cuenta.",
     ],
     revoked: [
       "bad",
-      "La autorización fue revocada: tus ventas ya no se reparten automáticamente.",
-      true,
+      "Cancelaste la autorización, así que tus ventas ya no se reparten solas.",
     ],
-    failed: ["bad", "No pudimos activar tu autorización.", true],
+    failed: ["bad", "No pudimos activar tu autorización."],
   };
   const entry = messages[status];
   if (!entry) {
     banner.hidden = true;
     return;
   }
-  const [tone, text, offerRetry] = entry;
-  banner.className = `banner banner-${tone}`;
+  const [tone, text] = entry;
+  const button = el("button", {
+    type: "button",
+    class: "btn btn-primary",
+    text: "Autorizar en mi billetera",
+  });
+  button.addEventListener("click", async () => {
+    try {
+      await withBusy(button, "Abriendo tu billetera…", async () => {
+        const { redirectUrl } = await postJson(
+          `/api/merchants/${encodeURIComponent(merchantId)}/consent`,
+          {},
+        );
+        window.location.href = redirectUrl;
+      });
+    } catch (error) {
+      showMessage(banner, error.message);
+    }
+  });
+  banner.className = `banner banner-${tone} stack-sm`;
   banner.replaceChildren(
-    el("span", { text }),
-    offerRetry ? " " : null,
-    offerRetry
-      ? el("a", { href: "/onboard.html", text: "Registra tu negocio de nuevo" })
-      : null,
-    offerRetry ? "." : null,
+    el("p", { text }),
+    el(
+      "p",
+      { class: "small" },
+      "En tu billetera entra con la cuenta dueña de ",
+      el("strong", { text: walletName(wallet) }),
+      " y toca ",
+      el("strong", { text: "Aceptar" }),
+      ".",
+    ),
+    button,
   );
   banner.hidden = false;
 }

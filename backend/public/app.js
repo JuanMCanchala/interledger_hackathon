@@ -19,12 +19,12 @@ export const PAYMENT_STEPS = [
 
 export const MERCHANT_STATUS = {
   "awaiting-consent": {
-    text: "Falta tu autorización en la wallet",
+    text: "Falta autorizar",
     tone: "wait",
   },
   active: { text: "Activo", tone: "ok" },
-  rejected: { text: "Autorización rechazada", tone: "bad" },
-  revoked: { text: "Autorización revocada", tone: "bad" },
+  rejected: { text: "Sin autorizar", tone: "bad" },
+  revoked: { text: "Autorización cancelada", tone: "bad" },
   failed: { text: "No se pudo activar", tone: "bad" },
 };
 
@@ -40,11 +40,11 @@ export const ITEM_STATUS = {
   processing: { text: "Enviando…", tone: "wait" },
   completed: { text: "Enviado", tone: "ok" },
   failed: { text: "Falló", tone: "bad" },
-  skipped: { text: "Tope diario alcanzado", tone: "neutral" },
+  skipped: { text: "Límite diario alcanzado", tone: "neutral" },
 };
 
 export const RULE_KIND = {
-  debt: "Crédito / proveedor",
+  debt: "Deuda",
   savings: "Ahorro",
 };
 
@@ -396,7 +396,7 @@ export function renderSplit(
           el("span", { text: RULE_KIND[item.kind] || item.kind }),
           statusBadge(ITEM_STATUS, item.status),
           item.capped && item.status !== "skipped"
-            ? badge("Tope diario alcanzado")
+            ? badge("Límite diario alcanzado")
             : null,
           item.error
             ? el("span", { class: "error-text", text: item.error })
