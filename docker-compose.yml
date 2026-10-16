@@ -54,8 +54,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        BACKEND_INTERNAL_URL: http://backend:3000
     container_name: miplante-frontend
     restart: unless-stopped
+    # Development: hot reload over the bind-mounted sources instead of the production build.
+    command: npm run dev
     depends_on:
       - backend
     environment:
