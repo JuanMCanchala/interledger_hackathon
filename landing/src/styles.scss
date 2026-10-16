@@ -116,6 +116,12 @@ img {
   }
 }
 
+.button-ghost {
+  background: transparent;
+  color: var(--lima);
+  box-shadow: inset 0 0 0 2px var(--lima);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
