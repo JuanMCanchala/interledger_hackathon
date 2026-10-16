@@ -1,2 +1,14 @@
 # Prompt log: kept local during the hackathon, uploaded before final submission
 prompts/
+
+# Dependencies
+node_modules/
+
+# Secrets: the repo is public, never commit keys or env files
+.env
+.env.*
+*.key
+*.pem
+
+# Local data (holds access tokens)
+data/
