@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/http/app.js";
 import { MerchantService } from "../src/merchants/merchantService.js";
+import { SalesService } from "../src/merchants/salesService.js";
 import { PaymentFlows } from "../src/openPayments/flows.js";
 import { Store } from "../src/storage/store.js";
 import { ALICE, BOB, createFakeOperations } from "./fakeOperations.js";
@@ -19,9 +20,13 @@ beforeAll(async () => {
     publicBaseUrl: "http://localhost:3000",
     allowedWalletHosts: ["ilp.interledger-test.dev"],
   });
+  const merchants = new MerchantService(flows, store);
   server = createApp({
     flows,
-    merchants: new MerchantService(flows, store),
+    merchants,
+    sales: new SalesService(flows, merchants, store, {
+      frontendUrl: FRONTEND_URL,
+    }),
     frontendUrl: FRONTEND_URL,
     corsOrigin: FRONTEND_URL,
   }).listen(0);

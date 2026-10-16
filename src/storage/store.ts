@@ -6,16 +6,22 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
-import type { MerchantRecord } from "../merchants/types.js";
+import type { MerchantRecord, SaleRecord } from "../merchants/types.js";
 import type { MandateRecord, PaymentRecord } from "../openPayments/records.js";
 
 interface StoreData {
   payments: Record<string, PaymentRecord>;
   mandates: Record<string, MandateRecord>;
   merchants: Record<string, MerchantRecord>;
+  sales: Record<string, SaleRecord>;
 }
 
-const EMPTY: StoreData = { payments: {}, mandates: {}, merchants: {} };
+const EMPTY: StoreData = {
+  payments: {},
+  mandates: {},
+  merchants: {},
+  sales: {},
+};
 
 /**
  * Minimal persistence for the hackathon (ADR 0007): records in memory, written atomically to a JSON
@@ -67,6 +73,23 @@ export class Store {
     this.data.merchants[record.id] = record;
     this.persist();
     return record;
+  }
+
+  getSale(id: string): SaleRecord | undefined {
+    return this.data.sales[id];
+  }
+
+  saveSale(record: SaleRecord): SaleRecord {
+    this.data.sales[record.id] = record;
+    this.persist();
+    return record;
+  }
+
+  /** Newest first. */
+  listSales(filter: { merchantId?: string } = {}): SaleRecord[] {
+    return Object.values(this.data.sales)
+      .filter((s) => !filter.merchantId || s.merchantId === filter.merchantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   private persist(): void {

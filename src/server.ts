@@ -1,6 +1,7 @@
 import { loadConfig } from "./config.js";
 import { createApp } from "./http/app.js";
 import { MerchantService } from "./merchants/merchantService.js";
+import { SalesService } from "./merchants/salesService.js";
 import { createOpenPaymentsClient } from "./openPayments/client.js";
 import { describeError } from "./openPayments/errors.js";
 import { PaymentFlows } from "./openPayments/flows.js";
@@ -22,10 +23,14 @@ try {
     allowedWalletHosts: config.allowedWalletHosts,
   });
   const merchants = new MerchantService(flows, store);
+  const sales = new SalesService(flows, merchants, store, {
+    frontendUrl: config.frontendUrl,
+  });
   const frontendOrigin = new URL(config.frontendUrl).origin;
   const app = createApp({
     flows,
     merchants,
+    sales,
     frontendUrl: config.frontendUrl,
     corsOrigin:
       frontendOrigin === new URL(config.publicBaseUrl).origin

@@ -78,3 +78,7 @@ export const onboardMerchant = z.object({
     .min(1)
     .max(5),
 });
+
+export const createSale = z.object({ amount: decimalAmount, description });
+
+export const paySale = z.object({ customerWallet: walletAddress });

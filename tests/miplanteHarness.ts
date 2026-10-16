@@ -2,6 +2,7 @@ import {
   MerchantService,
   type OnboardInput,
 } from "../src/merchants/merchantService.js";
+import { SalesService } from "../src/merchants/salesService.js";
 import { PaymentFlows } from "../src/openPayments/flows.js";
 import { computeInteractHash } from "../src/openPayments/hash.js";
 import type { Interaction } from "../src/openPayments/records.js";
@@ -55,6 +56,10 @@ export function setupMiPlante() {
     now,
   });
   const merchants = new MerchantService(flows, store, { now });
+  const sales = new SalesService(flows, merchants, store, {
+    frontendUrl: BASE_URL,
+    now,
+  });
 
   /** What the wallet appends to the finish URL when its owner approves. */
   const approve = (interaction: Interaction) => ({
@@ -92,6 +97,7 @@ export function setupMiPlante() {
     store,
     flows,
     merchants,
+    sales,
     approve,
     approveMandate,
     approvePayment,

@@ -9,12 +9,14 @@ import { z } from "zod";
 import { describeError } from "../openPayments/errors.js";
 import { AppError } from "../shared/errors.js";
 import type { MerchantService } from "../merchants/merchantService.js";
+import type { SalesService } from "../merchants/salesService.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import * as schemas from "./schemas.js";
 
 export interface AppOptions {
   flows: PaymentFlows;
   merchants: MerchantService;
+  sales: SalesService;
   /** Where the browser lands after the consent screen. */
   frontendUrl: string;
   /** Origin allowed to call /api from another host (e.g. a Vite or Next.js dev server). */
@@ -26,6 +28,7 @@ const PUBLIC_DIR = fileURLToPath(new URL("../../public", import.meta.url));
 export function createApp({
   flows,
   merchants,
+  sales,
   frontendUrl,
   corsOrigin,
 }: AppOptions) {
@@ -133,6 +136,24 @@ export function createApp({
 
   app.get("/api/merchants/:id", async (req, res) => {
     res.json(merchants.view(merchants.require(req.params.id)));
+  });
+
+  app.post("/api/merchants/:id/sales", async (req, res) => {
+    res
+      .status(201)
+      .json(
+        sales.createSale(req.params.id, schemas.createSale.parse(req.body)),
+      );
+  });
+
+  app.get("/api/sales/:id", async (req, res) => {
+    res.json(await sales.refresh(req.params.id));
+  });
+
+  app.post("/api/sales/:id/pay", async (req, res) => {
+    res
+      .status(201)
+      .json(await sales.pay(req.params.id, schemas.paySale.parse(req.body)));
   });
 
   app.use("/api", (_req, res) => {
