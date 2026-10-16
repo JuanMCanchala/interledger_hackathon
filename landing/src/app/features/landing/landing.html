@@ -1,0 +1,15 @@
+<app-loader (reveal)="revealed.set(true)" />
+<app-cursor />
+<app-nav />
+<div id="smooth-wrapper">
+  <div id="smooth-content">
+    <main>
+      <app-hero [revealed]="revealed()" />
+      <app-purpose />
+      <app-story />
+      <app-features />
+      <app-preview />
+    </main>
+    <app-closing />
+  </div>
+</div>

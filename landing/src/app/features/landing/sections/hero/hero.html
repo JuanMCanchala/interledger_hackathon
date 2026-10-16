@@ -1,0 +1,102 @@
+<section class="hero" id="inicio">
+  <div class="floaters" aria-hidden="true">
+    @for (floater of floaters; track floater.name) {
+      <span
+        class="floater"
+        [attr.data-speed]="floater.speed"
+        [style.left.%]="floater.x"
+        [style.top.%]="floater.y"
+        [style.--size]="floater.size"
+      >
+        <app-doodle
+          class="floater-doodle"
+          [name]="floater.name"
+          [attr.data-depth]="floater.depth"
+        />
+      </span>
+    }
+  </div>
+
+  <div class="wrap layout">
+    <h1 class="headline">
+      <span class="sentence">Con MiPlante llevamos tus finanzas</span>
+      <span class="sr-only">pa' lante</span>
+      <app-logo
+        class="word"
+        data-loader-target
+        aria-hidden="true"
+        [wordplay]="true"
+        [settled]="true"
+      />
+    </h1>
+
+    <div class="aside">
+      <p class="lead">
+        La caja registradora que reparte cada venta en tus bolsillos: lo tuyo, tus proveedores, tu
+        préstamo y tu ahorro. Si hoy no vendes, hoy no pagas.
+      </p>
+      <div class="actions">
+        <a class="button magnetic" [href]="app.register">Registra tu negocio</a>
+        <a class="button button-ghost magnetic" href="#funciones">Mira lo que hace</a>
+      </div>
+    </div>
+
+    <div class="till-stage">
+      <div class="till" id="caja" role="group" aria-labelledby="till-title">
+        <div class="till-head">
+          <p id="till-title" class="till-title">Toca una venta y mira cómo se reparte</p>
+          <div class="chips" role="group" aria-label="Valor de la venta">
+            @for (amount of amounts; track amount) {
+              <button
+                type="button"
+                class="chip"
+                data-cursor="Vender"
+                [attr.aria-pressed]="amount === sale()"
+                (click)="sell(amount)"
+              >
+                {{ format(amount) }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="ticket">
+          <app-doodle class="ticket-doodle" name="pago" />
+          <span>Te pagaron</span>
+          <strong class="ticket-amount">{{ format(sale()) }}</strong>
+        </div>
+
+        <ul class="pockets">
+          @for (pocket of pockets; track pocket.name) {
+            <li class="pocket">
+              <span class="coin" aria-hidden="true">$</span>
+              <app-doodle class="jar-doodle" [name]="pocket.doodle" />
+              <div class="jar">
+                <span class="fill" [style.--level]="pocket.percent / 100"></span>
+              </div>
+              <strong class="amount" aria-hidden="true">{{ format(0) }}</strong>
+              <span class="name">{{ pocket.name }}</span>
+              <span class="pct">{{ pocket.percent }} %</span>
+            </li>
+          }
+        </ul>
+        <p class="sr-only" aria-live="polite">{{ summary() }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track">
+      @for (copy of [0, 1]; track copy) {
+        @for (phrase of phrases; track phrase) {
+          <span class="ticker-item">
+            {{ phrase }}
+            <svg class="ticker-star" viewBox="0 0 76 76">
+              <path d="M38 0 50 26 76 38 50 50 38 76 26 50 0 38 26 26Z" />
+            </svg>
+          </span>
+        }
+      }
+    </div>
+  </div>
+</section>
