@@ -25,7 +25,7 @@ import {
   toNumber,
   walletName,
   withBusy,
-} from "../app.js";
+} from "./app.js";
 import { createRulesEditor } from "./rules-editor.js";
 
 /** How the merchant sees a sale progress (the customer sees the four Open Payments steps). */

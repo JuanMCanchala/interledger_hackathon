@@ -1,4 +1,4 @@
-import { STORAGE_KEYS, remember } from "../app.js";
+import { STORAGE_KEYS, remember } from "./app.js";
 
 const form = document.getElementById("open-form");
 const input = document.getElementById("merchant-id");

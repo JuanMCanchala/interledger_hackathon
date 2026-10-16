@@ -14,7 +14,7 @@ import {
   statusBadge,
   walletName,
   withBusy,
-} from "../app.js";
+} from "./app.js";
 
 /** Status labels from the customer's point of view. */
 const CUSTOMER_STATUS = {

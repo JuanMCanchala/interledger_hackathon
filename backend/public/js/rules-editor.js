@@ -6,7 +6,7 @@ import {
   previewSplit,
   showMessage,
   toMinor,
-} from "../app.js";
+} from "./app.js";
 
 export const MAX_RULES = 5;
 export const MAX_TOTAL_PERCENT = 50;

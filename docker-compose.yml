@@ -69,6 +69,7 @@ services:
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
+      - ./frontend/proxy.conf.mjs:/app/proxy.conf.mjs
 
   landing:
     build:

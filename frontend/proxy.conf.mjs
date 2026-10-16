@@ -3,15 +3,17 @@
 // Production does the same with nginx (nginx.conf.template). Keep both lists in sync.
 const target = process.env.BACKEND_INTERNAL_URL || 'http://localhost:3000';
 
+// Backend assets live under /css and /js, never at the root: `ng serve` publishes its own
+// /styles.css and would shadow a backend file with the same name.
 const BACKEND_PATHS = [
   '/api',
+  '/css',
   '/js',
+  '/img',
   '/onboard.html',
   '/merchant.html',
   '/pay.html',
   '/sandbox.html',
-  '/styles.css',
-  '/app.js',
   '/favicon.svg',
 ];
 
