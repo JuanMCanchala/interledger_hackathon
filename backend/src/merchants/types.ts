@@ -61,8 +61,13 @@ export interface SaleRecord {
   status: SaleStatus;
   /** Customer's wallet address, once they start paying. */
   customer?: string;
-  /** One-off Open Payments payment from the customer to the merchant. */
+  /** One-off Open Payments payment from the customer to the merchant (MiPlante's checkout). */
   paymentId?: string;
+  /**
+   * The incoming payment that paid the sale from the wallet provider's own page (the QR), matched
+   * by amount. Each one pays at most one sale.
+   */
+  incomingPaymentUrl?: string;
   error?: string;
   settlement: Settlement;
   paidAt?: string;

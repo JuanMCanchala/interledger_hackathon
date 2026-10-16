@@ -62,6 +62,8 @@ export interface MandateRecord {
   sender: string;
   maxAmount: Amount;
   interval?: string;
+  /** The grant can also read every incoming payment on the sender's wallet (list-all, read-all). */
+  incomingAccess?: boolean;
   error?: string;
   createdAt: string;
   updatedAt: string;

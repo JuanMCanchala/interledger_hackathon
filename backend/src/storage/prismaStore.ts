@@ -99,6 +99,7 @@ export class PrismaStore implements Store {
       sender: record.sender,
       maxAmount: record.maxAmount as unknown as Prisma.InputJsonValue,
       interval: record.interval ?? null,
+      incomingAccess: record.incomingAccess ?? false,
       error: record.error ?? null,
       createdAt: new Date(record.createdAt),
       updatedAt: new Date(record.updatedAt),
@@ -250,6 +251,7 @@ export class PrismaStore implements Store {
       status: record.status,
       customer: record.customer ?? null,
       paymentId: record.paymentId ?? null,
+      incomingPaymentUrl: record.incomingPaymentUrl ?? null,
       error: record.error ?? null,
       settlementStatus: settlement.status,
       settlementReason: settlement.reason ?? null,
@@ -322,6 +324,40 @@ export class PrismaStore implements Store {
     return count === 1 ? this.getSale(saleId) : undefined;
   }
 
+  async claimIncomingPayment(
+    saleId: string,
+    incomingPaymentUrl: string,
+    paidAt: string,
+  ) {
+    try {
+      const { count } = await this.prisma.sale.updateMany({
+        where: {
+          id: saleId,
+          status: "open",
+          paymentId: null,
+          incomingPaymentUrl: null,
+        },
+        data: {
+          status: "paid",
+          incomingPaymentUrl,
+          paidAt: new Date(paidAt),
+          updatedAt: new Date(paidAt),
+          error: null,
+        },
+      });
+      return count === 1;
+    } catch (error) {
+      // The unique index refused it: that incoming payment already paid another sale.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   async claimSettlement(saleId: string, updatedAt: string) {
     const { count } = await this.prisma.sale.updateMany({
       where: { id: saleId, status: "paid", settlementStatus: "pending" },
@@ -380,6 +416,7 @@ function toMandate(row: MandateRow): MandateRecord {
     sender: row.sender,
     maxAmount: row.maxAmount as unknown as Amount,
     interval: opt(row.interval),
+    incomingAccess: row.incomingAccess || undefined,
     error: opt(row.error),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -423,6 +460,7 @@ function toSale(row: SaleRow): SaleRecord {
     status: row.status as SaleRecord["status"],
     customer: opt(row.customer),
     paymentId: opt(row.paymentId),
+    incomingPaymentUrl: opt(row.incomingPaymentUrl),
     error: opt(row.error),
     settlement: {
       status: row.settlementStatus as SaleRecord["settlement"]["status"],

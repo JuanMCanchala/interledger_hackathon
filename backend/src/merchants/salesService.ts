@@ -23,6 +23,10 @@ export interface SalesOptions {
 
 /** The sweeper only looks at sales from the last day. */
 const SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** A QR payment matches a sale when it is within 2% of its amount (a payer in another currency). */
+const QR_AMOUNT_TOLERANCE_BPS = 200n;
+/** Clock skew allowed between MiPlante and the wallet when comparing creation times. */
+const QR_CLOCK_SKEW_MS = 60_000;
 
 /**
  * A sale is a one-off Open Payments payment from the customer's wallet to the merchant's:
@@ -43,7 +47,12 @@ export class SalesService {
     this.now = options.now ?? (() => new Date());
   }
 
-  /** The merchant types the amount; the till shows `payUrl` as a QR code. */
+  /**
+   * The merchant types the amount; the till shows `payUrl` as a QR code. When the merchant's consent
+   * lets MiPlante watch the wallet, the QR is the wallet address itself: a phone opens it on the
+   * wallet provider's payment page, the customer types the amount and pays from any wallet, and
+   * MiPlante matches that payment to the sale. Otherwise it is MiPlante's checkout.
+   */
   async createSale(
     merchantId: string,
     input: { amount: string; description?: string },
@@ -60,10 +69,8 @@ export class SalesService {
       createdAt: timestamp,
       updatedAt: timestamp,
     });
-    return {
-      sale: await this.view(sale),
-      payUrl: this.payUrl(sale.id),
-    };
+    const view = await this.view(sale);
+    return { sale: view, payUrl: view.payUrl, checkoutUrl: view.checkoutUrl };
   }
 
   /** The customer enters their wallet; returns the URL where they approve the payment. */
@@ -103,6 +110,10 @@ export class SalesService {
   /** Reads the payment's progress from Open Payments. Polled by both screens. */
   async refresh(saleId: string) {
     let sale = await this.require(saleId);
+    if (sale.status === "open" && !sale.paymentId) {
+      await this.matchQrPayments(sale.merchantId);
+      sale = await this.require(saleId);
+    }
     if (
       sale.paymentId &&
       (sale.status === "awaiting-consent" || sale.status === "processing")
@@ -254,7 +265,79 @@ export class SalesService {
     return () => clearInterval(timer);
   }
 
-  /** Link the customer opens from the QR code. */
+  /**
+   * Payments made from the wallet provider's page carry no reference to the sale, so they are
+   * matched by amount: each one, oldest first, pays the most recent open sale created before it
+   * whose amount it covers (within QR_AMOUNT_TOLERANCE_BPS). The most recent one is the sale that
+   * was on screen, not one the merchant abandoned earlier. The claim is atomic and an incoming
+   * payment pays one sale at most, so concurrent polls and the sweeper never pay a sale twice.
+   */
+  private async matchQrPayments(merchantId: string): Promise<void> {
+    const merchant = await this.merchants.require(merchantId);
+    const mandate = await this.flows.findMandate(merchant.mandateId);
+    if (mandate.status !== "active" || !mandate.incomingAccess) return;
+    const sales = await this.store.listSales({
+      merchantId,
+      createdSince: new Date(
+        this.now().getTime() - SWEEP_WINDOW_MS,
+      ).toISOString(),
+    });
+    // Newest first: the sale on screen wins over one left open earlier.
+    const open = sales
+      .filter((s) => s.status === "open" && !s.paymentId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (open.length === 0) return;
+
+    // Incoming payments that already belong to a sale: QR claims and MiPlante's own checkout.
+    const taken = new Set(
+      sales.flatMap((s) => (s.incomingPaymentUrl ? [s.incomingPaymentUrl] : [])),
+    );
+    for (const s of sales) {
+      if (!s.paymentId) continue;
+      const payment = await this.store.getPayment(s.paymentId);
+      if (payment) taken.add(payment.incomingPaymentUrl);
+    }
+
+    let received;
+    try {
+      received = await this.flows.listReceivedPayments(merchant.mandateId);
+    } catch (error) {
+      console.warn(
+        `[qr] no se pudieron leer los pagos de ${merchant.wallet}: ${describeError(error)}`,
+      );
+      return;
+    }
+    const candidates = received
+      .filter(
+        (p) =>
+          !taken.has(p.url) &&
+          p.receivedAmount.assetCode === merchant.asset.assetCode &&
+          p.receivedAmount.assetScale === merchant.asset.assetScale &&
+          BigInt(p.receivedAmount.value) > 0n,
+      )
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+    for (const payment of candidates) {
+      const sale = open.find(
+        (s) =>
+          Date.parse(payment.createdAt) >=
+            Date.parse(s.createdAt) - QR_CLOCK_SKEW_MS &&
+          coversSale(payment.receivedAmount, s.amount),
+      );
+      if (!sale) continue;
+      if (
+        await this.store.claimIncomingPayment(
+          sale.id,
+          payment.url,
+          this.timestamp(),
+        )
+      ) {
+        open.splice(open.indexOf(sale), 1);
+      }
+    }
+  }
+
+  /** MiPlante's own checkout, where the customer types their wallet name. */
   payUrl(saleId: string): string {
     return `${this.options.frontendUrl}/pay.html?sale=${saleId}`;
   }
@@ -270,6 +353,11 @@ export class SalesService {
       sale.paymentId ? this.flows.getPayment(sale.paymentId) : undefined,
       this.store.getMerchant(sale.merchantId),
     ]);
+    const mandate = merchant
+      ? await this.flows.findMandate(merchant.mandateId)
+      : undefined;
+    const qr =
+      merchant && mandate?.status === "active" && mandate.incomingAccess;
     return {
       id: sale.id,
       merchantId: sale.merchantId,
@@ -285,7 +373,10 @@ export class SalesService {
         debitAmount: payment.debitAmount,
         receivedAmount: payment.receivedAmount,
       },
-      payUrl: this.payUrl(sale.id),
+      // What the QR encodes: the wallet address when MiPlante can see QR payments, else the checkout.
+      payUrl: qr ? merchant.wallet : this.payUrl(sale.id),
+      checkoutUrl: this.payUrl(sale.id),
+      paidByQr: Boolean(sale.incomingPaymentUrl),
       settlement: sale.settlement,
       createdAt: sale.createdAt,
       updatedAt: sale.updatedAt,
@@ -371,9 +462,18 @@ function itemStatus(paymentStatus: string): SettlementItemStatus {
 
 function needsWork(sale: SaleRecord): boolean {
   return (
+    (sale.status === "open" && !sale.paymentId) ||
     sale.status === "awaiting-consent" ||
     sale.status === "processing" ||
     (sale.status === "paid" && sale.settlement.status === "pending") ||
     sale.settlement.items.some((item) => item.status === "processing")
   );
+}
+
+/** The payment covers the sale's amount, within QR_AMOUNT_TOLERANCE_BPS either way. */
+function coversSale(received: Amount, sale: Amount): boolean {
+  const amount = BigInt(sale.value);
+  const diff = BigInt(received.value) - amount;
+  const tolerance = (amount * QR_AMOUNT_TOLERANCE_BPS) / 10_000n;
+  return (diff < 0n ? -diff : diff) <= tolerance;
 }
