@@ -131,7 +131,7 @@ The till and dashboard.
                 "error"?, "resolution": "retried" | "marked-paid" | null, "createdAt" }],
   "notifications": [{ "id", "kind": "payout-failed" | "payout-due" | "payout-sent" | "consent"
                       | "cap-pending", "tone": "bad" | "wait" | "info" | "ok", "title", "text",
-                      "createdAt", "payoutId"?, "actions"?: ["retry", "mark-paid"] }],  // act-on first
+                      "createdAt", "payoutId"?, "actions"?: ["retry", "mark-paid", "use-emergency"] }],
   "today": { "salesCount", "gross": Amount, "kept": Amount, "allocated": Amount },
   "month": { "dayOfMonth": 16, "daysInMonth": 31, "salesCount", "gross": Amount, "kept": Amount,
              "allocated": Amount,
@@ -202,8 +202,18 @@ A payout that fails is never retried on its own (a timeout may have let it throu
 - `POST /api/merchants/:id/payouts/:payoutId/retry` → `201` with the new payout, worked out again.
 - `POST /api/merchants/:id/payouts/:payoutId/mark-paid` → `200`: the money did arrive; it counts as
   paid and nothing is sent.
+- `POST /api/merchants/:id/payouts/:payoutId/use-emergency` → `201`: the last resort (ADR 0016).
+  It moves the payout's amount from the emergency fund to the shop, and once that arrives sends the
+  payout again in full. It needs the fund's grant approved (`409` otherwise).
 
-Both answer `409` for a payout that is not a failure waiting for review.
+All three answer `409` for a payout that is not a failure waiting for review.
+
+### `POST /api/merchants/:id/emergency`
+
+`{ "ruleId"?: "<savings rule>" }` → `201 { "merchant", "redirectUrl" }`. Asks for the second consent
+that makes a savings wallet (the first savings rule's unless another is named) the last resort to
+pay a creditor, capped per month like the shop's grant. The merchant view shows it as
+`emergency: { "ruleId", "label", "status" } | null`. It is only used through `use-emergency`.
 
 ### `POST /api/merchants/:id/consent`
 
