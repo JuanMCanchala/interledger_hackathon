@@ -194,10 +194,13 @@ export function createFakeOperations() {
     getOutgoingPayment: vi.fn(async (url: string) =>
       mockOutgoingPayment({ id: url, failed: false }),
     ),
-    getGrantSpentAmounts: vi.fn(async () => ({
-      spentDebitAmount: usd("1300"),
-      spentReceiveAmount: null,
-    })),
+    // Like the wallet, nothing spent yet is reported as null.
+    getGrantSpentAmounts: vi.fn(
+      async (): Promise<{ spentDebitAmount: Amount | null; spentReceiveAmount: Amount | null }> => ({
+        spentDebitAmount: usd("1300"),
+        spentReceiveAmount: null,
+      }),
+    ),
     rotateToken: vi.fn(async () => ({
       value: "rotated-token",
       manage: `${AUTH_SERVER}/token/2`,
