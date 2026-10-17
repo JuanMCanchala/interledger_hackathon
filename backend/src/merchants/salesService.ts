@@ -209,7 +209,7 @@ export class SalesService {
       (sum, value) => sum + (value > 0n ? value : 0n),
       0n,
     );
-    const remainingCap = cap && {
+    const remainingCap = {
       ...cap,
       value: (BigInt(cap.value) > pending ? BigInt(cap.value) - pending : 0n).toString(),
     };
@@ -419,22 +419,44 @@ export class SalesService {
     return this.now().toISOString();
   }
 
-  /** What is left of today's cap, from the grant's spent amount. Undefined if unknown. */
-  private async remainingCap(
-    merchant: MerchantRecord,
-  ): Promise<Amount | undefined> {
-    const spent = (await this.flows.getMandate(merchant.mandateId)).spent
-      ?.debitAmount;
+  /**
+   * What is left of this month's cap. The wallet's count of what the grant spent wins; a grant that
+   * spent nothing yet reports none, which is zero. If the wallet cannot say (it did not answer, or
+   * answers in another asset), MiPlante's own charges under the grant this month stand in, so the
+   * cap is never just ignored.
+   */
+  private async remainingCap(merchant: MerchantRecord): Promise<Amount> {
     const cap = merchant.monthlyCap;
-    if (
-      !spent ||
-      spent.assetCode !== cap.assetCode ||
-      spent.assetScale !== cap.assetScale
+    const spent = (await this.flows.getMandate(merchant.mandateId)).spent;
+    let used: bigint;
+    if (spent && spent.debitAmount === null) {
+      used = 0n;
+    } else if (
+      spent?.debitAmount &&
+      spent.debitAmount.assetCode === cap.assetCode &&
+      spent.debitAmount.assetScale === cap.assetScale
     ) {
-      return undefined;
+      used = BigInt(spent.debitAmount.value);
+    } else {
+      used = await this.chargedThisMonth(merchant);
     }
-    const left = BigInt(cap.value) - BigInt(spent.value);
+    const left = BigInt(cap.value) - used;
     return { ...cap, value: (left > 0n ? left : 0n).toString() };
+  }
+
+  /** What MiPlante charged under the shop's grant since the 1st (Bogotá), failed charges aside. */
+  private async chargedThisMonth(merchant: MerchantRecord): Promise<bigint> {
+    const since = startOfBogotaMonth(this.now()).getTime();
+    const charges = await this.store.listPayments({ mandateId: merchant.mandateId });
+    return charges
+      .filter(
+        (p) =>
+          Date.parse(p.createdAt) >= since &&
+          p.status !== "failed" &&
+          p.status !== "rejected" &&
+          p.debitAmount?.assetCode === merchant.monthlyCap.assetCode,
+      )
+      .reduce((sum, p) => sum + BigInt(p.debitAmount!.value), 0n);
   }
 
   /**

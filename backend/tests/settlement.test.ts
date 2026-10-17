@@ -101,6 +101,30 @@ describe("settlement", () => {
     expect(sale.settlement.kept).toEqual(cop("900000"));
   });
 
+  it("keeps to the cap when the grant has spent nothing yet, counting what is reserved", async () => {
+    const env = setupMiPlante();
+    // Cap 30,000; the microcredit reserves up to its 20,000 quota; savings take 10%.
+    const merchantId = await env.onboardRosa({
+      rules: [
+        { label: "Microcrédito", category: "Microcréditos", kind: "debt", destination: COOP, sharePercent: 15, monthlyQuota: "20000" },
+        { label: "Fondo de emergencia", category: "Ahorro", kind: "savings", destination: SAVINGS, sharePercent: 10 },
+      ],
+    });
+    // A fresh grant: the wallet reports nothing spent.
+    env.ops.getGrantSpentAmounts.mockResolvedValue({ spentDebitAmount: null, spentReceiveAmount: null });
+    const { sale } = await env.sales.createSale(merchantId, { amount: "200000" });
+    const request = (await env.store.getPayment((await env.store.getSale(sale.id))!.paymentId!))!;
+    env.deliver(request.incomingPaymentUrl, cop("20000000"));
+
+    const settled = await env.sales.refresh(sale.id);
+
+    // 20,000 reserved for the microcredit, so only 10,000 of the cap is left for savings (not 20,000).
+    expect(settled.settlement.items.map((i) => [i.label, i.amount.value, i.status])).toEqual([
+      ["Microcrédito", "2000000", "reserved"],
+      ["Fondo de emergencia", "1000000", "processing"],
+    ]);
+  });
+
   it("collects nothing when the merchant revoked the authorization", async () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();
