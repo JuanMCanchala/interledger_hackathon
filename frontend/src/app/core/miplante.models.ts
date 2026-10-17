@@ -148,6 +148,8 @@ export interface MerchantDashboard {
   pendingCap?: Amount;
   spentThisMonth?: Amount;
   monthlySalesGoal?: Amount;
+  /** The link a phone opens once to show each new sale's QR (ADR 0018); null until linked. */
+  displayUrl?: string | null;
   today: {
     gross: Amount;
     kept: Amount;
