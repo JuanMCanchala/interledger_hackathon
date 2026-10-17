@@ -69,7 +69,15 @@ const rule = z.object({
   sharePercent: z.number().gt(0).max(50),
   monthlyQuota: decimalAmount.optional(),
   outstanding: decimalAmount.optional(),
+  savingsGoal: decimalAmount.optional(),
 });
+
+export const shopSettings = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    monthlySalesGoal: decimalAmount.nullable().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, "envía al menos un ajuste");
 
 export const onboardMerchant = z.object({
   name: z.string().trim().min(1).max(80),

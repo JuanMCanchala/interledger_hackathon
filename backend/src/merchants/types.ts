@@ -6,6 +6,8 @@ export interface MerchantRule extends AllocationRule {
   category: string;
   /** Total sent to this rule so far. */
   repaid: Amount;
+  /** Savings rules, optional: the amount the shop wants to reach. Shown as a goal, never a limit. */
+  savingsGoal?: Amount;
 }
 
 export interface MerchantRecord {
@@ -25,6 +27,8 @@ export interface MerchantRecord {
   rules: MerchantRule[];
   /** Open Payments mandate that holds the monthly-capped grant. */
   mandateId: string;
+  /** Optional: what the shop wants to sell each calendar month. Shown as a goal. */
+  monthlySalesGoal?: Amount;
   createdAt: string;
   updatedAt: string;
 }

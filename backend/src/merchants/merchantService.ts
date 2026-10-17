@@ -29,11 +29,19 @@ export interface RuleInput {
   monthlyQuota?: string;
   /** Debt rules, optional: the whole balance owed, e.g. a microcredit. */
   outstanding?: string;
+  /** Savings rules, optional: the amount the shop wants to save. */
+  savingsGoal?: string;
 }
 
 /** Editing the rules: `id` names an existing rule; without it, the rule is new. */
 export interface RuleEditInput extends RuleInput {
   id?: string;
+}
+
+/** The shop's own settings; what is not sent stays as it is. `null` clears the sales goal. */
+export interface ShopSettingsInput {
+  name?: string;
+  monthlySalesGoal?: string | null;
 }
 
 export interface OnboardInput {
@@ -84,6 +92,7 @@ export class MerchantService {
       shareBps: percentToBps(rule.sharePercent),
       monthlyQuota: debtAmount(rule, rule.monthlyQuota, asset),
       outstanding: debtAmount(rule, rule.outstanding, asset),
+      savingsGoal: savingsGoal(rule, asset),
       repaid: { value: "0", ...asset },
     }));
     validateRules(rules, asset);
@@ -155,6 +164,7 @@ export class MerchantService {
         destination: destinations[index]!.id,
         shareBps: percentToBps(rule.sharePercent),
         monthlyQuota: debtAmount(rule, rule.monthlyQuota, merchant.asset),
+        savingsGoal: savingsGoal(rule, merchant.asset),
         outstanding,
       };
     });
@@ -216,6 +226,27 @@ export class MerchantService {
     return { merchant: await this.view(updated), redirectUrl };
   }
 
+  /** Renames the shop or sets its monthly sales goal. Neither touches the wallet grant. */
+  async updateSettings(id: string, input: ShopSettingsInput) {
+    const merchant = await this.require(id);
+    const goal =
+      input.monthlySalesGoal === undefined
+        ? merchant.monthlySalesGoal
+        : input.monthlySalesGoal === null
+          ? undefined
+          : toAmount(input.monthlySalesGoal, merchant.asset);
+    if (goal && BigInt(goal.value) <= 0n) {
+      throw new AppError("La meta de ventas debe ser mayor que cero");
+    }
+    const updated = await this.store.saveMerchant({
+      ...merchant,
+      name: input.name ?? merchant.name,
+      monthlySalesGoal: goal,
+      updatedAt: this.now().toISOString(),
+    });
+    return this.view(updated);
+  }
+
   /** The shop, only if `userId` registered it; anyone else gets a 404, as if it did not exist. */
   async requireOwned(id: string, userId: string): Promise<MerchantRecord> {
     const merchant = await this.require(id);
@@ -260,11 +291,25 @@ export class MerchantService {
       wallet: merchant.wallet,
       asset: merchant.asset,
       monthlyCap: merchant.monthlyCap,
+      monthlySalesGoal: merchant.monthlySalesGoal ?? null,
       status: mandate.status,
       rules: merchant.rules,
       createdAt: merchant.createdAt,
     };
   }
+}
+
+/** A savings rule's goal in the shop's asset; debts have none. */
+function savingsGoal(
+  rule: { kind: RuleKind; savingsGoal?: string },
+  asset: Asset,
+): Amount | undefined {
+  if (rule.kind !== "savings" || rule.savingsGoal === undefined) return undefined;
+  const goal = toAmount(rule.savingsGoal, asset);
+  if (BigInt(goal.value) <= 0n) {
+    throw new AppError("La meta de ahorro debe ser mayor que cero");
+  }
+  return goal;
 }
 
 /** A debt's quota or balance in the shop's asset; savings have neither. */

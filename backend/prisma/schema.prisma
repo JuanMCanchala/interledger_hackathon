@@ -13,17 +13,19 @@ datasource db {
 }
 
 model Merchant {
-  id         String   @id @db.Uuid
+  id               String   @id @db.Uuid
   /// The account that registered the shop.
-  ownerId    String?  @map("owner_id") @db.Uuid
-  name       String
-  wallet     String
-  assetCode  String   @map("asset_code")
-  assetScale Int      @map("asset_scale")
-  monthlyCap BigInt   @map("monthly_cap")
-  mandateId  String   @unique @map("mandate_id") @db.Uuid
-  createdAt  DateTime @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
+  ownerId          String?  @map("owner_id") @db.Uuid
+  name             String
+  wallet           String
+  assetCode        String   @map("asset_code")
+  assetScale       Int      @map("asset_scale")
+  monthlyCap       BigInt   @map("monthly_cap")
+  mandateId        String   @unique @map("mandate_id") @db.Uuid
+  /// Optional monthly sales goal, in minor units.
+  monthlySalesGoal BigInt?  @map("monthly_sales_goal")
+  createdAt        DateTime @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @map("updated_at") @db.Timestamptz(3)
 
   mandate Mandate @relation(fields: [mandateId], references: [id])
   owner   User?   @relation(fields: [ownerId], references: [id])
@@ -49,6 +51,8 @@ model Rule {
   /// Debt rules only: what is still owed.
   outstanding  BigInt?
   repaid       BigInt  @default(0)
+  /// Savings rules, optional: the amount the shop wants to reach.
+  savingsGoal  BigInt? @map("savings_goal")
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 

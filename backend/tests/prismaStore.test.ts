@@ -146,6 +146,38 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect(rule!.outstanding).toEqual(cop("0"));
   });
 
+  it("stores the shop's goals", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const [microcredit, savings] = (await store.getMerchant(merchantId))!.rules;
+    await env.merchants.updateSettings(merchantId, { monthlySalesGoal: "3000000" });
+    await env.merchants.updateRules(merchantId, [
+      {
+        id: microcredit!.id,
+        label: microcredit!.label,
+        category: microcredit!.category,
+        kind: "debt",
+        destination: microcredit!.destination,
+        sharePercent: 15,
+        monthlyQuota: "20000",
+      },
+      {
+        id: savings!.id,
+        label: savings!.label,
+        category: savings!.category,
+        kind: "savings",
+        destination: savings!.destination,
+        sharePercent: 5,
+        savingsGoal: "1000000",
+      },
+    ]);
+
+    const stored = (await store.getMerchant(merchantId))!;
+    expect(stored.monthlySalesGoal).toEqual(cop("300000000"));
+    expect(stored.rules[1]!.savingsGoal).toEqual(cop("100000000"));
+    expect(stored.rules[0]!.savingsGoal).toBeUndefined();
+  });
+
   it("edits the rules in place: reorders, adds, keeps what was repaid", async () => {
     const env = setupMiPlante(store);
     const { merchantId, saleId } = await paidSale(env);

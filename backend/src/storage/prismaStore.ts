@@ -133,6 +133,9 @@ export class PrismaStore implements Store {
       assetCode: record.asset.assetCode,
       assetScale: record.asset.assetScale,
       monthlyCap: BigInt(record.monthlyCap.value),
+      monthlySalesGoal: record.monthlySalesGoal
+        ? BigInt(record.monthlySalesGoal.value)
+        : null,
       mandateId: record.mandateId,
       createdAt: new Date(record.createdAt),
       updatedAt: new Date(record.updatedAt),
@@ -159,6 +162,7 @@ export class PrismaStore implements Store {
             : null,
           outstanding: rule.outstanding ? BigInt(rule.outstanding.value) : null,
           repaid: BigInt(rule.repaid.value),
+          savingsGoal: rule.savingsGoal ? BigInt(rule.savingsGoal.value) : null,
         })),
       }),
     ]);
@@ -215,6 +219,7 @@ export class PrismaStore implements Store {
           monthlyQuota: rule.monthlyQuota
             ? BigInt(rule.monthlyQuota.value)
             : null,
+          savingsGoal: rule.savingsGoal ? BigInt(rule.savingsGoal.value) : null,
         };
         return this.prisma.rule.upsert({
           where: { merchantId_id: { merchantId, id: rule.id } },
@@ -486,8 +491,14 @@ function toMerchant(row: MerchantRow): MerchantRecord {
       outstanding:
         rule.outstanding === null ? undefined : amount(rule.outstanding, asset),
       repaid: amount(rule.repaid, asset),
+      savingsGoal:
+        rule.savingsGoal === null ? undefined : amount(rule.savingsGoal, asset),
     })),
     mandateId: row.mandateId,
+    monthlySalesGoal:
+      row.monthlySalesGoal === null
+        ? undefined
+        : amount(row.monthlySalesGoal, asset),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

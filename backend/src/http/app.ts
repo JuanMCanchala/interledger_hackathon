@@ -180,6 +180,16 @@ export function createApp({
     res.json(await dashboard.get(merchant.id));
   });
 
+  app.put("/api/merchants/:id/settings", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res.json(
+      await merchants.updateSettings(
+        merchant.id,
+        schemas.shopSettings.parse(req.body),
+      ),
+    );
+  });
+
   app.put("/api/merchants/:id/rules", async (req, res) => {
     const merchant = await ownedMerchant(req);
     const { rules } = schemas.updateRules.parse(req.body);
