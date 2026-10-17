@@ -420,11 +420,13 @@ function syncSaleForm() {
   $("sale-disabled-hint").hidden = enabled || !merchant;
 }
 
+/** Nothing left to watch: failed, or paid with every share of the split delivered (or failed). */
 function isFinal(sale) {
   if (sale.status === "failed") return true;
   return (
     sale.status === "paid" &&
-    ["done", "skipped"].includes(sale.settlement?.status)
+    ["done", "skipped"].includes(sale.settlement?.status) &&
+    !(sale.settlement.items || []).some((item) => item.status === "processing")
   );
 }
 
