@@ -23,5 +23,6 @@ earlier one instead of editing it.
 | [0015](0015-due-day-completes-the-quota-and-failed-payouts-wait-for-review.md) | The due day completes the quota, and a failed payout waits for review | Accepted |
 | [0016](0016-the-emergency-fund-is-the-last-resort.md) | The emergency fund is the last resort, and only when the shopkeeper chooses it | Accepted |
 | [0017](0017-gloria-an-assistant-that-reads-and-prepares-but-never-moves-money.md) | GlorIA, an assistant that reads and prepares but never moves money | Accepted |
+| [0018](0018-a-phone-at-the-counter-shows-each-new-sale.md) | A phone at the counter shows each new sale | Accepted |
 
 To add one, copy the structure of an existing ADR, take the next number and add it to this table.

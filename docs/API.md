@@ -220,13 +220,28 @@ pay a creditor, capped per month like the shop's grant. The merchant view shows 
 GlorIA, the shopkeeper's assistant (ADR 0017). Owner of the shop only.
 `{ "messages": [{ "role": "user" | "assistant", "content": "…" }] }` (1 to 40 turns, up to 1000
 characters each, the last one from the user) → `200 { "reply": "…", "actions": Action[] }`, where an
-action is a draft for the till to show, never something already done:
+action is for the till to carry out:
 
-- `{ "type": "sale", "amount": "20000", "description"?: "Arroz" }`: a sale to fill into Vender;
-- `{ "type": "open", "section": "inicio" | "vender" | "metas" | "repartos" | "ajustes" | "avisos" }`.
+- `{ "type": "sale", "amount": "20000", "description"?: "Arroz" }`: a sale whose QR the till
+  generates at once;
+- `{ "type": "open", "section": "inicio" | "vender" | "metas" | "repartos" | "ajustes" | "avisos" }`:
+  the till goes there at once.
 
 `503` when no model is configured or it did not answer, `429` after 20 questions in a minute.
 
+### `POST /api/merchants/:id/display`
+
+Links a phone as the shop's counter display (ADR 0018), or unlinks the old one: each call makes a
+new key. `201` → the merchant view, with `displayKey`. The merchant view (`GET /api/merchants/:id`)
+also carries `displayUrl`, the `/cobro?pantalla=<key>` link the till shows as a QR, or `null`.
+
+### `GET /api/displays/:key`
+
+No session: what the counter display shows. `200 { "shopName": "…", "sale": PublicSale | null }`,
+with the shop's newest sale from the last 30 minutes while it waits for the customer, or for a
+minute after it is paid, and `null` otherwise. `404` once the shop changed the link.
+
+### `POST /api/merchants/:id/consent`
 
 Asks for the monthly-capped consent again, with the same cap and rules, when the first attempt was
 never approved, was rejected (for example, the merchant logged in with another account) or was

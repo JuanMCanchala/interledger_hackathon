@@ -23,12 +23,27 @@ shop's infrastructure.
   answers `503` and the till works the same.
 - **Reasoning is off** (`thinking: disabled`). The questions are short lookups over the shop's own
   figures, and answers come back in 1 to 4 seconds instead of several more.
-- **She only reads, through tools over the dashboard** (summary, obligations, savings, notices,
-  recent sales, monthly cap). The figures reach her already formatted in pesos, so she repeats them
-  rather than computing them, and the prompt forbids inventing any.
-- **She never moves money.** Her only actions are drafts the shopkeeper confirms with a tap: a sale
-  filled into Vender (between $100 and $100.000.000, only with an active consent), or a section to
-  open. Charging, paying, retrying a payout and using the emergency fund stay buttons in the till.
+- **She knows the shop as it is right now.** Each question carries, after the fixed persona, the
+  shop's state as JSON (summary, obligations, savings, notices, recent sales, monthly cap), the time
+  in Bogotá and the section on screen, so most answers take one model call (about 1 to 2 seconds).
+  The figures come already formatted in pesos, so she repeats them rather than computing them, and
+  the prompt forbids inventing any. The same reads remain as tools. The persona goes first and never
+  changes, so DeepSeek serves it from its context cache.
+- **Strict tool calls.** Every tool is declared in DeepSeek's strict mode (beta endpoint): closed
+  schemas, the amount an integer between $100 and $100.000.000, the section one of six. The model
+  cannot call a tool with a malformed argument. The temperature is 0.2, for answers that stay with
+  the facts.
+- **Moving around the till does not depend on the model either.** "Llévame a inicio", "ve a
+  avisos" or just "avisos" are read on the device; a reply that says it opened a section without
+  asking the till to is caught too. After a charge or a move the chat steps aside and a short note
+  by the launcher says what she did.
+- **She charges at once, and never moves money.** Asked to charge ("cobra 50.000", "haz un cobro
+  de $50,000"), she generates the sale's QR right away, in the till and on the counter display
+  (ADR 0018), as if the shopkeeper had tapped "Generar QR". A clear request is read on the device,
+  without the model, so a charge never depends on how the model reads it; the model's
+  `preparar_cobro` covers the rest (between $100 and $100.000.000, only with an active consent). If
+  the till cannot charge she says why. A QR only asks the customer to pay: paying a creditor,
+  retrying a payout and using the emergency fund stay buttons in the till.
 - **Data minimization.** Wallet addresses, tokens and ids are never sent to the model, only labels,
   amounts and dates. The conversation is not stored on the server; the browser keeps it for the
   visit (`sessionStorage`).
@@ -39,6 +54,16 @@ shop's infrastructure.
   payment out loud ("¡Pago recibido! Veinte mil pesos") and the payouts that are sent or fail, which
   the shopkeeper can turn off in Ajustes. The amount in Vender can be dictated ("veinte mil de
   arroz"), parsed locally.
+
+- **Hands-free, opt-in.** A switch (in the chat or in Ajustes) keeps the till listening for
+  "Gloria": "Gloria, cobra veinte mil" is a request and "Gloria" alone wakes her (with a chime)
+  for the next phrase. Everything else said in the shop is ignored. It uses the browser's continuous speech
+  recognition, so while it is on the browser's speech service transcribes what the microphone hears;
+  the till says so next to the switch and shows that it is listening. For production the wake word
+  should be detected on the device (a small model such as Vosk or Porcupine in WebAssembly), sending
+  audio only after "Gloria".
+- **GlorIA speaks with a woman's voice** when the device has one (Salomé in Edge for es-CO, Helena,
+  Sabina, Paulina, Google español…), and with a higher pitch when it has none.
 
 ## Consequences
 
