@@ -4,7 +4,12 @@ import { startOfBogotaMonth } from "../domain/calendar.js";
 import { describeError } from "../openPayments/errors.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
-import { fromMinorUnits, toAmount, type Amount } from "../shared/money.js";
+import {
+  formatAmount,
+  fromMinorUnits,
+  toAmount,
+  type Amount,
+} from "../shared/money.js";
 import type { SalePaymentChanges, Store } from "../storage/store.js";
 import type { MerchantService } from "./merchantService.js";
 import { reservedBalances } from "./payoutService.js";
@@ -29,6 +34,12 @@ export interface SalesOptions {
   walletSendUrl?: string;
   now?: () => Date;
 }
+
+/**
+ * The most a single sale can be, in the shop's currency. Far above any shop's sale, and far below
+ * what an Open Payments amount can hold, so a typo never reaches the wallet as an overflow.
+ */
+const MAX_SALE_MAJOR = 100_000_000n;
 
 /** The sweeper only looks at sales from the last day. */
 const SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -66,6 +77,12 @@ export class SalesService {
   ) {
     const merchant = await this.merchants.require(merchantId);
     const amount = toAmount(input.amount, merchant.asset);
+    const max = MAX_SALE_MAJOR * 10n ** BigInt(merchant.asset.assetScale);
+    if (BigInt(amount.value) > max) {
+      throw new AppError(
+        `El monto es demasiado grande: el máximo por venta es ${formatAmount({ ...amount, value: max.toString() })}`,
+      );
+    }
     const request = await this.flows.requestPayment({
       receiver: merchant.wallet,
       amount: fromMinorUnits(amount.value, amount.assetScale),

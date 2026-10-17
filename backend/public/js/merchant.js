@@ -57,6 +57,9 @@ const RESUME_WINDOW_MS = 10 * 60 * 1000;
 const BUSY_REFRESH_MS = 5_000;
 const IDLE_REFRESH_MS = 30_000;
 const QUICK_AMOUNTS = [5000, 10000, 20000, 50000];
+/** A sale is in whole pesos, from 100 to 100 million (the server refuses more). */
+const MIN_SALE = 100;
+const MAX_SALE = 100_000_000;
 /** On a phone the QR for the customer is on this very screen; on a computer it goes to the phone. */
 const ON_PHONE = window.matchMedia("(max-width: 700px)").matches;
 
@@ -725,6 +728,7 @@ $("rules-form").addEventListener("submit", async (event) => {
 
 // Ajustes -----------------------------------------------------------------------------------------
 
+moneyInput($("sale-amount"));
 moneyInput($("sales-goal"));
 moneyInput($("cap-new"));
 
@@ -1061,6 +1065,14 @@ $("sale-form").addEventListener("submit", async (event) => {
   const amount = normalizeDecimal($("sale-amount").value);
   if (!amount) {
     showMessage($("sale-form-error"), "Escribe un monto válido, por ejemplo 10.000");
+    return;
+  }
+  if (Number(amount) < MIN_SALE) {
+    showMessage($("sale-form-error"), `El monto mínimo de una venta es ${formatMoney(MIN_SALE, "COP")}.`);
+    return;
+  }
+  if (Number(amount) > MAX_SALE) {
+    showMessage($("sale-form-error"), `El monto es demasiado grande: el máximo por venta es ${formatMoney(MAX_SALE, "COP")}.`);
     return;
   }
   const description = $("sale-description").value.trim();

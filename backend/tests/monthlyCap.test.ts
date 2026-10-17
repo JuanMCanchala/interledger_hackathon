@@ -54,4 +54,13 @@ describe("changing the monthly cap", () => {
     );
     await expect(env.merchants.changeCap(id, "30000")).rejects.toThrow(/ya es tu límite/);
   });
+
+  it("refuses a sale too large for a wallet, with a message that says so", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa();
+    await expect(
+      env.sales.createSale(id, { amount: "999999999999999999" }),
+    ).rejects.toThrow(/demasiado grande: el máximo por venta es \$\s100\.000\.000/);
+    expect(env.ops.createIncomingPayment).not.toHaveBeenCalled();
+  });
 });
