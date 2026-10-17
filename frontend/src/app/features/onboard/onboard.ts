@@ -24,6 +24,7 @@ import {
   toMinor,
   walletName,
 } from '../../core/miplante.utils';
+import { Doodle, DoodleName } from '../../shared/brand/doodle';
 import { SiteFooter, SiteHeader } from '../../shared/ui/site-layout';
 
 interface OnboardWalletDraft {
@@ -46,7 +47,7 @@ interface OnboardCategoryDraft {
   id: number;
   name: string;
   kind: 'debt' | 'savings';
-  icon: string;
+  doodle: DoodleName;
   wallets: OnboardWalletDraft[];
 }
 
@@ -61,20 +62,25 @@ let nextDraftId = 1;
 
 @Component({
   selector: 'app-onboard',
-  imports: [FormsModule, SiteHeader, SiteFooter],
+  imports: [FormsModule, SiteHeader, SiteFooter, Doodle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'miplante-page' },
   template: `
     <div class="container">
-      <app-site-header actionLabel="Ya tengo mi caja" actionLink="/merchant" />
+      <app-site-header
+        badge="Configuración guiada"
+        actionLabel="Ir a mi caja"
+        actionLink="/merchant"
+      />
 
-      <main class="narrow stack">
+      <main class="onboard-stage stack">
         <div class="stack-sm">
-          <p class="eyebrow">Configura tu tienda</p>
-          <h1 class="h1-sm">Tu tienda en 3 pasos</h1>
+          <p class="eyebrow">Arma tus bolsillos en 3 pasos</p>
+          <h1>Cada venta paga sola tus obligaciones del mes</h1>
           <p class="lead">
-            Cada venta paga sola tus obligaciones del mes. Cuando las completas,
-            todo lo que entra es ganancia tuya.
+            Configura tu negocio, define qué porcentaje va a tus proveedores,
+            créditos o ahorro, y autoriza el tope mensual en tu billetera Open
+            Payments.
           </p>
         </div>
 
@@ -100,9 +106,15 @@ let nextDraftId = 1;
           <!-- Paso 1: la tienda -->
           @if (step() === 0) {
             <section class="card stack wizard-panel" aria-labelledby="step1-title">
-              <h2 class="step-title" id="step1-title">
-                <span class="step-number" aria-hidden="true">1</span> Tu tienda
-              </h2>
+              <div class="row between">
+                <h2 class="step-title" id="step1-title">
+                  <span class="step-number" aria-hidden="true">1</span> Datos de tu tienda
+                </h2>
+                <span class="doodle-badge" aria-hidden="true">
+                  <app-doodle name="billetera" />
+                </span>
+              </div>
+
               <label class="field">
                 <span>¿Cómo se llama tu negocio?</span>
                 <input
@@ -114,8 +126,9 @@ let nextDraftId = 1;
                   placeholder="Ej: Tienda La Esquina"
                 />
               </label>
+
               <label class="field">
-                <span>¿Cuál es la billetera de tu negocio?</span>
+                <span>¿Cuál es la billetera Open Payments de tu negocio?</span>
                 <input
                   name="businessWallet"
                   [ngModel]="businessWallet()"
@@ -125,18 +138,21 @@ let nextDraftId = 1;
                   autocomplete="off"
                   spellcheck="false"
                   autocapitalize="off"
-                  placeholder="Ej: mi-tienda"
+                  placeholder="Ej: tienda-billeticos"
                 />
                 <small class="hint">
-                  Escribe solo su nombre. Ahí te pagan tus clientes y de ahí salen
-                  los pagos automáticos.
+                  Escribe solo su nombre (ej. <code>tienda-billeticos</code>) o la
+                  dirección completa. Ahí entran las ventas de tus clientes y de
+                  ahí salen los repartos automáticos.
                 </small>
-                <small
-                  [class]="'check ' + walletCheckClass()"
-                  aria-live="polite"
-                >
-                  {{ walletCheckText() }}
-                </small>
+                @if (walletCheckText()) {
+                  <small
+                    [class]="'check ' + walletCheckClass()"
+                    aria-live="polite"
+                  >
+                    {{ walletCheckText() }}
+                  </small>
+                }
               </label>
             </section>
           }
@@ -144,10 +160,16 @@ let nextDraftId = 1;
           <!-- Paso 2: billeteras por categoría -->
           @if (step() === 1) {
             <section class="card stack wizard-panel" aria-labelledby="step2-title">
-              <h2 class="step-title" id="step2-title">
-                <span class="step-number" aria-hidden="true">2</span> ¿A dónde va
-                cada parte?
-              </h2>
+              <div class="row between">
+                <h2 class="step-title" id="step2-title">
+                  <span class="step-number" aria-hidden="true">2</span> ¿A dónde va
+                  cada parte de tus ventas?
+                </h2>
+                <span class="doodle-badge" aria-hidden="true">
+                  <app-doodle name="monedas" />
+                </span>
+              </div>
+
               <p class="muted small">
                 Agrupa tus billeteras por categoría: puedes tener varios
                 proveedores o créditos y crear tus propias categorías. De cada
@@ -155,12 +177,56 @@ let nextDraftId = 1;
                 mes, y en su día de pago se le envía todo junto.
               </p>
 
+              <!-- Vista rápida en frascos -->
+              <div class="category stack-sm" aria-live="polite">
+                <div class="row between">
+                  <strong>Simulación en vivo para una venta de {{ peso(previewSaleMinor) }}</strong>
+                  <span
+                    class="badge"
+                    [class.badge-ok]="totalSharePercent() <= maxTotalPercent"
+                    [class.badge-bad]="totalSharePercent() > maxTotalPercent"
+                  >
+                    Repartido: {{ totalSharePercent().toLocaleString('es-CO') }}% (máx {{ maxTotalPercent }}%)
+                  </span>
+                </div>
+                <ul class="pocket-jars">
+                  <li class="pocket-jar-item">
+                    <div class="pocket-jar-vessel">
+                      <div
+                        class="pocket-jar-fill"
+                        [style.height.%]="previewWidth(preview().kept)"
+                      ></div>
+                      <span class="pocket-jar-pct">{{ previewWidth(preview().kept) }}%</span>
+                    </div>
+                    <strong>Tu ganancia</strong>
+                    <span class="small num">{{ peso(preview().kept) }}</span>
+                  </li>
+                  @for (item of preview().items; track $index) {
+                    <li class="pocket-jar-item">
+                      <div class="pocket-jar-vessel">
+                        <div
+                          class="pocket-jar-fill"
+                          [class.is-debt]="item.kind === 'debt'"
+                          [class.is-savings]="item.kind === 'savings'"
+                          [style.height.%]="previewWidth(item.amount)"
+                        ></div>
+                        <span class="pocket-jar-pct">{{ previewWidth(item.amount) }}%</span>
+                      </div>
+                      <strong>{{ item.label }}</strong>
+                      <span class="small num">{{ peso(item.amount) }}</span>
+                    </li>
+                  }
+                </ul>
+              </div>
+
               <div class="stack">
                 @for (cat of categories(); track cat.id) {
                   <section class="category stack-sm">
                     <div class="row between">
                       <div class="category-head">
-                        <span class="goal-icon" aria-hidden="true">{{ cat.icon }}</span>
+                        <span class="doodle-badge" aria-hidden="true">
+                          <app-doodle [name]="cat.doodle" />
+                        </span>
                         <div>
                           <h3>{{ cat.name }}</h3>
                           <p class="muted small">{{ kindText(cat.kind) }}</p>
@@ -190,7 +256,7 @@ let nextDraftId = 1;
                             />
                           </label>
                           <label class="field">
-                            <span>Billetera</span>
+                            <span>Billetera destino</span>
                             <input
                               [name]="'dest-' + w.id"
                               [ngModel]="w.destination"
@@ -270,14 +336,14 @@ let nextDraftId = 1;
                       [disabled]="totalWalletsCount() >= maxRules"
                       (click)="addWalletToCategory(cat.id)"
                     >
-                      + Agregar billetera
+                      + Agregar billetera a {{ cat.name }}
                     </button>
                   </section>
                 }
               </div>
 
               <div class="new-category stack-sm">
-                <p class="field-legend">Crear otra categoría</p>
+                <p class="field-legend">Crear otra categoría personalizada</p>
                 <div class="new-category-row">
                   <label class="field">
                     <span>Nombre</span>
@@ -285,7 +351,7 @@ let nextDraftId = 1;
                       name="newCategoryName"
                       [(ngModel)]="newCategoryName"
                       maxlength="40"
-                      placeholder="Ej: Arriendo"
+                      placeholder="Ej: Arriendo del local"
                     />
                   </label>
                   <label class="field">
@@ -296,32 +362,26 @@ let nextDraftId = 1;
                     </select>
                   </label>
                   <button type="button" class="btn btn-secondary" (click)="createCategory()">
-                    + Crear
+                    + Crear categoría
                   </button>
                 </div>
               </div>
-
-              <p
-                class="small"
-                [class.error-text]="totalSharePercent() > maxTotalPercent"
-                aria-live="polite"
-              >
-                Entre todas toman {{ totalSharePercent().toLocaleString('es-CO') }}% de cada venta (máximo {{ maxTotalPercent }}%).{{
-                  totalWalletsCount() >= maxRules
-                    ? ' Llegaste al máximo de ' + maxRules + ' billeteras.'
-                    : ''
-                }}
-              </p>
             </section>
           }
 
           <!-- Paso 3: límite mensual y resumen -->
           @if (step() === 2) {
             <section class="card stack wizard-panel" aria-labelledby="step3-title">
-              <h2 class="step-title" id="step3-title">
-                <span class="step-number" aria-hidden="true">3</span> Tu límite
-                mensual
-              </h2>
+              <div class="row between">
+                <h2 class="step-title" id="step3-title">
+                  <span class="step-number" aria-hidden="true">3</span> Tu límite
+                  mensual y confirmación
+                </h2>
+                <span class="doodle-badge" aria-hidden="true">
+                  <app-doodle name="alcancia" />
+                </span>
+              </div>
+
               <label class="field">
                 <span>¿Máximo cuánto puede salir de tu billetera en un mes?</span>
                 <input
@@ -336,12 +396,13 @@ let nextDraftId = 1;
                 <small class="hint">{{ capHint() }}</small>
               </label>
               <p class="hint">
-                Es lo que apruebas en tu billetera. Se renueva el primer día de
-                cada mes y lo puedes cancelar cuando quieras.
+                Es el permiso que apruebas en tu billetera Open Payments. Se
+                renueva el primer día de cada mes y puedes modificarlo o
+                cancelarlo cuando quieras.
               </p>
 
               <div class="stack-sm" aria-live="polite">
-                <h3>Así queda cada venta de {{ peso(previewSaleMinor) }}</h3>
+                <h3>Así se reparte cada venta de {{ peso(previewSaleMinor) }}</h3>
                 <div class="stacked-bar" aria-hidden="true">
                   <span
                     class="seg-kept"
@@ -356,7 +417,7 @@ let nextDraftId = 1;
                 </div>
                 <ul class="split">
                   <li class="split-item is-kept">
-                    <span class="split-label">Ganancia para ti</span>
+                    <span class="split-label">Ganancia libre para ti</span>
                     <span class="split-amount">{{ peso(preview().kept) }}</span>
                   </li>
                   @for (item of preview().items; track $index) {
@@ -369,10 +430,10 @@ let nextDraftId = 1;
               </div>
 
               <div class="stack-sm">
-                <h3>Lo que se paga cada mes</h3>
+                <h3>Calendario mensual de tus bolsillos</h3>
                 <ul class="list">
                   @for (w of validWallets(); track w.id) {
-                    <li class="row between small">
+                    <li class="list-item row between small">
                       <span>
                         <strong>{{ w.label || w.category }}</strong>
                         <span class="muted"> · {{ w.category }}</span>
@@ -380,17 +441,13 @@ let nextDraftId = 1;
                       <span class="num">
                         {{
                           w.kind === 'debt'
-                            ? w.sharePercent + '% hasta ' + pesos(w.monthlyQuota) + ' al mes, se paga el día ' + w.dueDay
-                            : w.sharePercent + '% de cada venta'
+                            ? w.sharePercent + '% hasta ' + pesos(w.monthlyQuota) + ' al mes · paga el día ' + w.dueDay
+                            : w.sharePercent + '% de cada venta hacia tu ahorro'
                         }}
                       </span>
                     </li>
                   }
                 </ul>
-                <p class="hint">
-                  Cuando una obligación completa su cuota del mes, su parte de cada
-                  venta vuelve a ser ganancia tuya. El ahorro siempre toma su parte.
-                </p>
               </div>
             </section>
           }
@@ -400,22 +457,22 @@ let nextDraftId = 1;
           }
 
           @if (step() === 2) {
-            <p class="banner banner-info">
-              Ahora te llevamos a tu billetera. Entra con la cuenta dueña de
+            <p class="banner banner-ok">
+              Ahora te llevaremos a tu billetera. Entra con la cuenta dueña de
               <strong>{{ checkedWallet()?.name || 'tu billetera' }}</strong>
-              y toca <strong>Aceptar</strong>. Después vuelves aquí solo.
+              y toca <strong>Aceptar</strong>. Al terminar volverás directo a tu caja.
             </p>
           }
 
           <div class="wizard-nav">
             @if (step() > 0) {
-              <button type="button" class="btn btn-ghost" (click)="prevStep()">
-                ← Atrás
+              <button type="button" class="btn btn-secondary" (click)="prevStep()">
+                ← Paso anterior
               </button>
             }
             <button
               type="submit"
-              class="btn btn-primary btn-lg next-btn"
+              class="btn btn-lima btn-lg next-btn"
               [disabled]="busy()"
               [attr.aria-busy]="busy() ? 'true' : null"
             >
@@ -424,7 +481,7 @@ let nextDraftId = 1;
               } @else if (step() === 2) {
                 Autorizar en mi billetera →
               } @else {
-                Siguiente →
+                Siguiente paso →
               }
             </button>
           </div>
@@ -444,9 +501,9 @@ export default class OnboardPage implements OnInit {
   protected readonly maxTotalPercent = MAX_TOTAL_PERCENT;
   protected readonly previewSaleMinor = PREVIEW_SALE;
   protected readonly stepsMeta = [
-    { index: 0, label: 'Tienda' },
-    { index: 1, label: 'Billeteras' },
-    { index: 2, label: 'Límite' },
+    { index: 0, label: 'Tu tienda' },
+    { index: 1, label: 'Bolsillos' },
+    { index: 2, label: 'Tope mensual' },
   ];
 
   protected readonly step = signal(0);
@@ -555,7 +612,7 @@ export default class OnboardPage implements OnInit {
         id: nextDraftId++,
         name: 'Proveedores',
         kind: 'debt',
-        icon: '📦',
+        doodle: 'billetera',
         wallets: [
           {
             id: nextDraftId++,
@@ -577,7 +634,7 @@ export default class OnboardPage implements OnInit {
         id: nextDraftId++,
         name: 'Microcréditos',
         kind: 'debt',
-        icon: '💳',
+        doodle: 'calculadora',
         wallets: [
           {
             id: nextDraftId++,
@@ -600,7 +657,7 @@ export default class OnboardPage implements OnInit {
         id: nextDraftId++,
         name: 'Ahorro',
         kind: 'savings',
-        icon: '🐷',
+        doodle: 'alcancia',
         wallets: [
           {
             id: nextDraftId++,
@@ -650,7 +707,7 @@ export default class OnboardPage implements OnInit {
   }
 
   protected previewWidth(minor: bigint): number {
-    return (Number(minor) * 100) / Number(PREVIEW_SALE);
+    return Math.round((Number(minor) * 100) / Number(PREVIEW_SALE));
   }
 
   protected onWalletInput(val: string): void {
@@ -768,7 +825,7 @@ export default class OnboardPage implements OnInit {
         id: nextDraftId++,
         name,
         kind,
-        icon: kind === 'debt' ? '🧾' : '🌱',
+        doodle: kind === 'debt' ? 'pago' : 'planta',
         wallets: canAddWallet
           ? [
               {

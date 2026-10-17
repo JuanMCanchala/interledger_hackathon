@@ -7,9 +7,11 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Title } from '@angular/platform-browser';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { Amount, SandboxMandate, SandboxPayment } from '../../core/miplante.models';
 import { PAYMENT_STEPS, remember } from '../../core/miplante.utils';
+import { Doodle } from '../../shared/brand/doodle';
+import { SiteFooter, SiteHeader } from '../../shared/ui/site-layout';
 
 interface ResultView {
   title: string;
@@ -21,360 +23,315 @@ interface ResultView {
 
 @Component({
   selector: 'app-sandbox',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, SiteHeader, SiteFooter, Doodle],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: 'miplante-page' },
   styles: `
-    :host {
-      --bg: #f5f6f8;
-      --card: #ffffff;
-      --text: #15171c;
-      --muted: #5d6474;
-      --border: #dde1e8;
-      --accent: #0f766e;
-      --accent-text: #ffffff;
-      --ok: #15803d;
-      --err: #b91c1c;
-      --pending: #a16207;
-      display: block;
-      min-height: 100dvh;
-      background: var(--bg);
-      color: var(--text);
-      font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
-    }
-    @media (prefers-color-scheme: dark) {
-      :host {
-        --bg: #0f1115;
-        --card: #171a21;
-        --text: #e7e9ee;
-        --muted: #9aa1b1;
-        --border: #2a2f3a;
-        --accent: #2dd4bf;
-        --accent-text: #06201d;
-        --ok: #4ade80;
-        --err: #f87171;
-        --pending: #facc15;
-      }
-    }
-    main {
-      max-width: 760px;
-      margin: 0 auto;
-      padding: 24px 16px 64px;
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin: 0 0 4px;
-      line-height: 1.3;
-    }
-    h2 {
-      font-size: 1.1rem;
-      margin: 0 0 12px;
-      line-height: 1.3;
-    }
-    p {
-      margin: 0 0 12px;
-    }
-    .muted {
-      color: var(--muted);
-    }
-    .sb-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-      margin-top: 16px;
-      color: var(--text);
-    }
-    form {
+    .sb-grid {
       display: grid;
-      gap: 10px;
+      gap: 20px;
+      grid-template-columns: minmax(0, 1fr);
+    }
+    @media (min-width: 880px) {
+      .sb-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
     .sb-row {
       display: grid;
-      gap: 10px;
-      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      grid-template-columns: minmax(0, 1fr);
     }
-    @media (max-width: 560px) {
+    @media (min-width: 560px) {
       .sb-row {
-        grid-template-columns: 1fr;
-      }
-    }
-    label {
-      display: grid;
-      gap: 4px;
-      font-size: 0.85rem;
-      color: var(--muted);
-    }
-    input,
-    select {
-      width: 100%;
-      padding: 9px 10px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--bg);
-      color: var(--text);
-      font: inherit;
-    }
-    button {
-      justify-self: start;
-      padding: 9px 16px;
-      border: 0;
-      border-radius: 8px;
-      background: var(--accent);
-      color: var(--accent-text);
-      font: inherit;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button.secondary {
-      background: transparent;
-      color: var(--err);
-      border: 1px solid var(--border);
-    }
-    button:disabled {
-      opacity: 0.6;
-      cursor: wait;
-    }
-    .sb-steps {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin: 12px 0;
-    }
-    @media (max-width: 560px) {
-      .sb-steps {
         grid-template-columns: 1fr 1fr;
       }
     }
-    .sb-step {
+    .sb-dl {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      gap: 6px 14px;
+      margin: 0;
+      padding: 14px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px;
-      font-size: 0.85rem;
+      font-size: 0.88rem;
+    }
+    .sb-dl dt {
       color: var(--muted);
-    }
-    .sb-step.done {
-      border-color: var(--ok);
-      color: var(--ok);
-      font-weight: 600;
-    }
-    .status {
       font-weight: 700;
     }
-    .status.completed,
-    .status.active {
-      color: var(--ok);
-    }
-    .status.failed,
-    .status.rejected,
-    .status.revoked {
-      color: var(--err);
-    }
-    .status.processing,
-    .status.awaiting-consent {
-      color: var(--pending);
-    }
-    dl {
-      display: grid;
-      grid-template-columns: max-content 1fr;
-      gap: 4px 12px;
-      margin: 0;
-      font-size: 0.9rem;
-    }
-    dt {
-      color: var(--muted);
-    }
-    dd {
+    .sb-dl dd {
       margin: 0;
       overflow-wrap: anywhere;
-    }
-    .error {
-      color: var(--err);
-      font-weight: 600;
-      margin-top: 8px;
-    }
-    .back-link {
-      color: var(--accent);
-      font-weight: 600;
-      text-decoration: none;
+      font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     }
   `,
   template: `
-    <main>
-      <p><a routerLink="/" class="back-link">← MiPlante</a></p>
-      <h1>Open Payments sandbox</h1>
-      <p class="muted">
-        Prueba el flujo obligatorio contra el test wallet: solicitud de pago →
-        autorización → ejecución → finalización. Las wallet addresses pueden ir
-        como <code>$ilp.interledger-test.dev/nombre</code>.
-      </p>
+    <div class="container">
+      <app-site-header
+        badge="Laboratorio Open Payments"
+        actionLabel="Ir a mi caja"
+        actionLink="/merchant"
+      />
 
-      @if (result(); as res) {
-        <section class="sb-card">
-          <h2>{{ res.title }}</h2>
-          <p>
-            Estado:
-            <span [class]="'status ' + res.status">{{ res.status }}</span>
+      <main class="stack">
+        <div class="stack-sm">
+          <p class="eyebrow">Red Interledger · Test Wallet</p>
+          <h1>Open Payments Sandbox</h1>
+          <p class="lead">
+            Prueba el flujo completo contra el test wallet:
+            <span class="marker-lima">solicitud → autorización → ejecución → finalización</span>.
+            Puedes escribir las wallet addresses como
+            <code>$ilp.interledger-test.dev/nombre</code> o solo el nombre.
           </p>
-          @if (res.steps) {
-            <div class="sb-steps">
-              @for (step of stepDefinitions; track step[0]) {
-                <div class="sb-step" [class.done]="res.steps[step[0]]">
-                  {{ res.steps[step[0]] ? '✓' : '○' }} {{ step[1] }}
-                </div>
-              }
+        </div>
+
+        @if (result(); as res) {
+          <section class="card card-forest stack" aria-live="polite">
+            <div class="row between">
+              <div>
+                <p class="eyebrow">Resultado de la operación</p>
+                <h2>{{ res.title }}</h2>
+              </div>
+              <span
+                class="badge"
+                [class.badge-ok]="res.status === 'completed' || res.status === 'active'"
+                [class.badge-bad]="res.status === 'failed' || res.status === 'rejected' || res.status === 'revoked'"
+                [class.badge-wait]="res.status === 'processing' || res.status === 'awaiting-consent'"
+              >
+                {{ res.status }}
+              </span>
             </div>
-          }
-          <dl>
-            @for (row of res.details; track row[0]) {
-              <dt>{{ row[0] }}</dt>
-              <dd>{{ row[1] }}</dd>
+
+            @if (res.steps) {
+              <ol class="steps">
+                @for (step of stepDefinitions; track step[0]) {
+                  <li class="step" [class.is-done]="res.steps[step[0]]">
+                    <span class="step-icon" aria-hidden="true">
+                      {{ res.steps[step[0]] ? '✓' : '○' }}
+                    </span>
+                    <span>{{ step[1] }}</span>
+                  </li>
+                }
+              </ol>
             }
-          </dl>
-          @if (res.error) {
-            <p class="error">{{ res.error }}</p>
-          }
-        </section>
-      }
 
-      <section class="sb-card">
-        <h2>1. Pago único</h2>
-        <p class="muted">
-          Quien recibe recibe exactamente el monto, en su moneda; quien paga
-          aprueba en su wallet.
-        </p>
-        <form (ngSubmit)="submitPayment()">
-          <div class="sb-row">
-            <label>
-              Wallet que paga
-              <input name="sender" [(ngModel)]="paymentSender" required />
-            </label>
-            <label>
-              Wallet que recibe
-              <input name="receiver" [(ngModel)]="paymentReceiver" required />
-            </label>
-          </div>
-          <div class="sb-row">
-            <label>
-              Monto (moneda de quien recibe)
-              <input
-                name="amount"
-                [(ngModel)]="paymentAmount"
-                required
-                inputmode="decimal"
-                placeholder="10.00"
-              />
-            </label>
-            <label>
-              Descripción
-              <input
-                name="description"
-                [(ngModel)]="paymentDescription"
-                maxlength="200"
-              />
-            </label>
-          </div>
-          <button type="submit" [disabled]="busyPayment()">
-            Pagar con Open Payments
-          </button>
-        </form>
-      </section>
+            @if (res.details.length) {
+              <dl class="sb-dl">
+                @for (row of res.details; track row[0]) {
+                  <dt>{{ row[0] }}</dt>
+                  <dd>{{ row[1] }}</dd>
+                }
+              </dl>
+            }
 
-      <section class="sb-card">
-        <h2>2. Autorización recurrente</h2>
-        <p class="muted">
-          Quien paga aprueba una sola vez un tope de débito (por periodo, si
-          eliges uno); luego la app cobra sin volver a pedir permiso.
-        </p>
-        <form (ngSubmit)="submitMandate()">
-          <div class="sb-row">
-            <label>
-              Wallet que paga
-              <input name="mandateSender" [(ngModel)]="mandateSender" required />
-            </label>
-            <label>
-              Tope (moneda de quien paga)
-              <input
-                name="maxAmount"
-                [(ngModel)]="mandateMaxAmount"
-                required
-                inputmode="decimal"
-                placeholder="20.00"
-              />
-            </label>
-          </div>
-          <div class="sb-row">
-            <label>
-              Periodo
-              <select name="interval" [(ngModel)]="mandateInterval">
-                <option value="">Sin periodo (tope total)</option>
-                <option value="PT1M">Cada minuto (demo)</option>
-                <option value="P1D">Diario</option>
-                <option value="P1W">Semanal</option>
-                <option value="P15D">Quincenal</option>
-                <option value="P1M">Mensual</option>
-              </select>
-            </label>
-            <label>
-              Descripción
-              <input
-                name="mandateDescription"
-                [(ngModel)]="mandateDescription"
-                maxlength="200"
-              />
-            </label>
-          </div>
-          <button type="submit" [disabled]="busyMandate()">
-            Pedir autorización
-          </button>
-        </form>
-      </section>
+            @if (res.error) {
+              <p class="banner banner-bad" role="alert">{{ res.error }}</p>
+            }
+          </section>
+        }
 
-      @if (canCharge()) {
-        <section class="sb-card">
-          <h2>3. Cobrar con la autorización</h2>
-          <form (ngSubmit)="submitCharge()">
-            <div class="sb-row">
-              <label>
-                Wallet que recibe
-                <input name="chargeReceiver" [(ngModel)]="chargeReceiver" required />
-              </label>
-              <label>
-                Monto
-                <input
-                  name="chargeAmount"
-                  [(ngModel)]="chargeAmount"
-                  required
-                  inputmode="decimal"
-                  placeholder="5.00"
-                />
-              </label>
+        <div class="sb-grid">
+          <section class="card stack">
+            <div class="row between">
+              <div class="stack-sm">
+                <p class="eyebrow">Flujo 1 · Pago directo</p>
+                <h2>1. Pago único</h2>
+                <p class="muted small">
+                  Quien recibe obtiene exactamente el monto en su moneda; quien
+                  paga aprueba una sola vez en su billetera.
+                </p>
+              </div>
+              <span class="doodle-badge" aria-hidden="true">
+                <app-doodle name="pago" />
+              </span>
             </div>
-            <div class="sb-row">
-              <label>
-                El monto es
-                <select name="amountType" [(ngModel)]="chargeAmountType">
-                  <option value="receive">Lo que recibe el destinatario</option>
-                  <option value="send">Lo que paga el remitente</option>
-                </select>
-              </label>
-              <label>
-                Descripción
-                <input
-                  name="chargeDescription"
-                  [(ngModel)]="chargeDescription"
-                  maxlength="200"
-                />
-              </label>
+
+            <form class="stack" (ngSubmit)="submitPayment()">
+              <div class="sb-row">
+                <label class="field">
+                  <span>Wallet que paga</span>
+                  <input
+                    name="sender"
+                    [(ngModel)]="paymentSender"
+                    required
+                    placeholder="$ilp.interledger-test.dev/cliente"
+                  />
+                </label>
+                <label class="field">
+                  <span>Wallet que recibe</span>
+                  <input
+                    name="receiver"
+                    [(ngModel)]="paymentReceiver"
+                    required
+                    placeholder="$ilp.interledger-test.dev/tienda"
+                  />
+                </label>
+              </div>
+              <div class="sb-row">
+                <label class="field">
+                  <span>Monto (moneda de quien recibe)</span>
+                  <input
+                    name="amount"
+                    [(ngModel)]="paymentAmount"
+                    required
+                    inputmode="decimal"
+                    placeholder="10.00"
+                  />
+                </label>
+                <label class="field">
+                  <span>Descripción</span>
+                  <input
+                    name="description"
+                    [(ngModel)]="paymentDescription"
+                    maxlength="200"
+                    placeholder="Compra en tienda"
+                  />
+                </label>
+              </div>
+              <button
+                type="submit"
+                class="btn btn-lima btn-block"
+                [disabled]="busyPayment()"
+              >
+                {{ busyPayment() ? 'Abriendo wallet…' : 'Pagar con Open Payments →' }}
+              </button>
+            </form>
+          </section>
+
+          <section class="card stack">
+            <div class="row between">
+              <div class="stack-sm">
+                <p class="eyebrow">Flujo 2 · Grant con intervalo</p>
+                <h2>2. Autorización recurrente</h2>
+                <p class="muted small">
+                  Quien paga aprueba una sola vez un tope de débito por periodo;
+                  luego la app ejecuta repartos sin volver a pedir permiso.
+                </p>
+              </div>
+              <span class="doodle-badge" aria-hidden="true">
+                <app-doodle name="billetera" />
+              </span>
             </div>
-            <button type="submit" [disabled]="busyCharge()">Cobrar</button>
-          </form>
-          <p></p>
-          <button type="button" class="secondary" (click)="revokeMandate()">
-            Revocar autorización
-          </button>
-        </section>
-      }
-    </main>
+
+            <form class="stack" (ngSubmit)="submitMandate()">
+              <div class="sb-row">
+                <label class="field">
+                  <span>Wallet que autoriza</span>
+                  <input
+                    name="mandateSender"
+                    [(ngModel)]="mandateSender"
+                    required
+                    placeholder="$ilp.interledger-test.dev/tienda"
+                  />
+                </label>
+                <label class="field">
+                  <span>Tope (moneda de quien paga)</span>
+                  <input
+                    name="maxAmount"
+                    [(ngModel)]="mandateMaxAmount"
+                    required
+                    inputmode="decimal"
+                    placeholder="20.00"
+                  />
+                </label>
+              </div>
+              <div class="sb-row">
+                <label class="field">
+                  <span>Periodo</span>
+                  <select name="interval" [(ngModel)]="mandateInterval">
+                    <option value="">Sin periodo (tope total)</option>
+                    <option value="PT1M">Cada minuto (demo)</option>
+                    <option value="P1D">Diario</option>
+                    <option value="P1W">Semanal</option>
+                    <option value="P15D">Quincenal</option>
+                    <option value="P1M">Mensual</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Descripción</span>
+                  <input
+                    name="mandateDescription"
+                    [(ngModel)]="mandateDescription"
+                    maxlength="200"
+                    placeholder="Límite mensual MiPlante"
+                  />
+                </label>
+              </div>
+              <button
+                type="submit"
+                class="btn btn-lima btn-block"
+                [disabled]="busyMandate()"
+              >
+                {{ busyMandate() ? 'Solicitando permiso…' : 'Pedir autorización →' }}
+              </button>
+            </form>
+          </section>
+        </div>
+
+        @if (canCharge()) {
+          <section class="card stack">
+            <div class="row between">
+              <div class="stack-sm">
+                <p class="eyebrow">Flujo 3 · Uso del token autorizado</p>
+                <h2>3. Cobrar con la autorización activa</h2>
+              </div>
+              <span class="doodle-badge" aria-hidden="true">
+                <app-doodle name="monedas" />
+              </span>
+            </div>
+
+            <form class="stack" (ngSubmit)="submitCharge()">
+              <div class="sb-row">
+                <label class="field">
+                  <span>Wallet que recibe</span>
+                  <input name="chargeReceiver" [(ngModel)]="chargeReceiver" required />
+                </label>
+                <label class="field">
+                  <span>Monto</span>
+                  <input
+                    name="chargeAmount"
+                    [(ngModel)]="chargeAmount"
+                    required
+                    inputmode="decimal"
+                    placeholder="5.00"
+                  />
+                </label>
+              </div>
+              <div class="sb-row">
+                <label class="field">
+                  <span>El monto corresponde a</span>
+                  <select name="amountType" [(ngModel)]="chargeAmountType">
+                    <option value="receive">Lo que recibe el destinatario</option>
+                    <option value="send">Lo que paga el remitente</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Descripción</span>
+                  <input
+                    name="chargeDescription"
+                    [(ngModel)]="chargeDescription"
+                    maxlength="200"
+                  />
+                </label>
+              </div>
+              <div class="row">
+                <button type="submit" class="btn btn-lima" [disabled]="busyCharge()">
+                  {{ busyCharge() ? 'Ejecutando cobro…' : 'Ejecutar cobro →' }}
+                </button>
+                <button type="button" class="btn btn-danger" (click)="revokeMandate()">
+                  Revocar autorización
+                </button>
+              </div>
+            </form>
+          </section>
+        }
+      </main>
+
+      <app-site-footer />
+    </div>
   `,
 })
 export default class SandboxPage implements OnInit {
@@ -408,7 +365,7 @@ export default class SandboxPage implements OnInit {
   private currentMandateId: string | null = null;
 
   ngOnInit(): void {
-    this.title.setTitle('Open Payments Sandbox');
+    this.title.setTitle('Open Payments Sandbox · MiPlante');
     const params = this.route.snapshot.queryParamMap;
     const paymentId = params.get('payment');
     this.currentMandateId = params.get('mandate');

@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Title } from '@angular/platform-browser';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../core/api.service';
 import { SaleView } from '../../core/miplante.models';
 import {
@@ -26,7 +26,8 @@ import {
   statusInfo,
   walletName,
 } from '../../core/miplante.utils';
-import { SiteHeader } from '../../shared/ui/site-layout';
+import { Doodle } from '../../shared/brand/doodle';
+import { SiteFooter, SiteHeader } from '../../shared/ui/site-layout';
 import { SplitList } from '../../shared/ui/split-list';
 import { StepsIndicator } from '../../shared/ui/steps-indicator';
 
@@ -35,20 +36,33 @@ const MAX_POLLS = 400;
 
 @Component({
   selector: 'app-pay',
-  imports: [FormsModule, SiteHeader, SplitList, StepsIndicator],
+  imports: [FormsModule, RouterLink, SiteHeader, SiteFooter, SplitList, StepsIndicator, Doodle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'miplante-page' },
   template: `
     <div class="container">
-      <app-site-header />
+      <app-site-header badge="Pago seguro Open Payments" />
 
       <main class="narrow stack">
         @if (missing()) {
           <section class="card stack">
-            <h1 class="h1-sm">No encontramos este cobro</h1>
-            <p class="muted">
-              Revisa el enlace o pide al negocio que te muestre el QR de nuevo.
-            </p>
+            <div class="row between">
+              <div class="stack-sm">
+                <p class="eyebrow">Enlace no encontrado</p>
+                <h1 class="h1-sm">No encontramos este cobro</h1>
+                <p class="muted">
+                  Revisa el enlace o pide al negocio que te muestre el código QR
+                  de nuevo.
+                </p>
+              </div>
+              <span class="doodle-badge doodle-badge-lg" aria-hidden="true">
+                <app-doodle name="duda" />
+              </span>
+            </div>
+            <div class="row">
+              <a class="btn btn-lima" routerLink="/">Ir al inicio</a>
+              <a class="btn btn-secondary" routerLink="/merchant">Abrir mi caja</a>
+            </div>
           </section>
         }
 
@@ -58,18 +72,26 @@ const MAX_POLLS = 400;
 
         @if (sale(); as s) {
           <section class="card stack" aria-live="polite">
-            <div class="stack-sm">
-              <p class="muted small">Vas a pagar a</p>
-              <h1 class="h1-sm">{{ s.merchantName }}</h1>
+            <div class="row between">
+              <div class="stack-sm">
+                <p class="eyebrow">Vas a pagar a</p>
+                <h1 class="h1-sm">{{ s.merchantName || 'Comercio MiPlante' }}</h1>
+              </div>
+              <span class="doodle-badge doodle-badge-lg" aria-hidden="true">
+                <app-doodle name="pago" />
+              </span>
+            </div>
+
+            <div class="cobro-amount stack-sm">
               <p class="amount-xl">{{ formatAmount(s.amount) }}</p>
               @if (s.description) {
                 <p class="muted">{{ s.description }}</p>
               }
-              <span>
+              <div>
                 <span [class]="statusBadgeClass(s.status)">
                   {{ statusText(s.status) }}
                 </span>
-              </span>
+              </div>
             </div>
 
             @if (s.payment?.steps) {
@@ -88,7 +110,7 @@ const MAX_POLLS = 400;
             @if (s.status === 'open' || s.status === 'failed') {
               <form class="stack" (ngSubmit)="submitPay()">
                 <label class="field">
-                  <span>¿Cuál es tu billetera?</span>
+                  <span>¿Cuál es tu billetera Open Payments?</span>
                   <input
                     #walletInput
                     name="customerWallet"
@@ -98,22 +120,25 @@ const MAX_POLLS = 400;
                     autocomplete="off"
                     spellcheck="false"
                     autocapitalize="off"
-                    placeholder="Ej: mi-billetera"
+                    placeholder="Ej: cliente-feliz"
                   />
-                  <small class="hint">Escribe solo el nombre de tu billetera.</small>
+                  <small class="hint">
+                    Escribe solo el nombre de tu billetera o su dirección
+                    completa (ej. <code>$ilp.interledger-test.dev/cliente</code>).
+                  </small>
                 </label>
                 <p class="banner banner-info">
-                  Te llevamos a tu billetera para que apruebes este pago. Entra con
-                  tu cuenta y toca <strong>Aceptar</strong>. Nada se cobra sin tu
-                  permiso.
+                  Te llevamos a tu billetera para que apruebes este pago. Entra
+                  con tu cuenta y toca <strong>Aceptar</strong>. Nada se cobra
+                  sin tu permiso.
                 </p>
                 <button
-                  class="btn btn-primary btn-lg btn-block"
+                  class="btn btn-lima btn-lg btn-block"
                   type="submit"
                   [disabled]="busy()"
                   [attr.aria-busy]="busy() ? 'true' : null"
                 >
-                  {{ busy() ? 'Abriendo tu billetera…' : 'Pagar ' + formatAmount(s.amount) }}
+                  {{ busy() ? 'Abriendo tu billetera…' : 'Pagar ' + formatAmount(s.amount) + ' →' }}
                 </button>
               </form>
             }
@@ -121,11 +146,12 @@ const MAX_POLLS = 400;
             @if (s.status === 'paid') {
               <div class="success">
                 <span class="success-icon" aria-hidden="true">✓</span>
-                <p class="success-title">¡Pago completado!</p>
+                <p class="success-title">¡Pago completado con éxito!</p>
+                <p class="small">Gracias por apoyar este negocio con MiPlante.</p>
               </div>
 
               <section class="stack-sm">
-                <h2>Así se repartió tu pago</h2>
+                <h2>Así se repartió tu pago automáticamente</h2>
                 <app-split-list
                   [settlement]="s.settlement"
                   [keptLabel]="(s.merchantName || 'El negocio') + ' recibe'"
@@ -137,11 +163,9 @@ const MAX_POLLS = 400;
             }
           </section>
         }
-
-        <p class="muted small center">
-          Pago con Open Payments sobre la red Interledger.
-        </p>
       </main>
+
+      <app-site-footer />
     </div>
   `,
 })

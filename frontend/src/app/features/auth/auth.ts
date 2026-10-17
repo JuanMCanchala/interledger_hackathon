@@ -13,38 +13,112 @@ import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
 import { safeNext } from '../../core/miplante.utils';
+import { Doodle } from '../../shared/brand/doodle';
 import { SiteFooter, SiteHeader } from '../../shared/ui/site-layout';
 
 @Component({
   selector: 'app-auth',
-  imports: [FormsModule, RouterLink, SiteHeader, SiteFooter],
+  imports: [FormsModule, RouterLink, SiteHeader, SiteFooter, Doodle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'miplante-page' },
   template: `
     <div class="container">
       <app-site-header
+        [badge]="registering() ? 'Registro rápido' : 'Acceso tendero'"
         [actionLabel]="registering() ? 'Ya tengo cuenta' : 'Crear cuenta'"
         [actionLink]="registering() ? '/login' : '/register'"
         [actionQueryParams]="nextQueryParams()"
       />
 
-      <main class="narrow stack">
-        <div class="stack-sm">
-          <p class="eyebrow">{{ registering() ? 'Registro · 1 minuto' : 'Tu caja' }}</p>
-          <h1 class="h1-sm">{{ registering() ? 'Crea tu cuenta' : 'Entra a tu caja' }}</h1>
-          <p class="lead">
-            {{
-              registering()
-                ? 'Con ella entras a tu caja desde cualquier equipo. Después configuras tu tienda y a dónde va cada parte de tus ventas.'
-                : 'Con tu correo y tu contraseña, desde cualquier celular o computador.'
-            }}
-          </p>
-        </div>
+      <main class="wide-stage">
+        <section class="stack" aria-label="Beneficios de MiPlante">
+          <div class="stack-sm">
+            <p class="eyebrow">
+              {{ registering() ? 'Empieza en 1 minuto' : 'Bienvenido de vuelta' }}
+            </p>
+            <h1>
+              {{
+                registering()
+                  ? 'Separa el plante de la ganancia en cada venta.'
+                  : 'Entra a tu caja y sigue vendiendo.'
+              }}
+            </h1>
+            <p class="lead">
+              {{
+                registering()
+                  ? 'Crea tu cuenta para configurar tu tienda, conectar tu billetera Open Payments y repartir automáticamente proveedores, créditos y ahorro.'
+                  : 'Revisa cuánto llevas vendido hoy, genera códigos QR al instante y mira el avance de tus obligaciones del mes.'
+              }}
+            </p>
+          </div>
+
+          <ul class="feature-pills">
+            <li class="feature-pill">
+              <span class="doodle-badge" aria-hidden="true">
+                <app-doodle name="pago" />
+              </span>
+              <div>
+                <strong>Cobro con QR inmediato</strong>
+                <span>Tu cliente escanea y aprueba en su billetera Open Payments.</span>
+              </div>
+            </li>
+            <li class="feature-pill">
+              <span class="doodle-badge" aria-hidden="true">
+                <app-doodle name="alcancia" />
+              </span>
+              <div>
+                <strong>Bolsillos automáticos</strong>
+                <span>Cada venta aparta sola la cuota de proveedores, deudas y ahorro.</span>
+              </div>
+            </li>
+            <li class="feature-pill">
+              <span class="doodle-badge" aria-hidden="true">
+                <app-doodle name="crecimiento" />
+              </span>
+              <div>
+                <strong>Tu ganancia real siempre clara</strong>
+                <span>Cuando completas una cuota del mes, todo el resto queda libre para ti.</span>
+              </div>
+            </li>
+          </ul>
+        </section>
 
         <form class="card stack" (ngSubmit)="submit()" (input)="error.set('')" novalidate>
+          <div class="mode-tabs" role="tablist" aria-label="Modo de acceso">
+            <a
+              role="tab"
+              routerLink="/login"
+              [queryParams]="nextQueryParams()"
+              [class.is-active]="!registering()"
+              [attr.aria-selected]="!registering()"
+            >
+              Entrar a mi caja
+            </a>
+            <a
+              role="tab"
+              routerLink="/register"
+              [queryParams]="nextQueryParams()"
+              [class.is-active]="registering()"
+              [attr.aria-selected]="registering()"
+            >
+              Crear cuenta
+            </a>
+          </div>
+
+          <div class="stack-sm">
+            <h2>{{ registering() ? 'Datos de tu cuenta' : 'Inicia sesión' }}</h2>
+            <p class="muted small">
+              {{
+                registering()
+                  ? 'En el siguiente paso conectas tu billetera y eliges tus porcentajes.'
+                  : 'Usa el correo y contraseña con los que registraste tu negocio.'
+              }}
+            </p>
+          </div>
+
           @if (registering()) {
             <label class="field">
-              <span>Tu nombre</span>
+              <span>Tu nombre o el de quien atiende</span>
               <input
                 #nameInput
                 name="name"
@@ -58,7 +132,7 @@ import { SiteFooter, SiteHeader } from '../../shared/ui/site-layout';
           }
 
           <label class="field">
-            <span>Correo</span>
+            <span>Correo electrónico</span>
             <input
               #emailInput
               name="email"
@@ -75,18 +149,28 @@ import { SiteFooter, SiteHeader } from '../../shared/ui/site-layout';
 
           <label class="field">
             <span>Contraseña</span>
-            <input
-              #passwordInput
-              name="password"
-              type="password"
-              [(ngModel)]="password"
-              required
-              [attr.minlength]="registering() ? 8 : null"
-              maxlength="200"
-              [attr.autocomplete]="registering() ? 'new-password' : 'current-password'"
-            />
+            <div class="input-with-action">
+              <input
+                #passwordInput
+                name="password"
+                [type]="showPassword() ? 'text' : 'password'"
+                [(ngModel)]="password"
+                required
+                [attr.minlength]="registering() ? 8 : null"
+                maxlength="200"
+                [attr.autocomplete]="registering() ? 'new-password' : 'current-password'"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                class="input-action"
+                (click)="showPassword.set(!showPassword())"
+              >
+                {{ showPassword() ? 'Ocultar' : 'Mostrar' }}
+              </button>
+            </div>
             @if (registering()) {
-              <small class="hint">Al menos 8 caracteres.</small>
+              <small class="hint">Usa al menos 8 caracteres.</small>
             }
           </label>
 
@@ -96,18 +180,18 @@ import { SiteFooter, SiteHeader } from '../../shared/ui/site-layout';
 
           <button
             type="submit"
-            class="btn btn-primary btn-lg btn-block"
+            class="btn btn-lima btn-lg btn-block"
             [disabled]="busy()"
             [attr.aria-busy]="busy() ? 'true' : null"
           >
             @if (busy()) {
               {{ registering() ? 'Creando tu cuenta…' : 'Entrando…' }}
             } @else {
-              {{ registering() ? 'Crear cuenta y seguir' : 'Entrar' }}
+              {{ registering() ? 'Crear cuenta y configurar tienda →' : 'Entrar a mi caja →' }}
             }
           </button>
 
-          <p class="small center">
+          <p class="small center muted">
             @if (registering()) {
               ¿Ya tienes cuenta?
               <a routerLink="/login" [queryParams]="nextQueryParams()">Entra a tu caja</a>
@@ -134,6 +218,7 @@ export default class AuthPage implements OnInit {
   private readonly passwordInput = viewChild<ElementRef<HTMLInputElement>>('passwordInput');
 
   protected readonly registering = signal(false);
+  protected readonly showPassword = signal(false);
   protected readonly next = signal('');
   protected readonly nextQueryParams = computed(() =>
     this.next() ? { next: this.next() } : null,

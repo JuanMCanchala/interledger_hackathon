@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { Title } from '@angular/platform-browser';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../core/api.service';
 import { SaleView } from '../../core/miplante.models';
 import {
@@ -19,57 +19,88 @@ import {
   salePace,
   statusInfo,
 } from '../../core/miplante.utils';
+import { Doodle } from '../../shared/brand/doodle';
+import { Logo } from '../../shared/brand/logo';
 import { QrCode } from '../../shared/ui/qr-code';
 
 @Component({
   selector: 'app-cobro',
-  imports: [QrCode],
+  imports: [RouterLink, QrCode, Logo, Doodle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'miplante-page cobro-page' },
   template: `
     <main class="cobro" aria-live="polite">
+      <div class="row between">
+        <a routerLink="/" aria-label="MiPlante" style="width: 118px; display: block">
+          <app-logo />
+        </a>
+        <a class="header-pill" routerLink="/merchant">← Volver a mi caja</a>
+      </div>
+
       @if (missing()) {
         <section class="card cobro-card stack">
-          <h1 class="h1-sm">No encontramos este cobro</h1>
-          <p class="muted">
-            Revisa el enlace o genera el cobro de nuevo desde tu caja.
-          </p>
+          <div class="row between">
+            <div class="stack-sm">
+              <p class="eyebrow">Cobro no disponible</p>
+              <h1 class="h1-sm">No encontramos este cobro</h1>
+              <p class="muted">
+                Revisa el enlace o genera el cobro de nuevo desde tu caja.
+              </p>
+            </div>
+            <span class="doodle-badge" aria-hidden="true">
+              <app-doodle name="duda" />
+            </span>
+          </div>
+          <a class="btn btn-lima btn-block" routerLink="/merchant">Ir a mi caja</a>
         </section>
       }
 
       @if (sale(); as s) {
         <section class="card cobro-card">
           <header class="cobro-head">
-            <p class="eyebrow">{{ s.merchantName || 'MiPlante' }}</p>
-            <span>
-              <span [class]="statusBadgeClass(s.status)">{{ statusText(s.status) }}</span>
-            </span>
+            <div>
+              <p class="eyebrow">Cobro en mostrador</p>
+              <h2>{{ s.merchantName || 'MiPlante' }}</h2>
+            </div>
+            <span [class]="statusBadgeClass(s.status)">{{ statusText(s.status) }}</span>
           </header>
 
-          <p class="cobro-amount amount-xl">
-            {{ formatAmount(s.status === 'paid' ? s.amount : s.pending || s.amount) }}
-          </p>
-          @if (s.description) {
-            <p class="muted center">{{ s.description }}</p>
-          }
+          <div class="cobro-amount stack-sm">
+            <p class="amount-xl">
+              {{ formatAmount(s.status === 'paid' ? s.amount : s.pending || s.amount) }}
+            </p>
+            @if (s.description) {
+              <p class="muted center">{{ s.description }}</p>
+            }
+          </div>
 
           @if (waiting(s) && s.payUrl) {
             <div class="cobro-qr">
               <div class="qr-box">
                 <app-qr-code
                   [value]="s.payUrl"
-                  [size]="320"
+                  [size]="310"
                   fallback="Pide al negocio el enlace de pago."
                 />
                 <p class="small center">
-                  {{
-                    s.pending
-                      ? 'Escanea de nuevo y confirma los ' + formatAmount(s.pending) + ' que faltan'
-                      : 'Escanea con tu celular y confirma en tu billetera'
-                  }}
+                  <strong>
+                    {{
+                      s.pending
+                        ? 'Escanea de nuevo y confirma los ' + formatAmount(s.pending) + ' que faltan'
+                        : 'Escanea con tu celular y confirma en tu billetera'
+                    }}
+                  </strong>
                 </p>
               </div>
             </div>
+
+            <a
+              class="btn btn-lima btn-block"
+              routerLink="/pay"
+              [queryParams]="{ sale: s.id }"
+            >
+              Pagar desde este navegador →
+            </a>
           }
 
           @if (s.pending) {
@@ -82,7 +113,7 @@ import { QrCode } from '../../shared/ui/qr-code';
             <div class="success cobro-done">
               <span class="success-icon" aria-hidden="true">✓</span>
               <p class="success-title">¡Pago recibido!</p>
-              <p class="muted small">
+              <p class="small">
                 {{
                   s.paidAt
                     ? 'Pagado a las ' + formatTime(s.paidAt) + '. ¡Gracias por tu compra!'
