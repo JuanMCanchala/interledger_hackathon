@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 const MESSAGES = [
   'Mañana viene el proveedor: ya tienes $ 45.000 guardados.',
   'Vas en 80 % de tu ahorro del mes. ¡Pa’ lante!',
-  'Hoy toca tu aporte a pensión. Ya está separado.',
+  'Ya completaste la cuota del mes de tu proveedor.',
   'Esta semana abonaste $ 9.600 a tu préstamo.',
 ];
 const VISIBLE = 2;
