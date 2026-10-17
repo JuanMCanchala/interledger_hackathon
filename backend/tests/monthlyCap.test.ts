@@ -48,7 +48,10 @@ describe("changing the monthly cap", () => {
     const env = setupMiPlante();
     const id = await env.onboardRosa();
 
-    await expect(env.merchants.changeCap(id, "1000")).rejects.toThrow(/cuotas/);
+    // The message reads like the rest of the app: "$ 20.000", not "20000.00 COP".
+    await expect(env.merchants.changeCap(id, "1000")).rejects.toThrow(
+      /Las cuotas del mes suman \$\s20\.000, más que el límite mensual de \$\s1\.000/,
+    );
     await expect(env.merchants.changeCap(id, "30000")).rejects.toThrow(/ya es tu límite/);
   });
 });

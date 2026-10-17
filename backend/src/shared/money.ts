@@ -59,10 +59,6 @@ export function toAmount(decimal: string, asset: Asset): Amount {
   };
 }
 
-export function formatAmount(amount: Amount): string {
-  return `${fromMinorUnits(amount.value, amount.assetScale)} ${amount.assetCode}`;
-}
-
 /** Negative if a < b, zero if equal, positive if a > b. Both amounts must share the asset. */
 export function compareAmounts(a: Amount, b: Amount): number {
   if (a.assetCode !== b.assetCode || a.assetScale !== b.assetScale) {
@@ -72,4 +68,20 @@ export function compareAmounts(a: Amount, b: Amount): number {
   }
   const diff = BigInt(a.value) - BigInt(b.value);
   return diff === 0n ? 0 : diff > 0n ? 1 : -1;
+}
+
+/** "$ 300.000" for messages people read, in Colombian format; "12,50 USD" for other currencies. */
+export function formatAmount(amount: Amount): string {
+  const value = Number(fromMinorUnits(amount.value, amount.assetScale));
+  const fraction = Number.isInteger(value) ? 0 : 2;
+  try {
+    return new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: amount.assetCode,
+      minimumFractionDigits: fraction,
+      maximumFractionDigits: fraction,
+    }).format(value);
+  } catch {
+    return `${value.toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${amount.assetCode}`;
+  }
 }

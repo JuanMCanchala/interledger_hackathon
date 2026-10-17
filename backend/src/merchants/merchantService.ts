@@ -8,6 +8,7 @@ import { startOfBogotaMonth } from "../domain/calendar.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
 import {
+  formatAmount,
   fromMinorUnits,
   toAmount,
   type Amount,
@@ -414,7 +415,7 @@ function assertCapCoversQuotas(
   );
   if (quotas > BigInt(cap.value)) {
     throw new AppError(
-      `Las cuotas del mes suman ${fromMinorUnits(quotas.toString(), cap.assetScale)} ${cap.assetCode}, más que el límite mensual de ${fromMinorUnits(cap.value, cap.assetScale)} ${cap.assetCode}`,
+      `Las cuotas del mes suman ${formatAmount({ ...cap, value: quotas.toString() })}, más que el límite mensual de ${formatAmount(cap)}`,
     );
   }
 }
