@@ -243,7 +243,7 @@ let nextDraftId = 1;
 
                     <div class="category-wallets stack-sm">
                       @for (w of cat.wallets; track w.id) {
-                        <fieldset class="wallet-row">
+                        <fieldset class="wallet-row" [class.is-invalid]="!!walletErrors()[w.id]">
                           <legend class="sr-only">Billetera</legend>
                           <label class="field">
                             <span>Nombre</span>
@@ -259,6 +259,8 @@ let nextDraftId = 1;
                             <span>Billetera destino</span>
                             <input
                               [name]="'dest-' + w.id"
+                              [class.input-invalid]="!!walletErrors()[w.id]"
+                              [attr.aria-invalid]="walletErrors()[w.id] ? 'true' : null"
                               [ngModel]="w.destination"
                               (ngModelChange)="updateWallet(cat.id, w.id, { destination: $event })"
                               maxlength="300"
@@ -267,6 +269,9 @@ let nextDraftId = 1;
                               autocapitalize="off"
                               [placeholder]="w.examples?.destination || 'Ej: distribuidora-central'"
                             />
+                            @if (walletErrors()[w.id]; as wErr) {
+                              <small class="check check-bad" role="alert">{{ wErr }}</small>
+                            }
                           </label>
                           <label class="field">
                             <span>% de cada venta</span>
@@ -466,18 +471,28 @@ let nextDraftId = 1;
 
           <div class="wizard-nav">
             @if (step() > 0) {
-              <button type="button" class="btn btn-secondary" (click)="prevStep()">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                [disabled]="busy() || stepBusy()"
+                (click)="prevStep()"
+              >
                 ← Paso anterior
               </button>
             }
             <button
               type="submit"
               class="btn btn-lima btn-lg next-btn"
-              [disabled]="busy()"
-              [attr.aria-busy]="busy() ? 'true' : null"
+              [class.is-loading]="busy() || stepBusy()"
+              [disabled]="busy() || stepBusy()"
+              [attr.aria-busy]="busy() || stepBusy() ? 'true' : null"
             >
               @if (busy()) {
-                Abriendo tu billetera…
+                <span class="btn-spinner" aria-hidden="true"></span>
+                <span>Abriendo tu billetera…</span>
+              } @else if (stepBusy()) {
+                <span class="btn-spinner" aria-hidden="true"></span>
+                <span>{{ step() === 1 ? 'Validando billeteras…' : 'Verificando billetera…' }}</span>
               } @else if (step() === 2) {
                 Autorizar en mi billetera →
               } @else {
@@ -509,6 +524,7 @@ export default class OnboardPage implements OnInit {
   protected readonly step = signal(0);
   protected readonly reached = signal(0);
   protected readonly busy = signal(false);
+  protected readonly stepBusy = signal(false);
   protected readonly formError = signal('');
 
   protected readonly businessName = signal('');
@@ -518,6 +534,7 @@ export default class OnboardPage implements OnInit {
   protected readonly walletCheckClass = signal('');
 
   protected readonly categories = signal<OnboardCategoryDraft[]>([]);
+  protected readonly walletErrors = signal<Record<number, string>>({});
   protected newCategoryName = '';
   protected newCategoryKind: 'debt' | 'savings' = 'debt';
 
@@ -745,6 +762,13 @@ export default class OnboardPage implements OnInit {
     walletId: number,
     patch: Partial<OnboardWalletDraft>,
   ): void {
+    if ('destination' in patch && this.walletErrors()[walletId]) {
+      this.walletErrors.update((prev) => {
+        const next = { ...prev };
+        delete next[walletId];
+        return next;
+      });
+    }
     this.categories.update((cats) =>
       cats.map((c) =>
         c.id !== catId
@@ -794,6 +818,12 @@ export default class OnboardPage implements OnInit {
   }
 
   protected removeWallet(catId: number, walletId: number): void {
+    this.walletErrors.update((prev) => {
+      if (!prev[walletId]) return prev;
+      const next = { ...prev };
+      delete next[walletId];
+      return next;
+    });
     this.categories.update((cats) =>
       cats.map((c) =>
         c.id !== catId
@@ -861,13 +891,20 @@ export default class OnboardPage implements OnInit {
     if (!this.businessWallet().trim()) {
       return this.fail('Escribe el nombre de tu billetera.');
     }
-    if (!(this.checkedWallet() || (await this.verifyWallet()))) {
-      return this.fail('Revisa el nombre de tu billetera.');
+    if (!this.checkedWallet()) {
+      this.stepBusy.set(true);
+      try {
+        if (!(await this.verifyWallet())) {
+          return this.fail('Revisa el nombre de tu billetera.');
+        }
+      } finally {
+        this.stepBusy.set(false);
+      }
     }
     return true;
   }
 
-  private checkWallets(): boolean {
+  private async checkWallets(): Promise<boolean> {
     const wallets = this.flatWallets();
     if (wallets.length === 0) {
       return this.fail('Agrega al menos una billetera para pagar con tus ventas.');
@@ -880,6 +917,10 @@ export default class OnboardPage implements OnInit {
         return this.fail(`Ponle un nombre a la billetera de ${w.category}.`);
       }
       if (!dest) {
+        this.walletErrors.update((prev) => ({
+          ...prev,
+          [w.id]: 'Escribe la billetera destino.',
+        }));
         return this.fail(`Escribe la billetera de "${where}".`);
       }
       if (
@@ -911,6 +952,49 @@ export default class OnboardPage implements OnInit {
         `Entre todas suman ${total.toLocaleString('es-CO')}% de cada venta. Baja alguna: lo máximo es ${MAX_TOTAL_PERCENT}%, para que siempre te quede una parte.`,
       );
     }
+
+    // Validate that each destination wallet exists and is not the business's own wallet
+    this.stepBusy.set(true);
+    try {
+      const shopWalletUrl =
+        this.checkedWallet()?.wallet || normalizeWallet(this.businessWallet());
+      const errors: Record<number, string> = {};
+      const failedNames: string[] = [];
+
+      await Promise.all(
+        wallets.map(async (w) => {
+          const dest = w.destination.trim();
+          const where = `${w.category} · ${w.label.trim()}`;
+          if (normalizeWallet(dest) === shopWalletUrl) {
+            errors[w.id] =
+              'No puede ser la misma billetera de tu negocio.';
+            failedNames.push(where);
+            return;
+          }
+          try {
+            await this.api.checkWallet(dest);
+          } catch (err: unknown) {
+            errors[w.id] =
+              (err as Error)?.message ||
+              'No encontramos esta billetera. Revisa que esté bien escrita.';
+            failedNames.push(where);
+          }
+        }),
+      );
+
+      this.walletErrors.set(errors);
+      if (failedNames.length > 0) {
+        const list = failedNames.map((n) => `"${n}"`).join(', ');
+        return this.fail(
+          failedNames.length === 1
+            ? `No pudimos validar la billetera de ${list}. Revisa el campo marcado en rojo.`
+            : `No pudimos validar las billeteras de ${list}. Revisa los campos marcados en rojo.`,
+        );
+      }
+    } finally {
+      this.stepBusy.set(false);
+    }
+
     return true;
   }
 
@@ -946,6 +1030,7 @@ export default class OnboardPage implements OnInit {
   }
 
   protected async jumpToStep(target: number): Promise<void> {
+    if (this.busy() || this.stepBusy()) return;
     const current = this.step();
     if (target === current || target > this.reached()) return;
     for (let at = current; at < target; at += 1) {
@@ -955,7 +1040,7 @@ export default class OnboardPage implements OnInit {
   }
 
   protected async submitStep(): Promise<void> {
-    if (this.busy()) return;
+    if (this.busy() || this.stepBusy()) return;
     this.formError.set('');
     const current = this.step();
     if (!(await this.runCheck(current))) return;
