@@ -1,5 +1,6 @@
 import { APP_LINKS } from '../../../../core/app-links';
 import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import {
   FINE_POINTER,
   MOTION,
@@ -27,7 +28,7 @@ const PARALLAX_PX = 36;
 
 @Component({
   selector: 'app-hero',
-  imports: [Logo, Doodle],
+  imports: [Logo, Doodle, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './hero.html',
   styleUrl: './hero.scss',

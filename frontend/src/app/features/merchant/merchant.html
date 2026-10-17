@@ -1,0 +1,1274 @@
+<div class="container">
+  <header class="site-header panel-header">
+    <a
+      class="brand"
+      href="#inicio"
+      (click)="$event.preventDefault(); selectTab('inicio')"
+      aria-label="MiPlante: inicio del panel"
+    >
+      <span class="brand-mark" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="22"
+          height="22"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 21v-9" />
+          <path d="M12 12c0-4 3-7 8-7 0 4-3 7-8 7z" />
+          <path d="M12 14c0-3-2.5-5.5-7-5.5 0 3 2.5 5.5 7 5.5z" />
+        </svg>
+      </span>
+      <span class="panel-shop">
+        <span>{{ merchant()?.name || 'MiPlante' }}</span>
+        @if (merchant(); as m) {
+          <small class="muted">{{ walletName(m.wallet) }}</small>
+        }
+      </span>
+    </a>
+
+    <div class="row panel-header-actions">
+      <button
+        type="button"
+        class="bell"
+        (click)="selectTab('avisos')"
+        [attr.aria-label]="unseenCount() ? 'Avisos: ' + unseenCount() + ' nuevos' : 'Avisos'"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z" />
+          <path d="M10 20a2 2 0 0 0 4 0" />
+        </svg>
+        @if (unseenCount() > 0) {
+          <span class="bell-count">{{ unseenCount() > 9 ? '9+' : unseenCount() }}</span>
+        }
+      </button>
+      @if (merchant(); as m) {
+        <span [class]="merchantStatusBadgeClass(m.status)">
+          {{ merchantStatusText(m.status) }}
+        </span>
+      }
+    </div>
+  </header>
+
+  <nav class="panel-nav" aria-label="Secciones del panel">
+    <button
+      type="button"
+      [class.is-active]="tab() === 'inicio'"
+      [attr.aria-current]="tab() === 'inicio' ? 'page' : null"
+      (click)="selectTab('inicio')"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />
+      </svg>
+      <span>Inicio</span>
+    </button>
+    <button
+      type="button"
+      class="is-primary"
+      [class.is-active]="tab() === 'vender'"
+      [attr.aria-current]="tab() === 'vender' ? 'page' : null"
+      (click)="selectTab('vender')"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z"
+        />
+      </svg>
+      <span>Vender</span>
+    </button>
+    <button
+      type="button"
+      [class.is-active]="tab() === 'metas'"
+      [attr.aria-current]="tab() === 'metas' ? 'page' : null"
+      (click)="selectTab('metas')"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" />
+        <circle cx="12" cy="12" r="4" />
+        <circle cx="12" cy="12" r="0.5" />
+      </svg>
+      <span>Metas</span>
+    </button>
+    <button
+      type="button"
+      [class.is-active]="tab() === 'repartos'"
+      [attr.aria-current]="tab() === 'repartos' ? 'page' : null"
+      (click)="selectTab('repartos')"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v18M12 8l-6 4M12 8l6 4M6 12v6M18 12v6" />
+      </svg>
+      <span>Repartos</span>
+    </button>
+    <button
+      type="button"
+      [class.is-active]="tab() === 'ajustes'"
+      [attr.aria-current]="tab() === 'ajustes' ? 'page' : null"
+      (click)="selectTab('ajustes')"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"
+        />
+      </svg>
+      <span>Ajustes</span>
+    </button>
+  </nav>
+
+  <main class="panel-main stack">
+    @if (missingText()) {
+      <section class="card stack">
+        <h1 class="h1-sm">No encontramos tu caja</h1>
+        <p class="muted">{{ missingText() }}</p>
+        <div class="row">
+          <a class="btn btn-primary" routerLink="/onboard">Configurar mi tienda</a>
+          <a class="btn btn-secondary" routerLink="/login">Entrar con otra cuenta</a>
+        </div>
+      </section>
+    }
+
+    @if (loadError()) {
+      <p class="banner banner-bad" role="alert">{{ loadError() }}</p>
+    }
+
+    @if (statusBanner(); as sb) {
+      <div [class]="'banner banner-' + sb.tone + ' stack-sm'" role="status">
+        <p>{{ sb.text }}</p>
+        <p class="small">
+          En tu billetera entra con la cuenta dueña de
+          <strong>{{ sb.wallet }}</strong> y toca <strong>Aceptar</strong>.
+        </p>
+        <button
+          type="button"
+          class="btn btn-primary"
+          [disabled]="consentBusy()"
+          (click)="requestConsent()"
+        >
+          {{ consentBusy() ? 'Abriendo tu billetera…' : 'Autorizar en mi billetera' }}
+        </button>
+      </div>
+    }
+
+    @if (merchant(); as m) {
+      <div class="stack">
+        <!-- Inicio ============================================================ -->
+        @if (tab() === 'inicio') {
+          <section class="view stack" aria-labelledby="inicio-title">
+            @if (reviewBannerText()) {
+              <button
+                type="button"
+                class="banner banner-bad review-banner"
+                (click)="selectTab('avisos')"
+              >
+                {{ reviewBannerText() }}
+              </button>
+            }
+
+            <div class="card stack hero-card">
+              <div class="row between">
+                <h1 class="h1-sm" id="inicio-title">Hoy</h1>
+                <span class="muted small">{{ todayDateText }}</span>
+              </div>
+              <p>
+                <span class="amount-xl">{{ formatAmount(m.today.gross) }}</span>
+                <span class="muted small">
+                  {{
+                    m.today.salesCount === 1
+                      ? ' en 1 venta'
+                      : ' en ' + m.today.salesCount + ' ventas'
+                  }}
+                </span>
+              </p>
+              <div class="stats">
+                <div class="stat">
+                  <p class="stat-label">Ganancia de hoy</p>
+                  <p class="stat-value">{{ formatAmount(m.today.kept) }}</p>
+                </div>
+                <div class="stat">
+                  <p class="stat-label">Repartido hoy</p>
+                  <p class="stat-value">{{ formatAmount(m.today.allocated) }}</p>
+                </div>
+                <div class="stat">
+                  <p class="stat-label">Vendido este mes</p>
+                  <p class="stat-value">{{ formatAmount(m.month.gross) }}</p>
+                </div>
+                <div class="stat">
+                  <p class="stat-label">Ganancia real del mes</p>
+                  <p
+                    class="stat-value"
+                    [class.is-negative]="toNumber(m.month.realProfit) < 0"
+                  >
+                    {{ formatAmount(m.month.realProfit ?? m.month.kept) }}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="btn btn-primary btn-lg btn-block"
+                (click)="selectTab('vender')"
+              >
+                Nueva venta
+              </button>
+            </div>
+
+            <div class="panel-grid">
+              <section class="card stack" aria-labelledby="chart-title">
+                <div class="stack-sm">
+                  <h2 id="chart-title">Ventas del mes</h2>
+                  <p class="muted small">{{ monthChartCaption() }}</p>
+                </div>
+                <app-bar-chart
+                  [bars]="monthSalesBars()"
+                  [goal]="monthDailyGoal()"
+                  [goalLabel]="monthDailyGoalLabel()"
+                  [summary]="monthSalesSummary()"
+                />
+                <p class="chart-legend small">
+                  <span class="legend legend-sales">Ventas por día</span>
+                  @if (monthDailyGoal()) {
+                    <span class="legend legend-goal">Ritmo para tu meta</span>
+                  }
+                </p>
+              </section>
+
+              <section class="card stack" aria-labelledby="money-title">
+                <div class="stack-sm">
+                  <h2 id="money-title">A dónde fue tu dinero este mes</h2>
+                  <p class="muted small">
+                    Tu ganancia real ya descuenta lo que salió de ella para
+                    completar las cuotas de tus acreedores.
+                  </p>
+                </div>
+                <div class="stacked-bar" aria-hidden="true">
+                  @for (row of monthSplitRows(); track row.label) {
+                    @if (row.widthPercent > 0) {
+                      <span
+                        [class]="row.seg"
+                        [style.width.%]="row.widthPercent"
+                      ></span>
+                    }
+                  }
+                </div>
+                <ul class="split">
+                  @for (row of monthSplitRows(); track row.label) {
+                    <li class="split-item" [class.is-kept]="row.kept">
+                      <span class="split-label">{{ row.label }}</span>
+                      <span
+                        class="split-amount"
+                        [class.is-negative]="row.value < 0"
+                      >
+                        {{ formatAmount(row.amount) }}
+                      </span>
+                      @if (row.note) {
+                        <p class="split-detail small muted">{{ row.note }}</p>
+                      }
+                    </li>
+                  }
+                </ul>
+              </section>
+
+              <section class="card stack" aria-labelledby="profit-title">
+                <div class="stack-sm">
+                  <h2 id="profit-title">Tu ganancia real por día</h2>
+                  <p class="muted small">{{ profitChartCaption() }}</p>
+                </div>
+                <app-bar-chart
+                  [bars]="monthProfitBars()"
+                  [summary]="monthProfitSummary()"
+                />
+              </section>
+
+              <section class="card stack" aria-labelledby="cap-title">
+                <div class="row between">
+                  <h2 id="cap-title">Límite mensual</h2>
+                  <span class="muted small">Límite: {{ formatAmount(m.monthlyCap) }}</span>
+                </div>
+                <p>
+                  <span class="amount-lg">
+                    {{ m.spentThisMonth ? formatAmount(m.spentThisMonth) : '—' }}
+                  </span>
+                  <span class="muted small"> descontado este mes</span>
+                </p>
+                <div class="progress is-gold">
+                  <span [style.width.%]="capBarWidth()"></span>
+                </div>
+                <p class="hint">
+                  Nunca sale más de esto en un mes; se renueva el día 1. Lo
+                  cambias en
+                  <a href="#ajustes" (click)="$event.preventDefault(); selectTab('ajustes')">
+                    Ajustes
+                  </a>.
+                </p>
+              </section>
+
+              <section class="card stack" aria-labelledby="sales-title">
+                <h2 id="sales-title">Últimas ventas</h2>
+                @if (m.sales.length === 0) {
+                  <p class="muted small">Todavía no hay ventas.</p>
+                } @else {
+                  <ul class="list">
+                    @for (s of m.sales.slice(0, 8); track s.id) {
+                      <li>
+                        <button
+                          type="button"
+                          class="list-button"
+                          (click)="openSaleFromHistory(s)"
+                        >
+                          <span>
+                            <strong class="num">{{ formatAmount(s.amount) }}</strong>
+                            <span class="meta">
+                              · {{ formatTime(s.createdAt) }}{{ s.description ? ' · ' + s.description : '' }}
+                            </span>
+                          </span>
+                          <span [class]="saleStatusBadgeClass(s.status)">
+                            {{ saleStatusText(s.status) }}
+                          </span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+              </section>
+            </div>
+          </section>
+        }
+
+        <!-- Vender ============================================================ -->
+        @if (tab() === 'vender') {
+          <section class="view stack" aria-labelledby="register-title">
+            <section class="card stack sell-card">
+              <h1 class="h1-sm" id="register-title">Nueva venta</h1>
+
+              @if (!currentSale()) {
+                <form class="stack" (ngSubmit)="submitSale()">
+                  <label class="field">
+                    <span>Monto</span>
+                    <input
+                      #saleAmountInput
+                      name="saleAmount"
+                      class="input-xl"
+                      required
+                      inputmode="numeric"
+                      autocomplete="off"
+                      placeholder="10.000"
+                      [ngModel]="saleAmountInputVal()"
+                      (ngModelChange)="onSaleAmountInput($event)"
+                    />
+                  </label>
+                  <div class="chips" aria-label="Montos rápidos">
+                    @for (q of quickAmounts; track q) {
+                      <button
+                        type="button"
+                        class="chip-button"
+                        (click)="pickQuickAmount(q)"
+                      >
+                        {{ formatMoney(q, 'COP') }}
+                      </button>
+                    }
+                  </div>
+                  <label class="field">
+                    <span>Descripción (opcional)</span>
+                    <input
+                      name="saleDescription"
+                      maxlength="120"
+                      autocomplete="off"
+                      placeholder="Arroz, huevos y gaseosa"
+                      [(ngModel)]="saleDescription"
+                    />
+                  </label>
+                  @if (saleFormError()) {
+                    <p class="banner banner-bad" role="alert">{{ saleFormError() }}</p>
+                  }
+                  <button
+                    class="btn btn-primary btn-lg btn-block"
+                    type="submit"
+                    [disabled]="!canSell() || saleBusy()"
+                    [attr.aria-busy]="saleBusy() ? 'true' : null"
+                  >
+                    {{ saleBusy() ? 'Creando el cobro…' : 'Cobrar' }}
+                  </button>
+                  @if (!canSell()) {
+                    <p class="hint">
+                      Para cobrar, primero autoriza tu límite mensual en tu
+                      billetera.
+                    </p>
+                  }
+                </form>
+              } @else if (currentSale(); as cur) {
+                <div class="stack" aria-live="polite">
+                  <div class="row between">
+                    <div style="min-width: 0">
+                      <p class="muted small">Venta · {{ formatTime(cur.sale.createdAt) }}</p>
+                      <p class="amount-xl">{{ formatAmount(cur.sale.amount) }}</p>
+                    </div>
+                    <span [class]="saleStatusBadgeClass(cur.sale.status)">
+                      {{ saleStatusText(cur.sale.status) }}
+                    </span>
+                  </div>
+
+                  @if (cur.sale.description) {
+                    <p class="muted small">{{ cur.sale.description }}</p>
+                  }
+
+                  <app-steps-indicator
+                    [labels]="saleStages"
+                    [doneFlags]="saleStageFlags(cur.sale)"
+                    [active]="cur.sale.status !== 'failed'"
+                    ariaLabel="Progreso de la venta"
+                  />
+
+                  @if (waitingForCustomer(cur.sale)) {
+                    <div class="stack">
+                      <div class="segmented" role="tablist" aria-label="Dónde mostrar el cobro">
+                        <button
+                          type="button"
+                          role="tab"
+                          [attr.aria-selected]="showOn() === 'phone'"
+                          (click)="showOn.set('phone')"
+                        >
+                          En mi celular
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          [attr.aria-selected]="showOn() === 'here'"
+                          (click)="showOn.set('here')"
+                        >
+                          En esta pantalla
+                        </button>
+                      </div>
+
+                      @if (showOn() === 'phone') {
+                        <div class="stack">
+                          <div class="qr-box">
+                            <app-qr-code [value]="cobroUrl(cur.sale)" [size]="220" />
+                            <p class="small center">
+                              Escanéalo con <strong>tu</strong> celular: abre la
+                              pantalla de cobro para mostrársela a tu cliente.
+                            </p>
+                          </div>
+                        </div>
+                      } @else {
+                        <div class="stack">
+                          <div class="qr-box">
+                            <app-qr-code [value]="cur.payUrl" [size]="256" />
+                            <p class="small center">
+                              {{
+                                cur.sale.pending
+                                  ? 'Que tu cliente escanee de nuevo y confirme los ' + formatAmount(cur.sale.pending) + ' que faltan'
+                                  : 'Que tu cliente lo escanee y confirme ' + formatAmount(cur.sale.amount) + ' en su billetera'
+                              }}
+                            </p>
+                          </div>
+                          <div class="copy-row">
+                            <input
+                              readonly
+                              aria-label="Enlace de pago"
+                              [value]="cur.payUrl"
+                            />
+                            <button
+                              class="btn btn-secondary"
+                              type="button"
+                              (click)="copyPayUrl(cur.payUrl)"
+                            >
+                              {{ copyLabel() }}
+                            </button>
+                          </div>
+                          <p class="hint">
+                            ¿Paga con otra billetera Open Payments?
+                            <a
+                              [href]="checkoutUrl(cur.sale)"
+                              target="_blank"
+                              rel="noopener"
+                            >
+                              Ábrele el pago en MiPlante
+                            </a>.
+                          </p>
+                        </div>
+                      }
+
+                      <a
+                        class="btn btn-primary btn-block"
+                        [href]="cobroUrl(cur.sale)"
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        Abrir pantalla de cobro
+                      </a>
+                    </div>
+                  }
+
+                  @if (cur.sale.pending) {
+                    <p class="banner banner-wait" role="status">
+                      Llegaron {{ formatAmount(cur.sale.payment?.receivedAmount) }} de
+                      {{ formatAmount(cur.sale.amount) }}. Faltan
+                      {{ formatAmount(cur.sale.pending) }}: el cliente puede volver a
+                      escanear el mismo QR.
+                    </p>
+                  }
+
+                  @if (cur.sale.status === 'failed') {
+                    <p class="banner banner-bad" role="alert">
+                      El pago no se completó{{ cur.sale.error ? ': ' + cur.sale.error : '' }}.
+                      Toca "Nueva venta" para cobrar de nuevo.
+                    </p>
+                  }
+
+                  @if (cur.sale.status === 'paid') {
+                    <div class="stack-sm">
+                      <h3>Así se repartió esta venta</h3>
+                      <app-split-list
+                        [settlement]="cur.sale.settlement"
+                        [rules]="m.rules"
+                      />
+                      @if (settlementNote(cur.sale)) {
+                        <p class="hint">{{ settlementNote(cur.sale) }}</p>
+                      }
+                    </div>
+                  }
+
+                  <button
+                    class="btn btn-secondary btn-block"
+                    type="button"
+                    (click)="resetSaleForm()"
+                  >
+                    Nueva venta
+                  </button>
+                </div>
+              }
+            </section>
+          </section>
+        }
+
+        <!-- Metas ============================================================= -->
+        @if (tab() === 'metas') {
+          <section class="view stack" aria-labelledby="metas-title">
+            <div class="stack-sm">
+              <h1 class="h1-sm" id="metas-title">Tus metas</h1>
+              <p class="muted">
+                Día {{ m.month.dayOfMonth }} de {{ m.month.daysInMonth }} de {{ currentMonthName }}.
+              </p>
+            </div>
+            <div class="goals">
+              @for (card of goalCards(); track $index) {
+                <article class="card goal-card">
+                  <app-progress-ring
+                    [ratio]="card.ratio"
+                    [tone]="card.tone"
+                    [label]="card.ringLabel"
+                  />
+                  <div class="stack-sm goal-card-body">
+                    <p class="eyebrow">{{ card.eyebrow }}</p>
+                    <h2>{{ card.title }}</h2>
+                    <p class="num">{{ card.detail }}</p>
+                    @if (card.note) {
+                      <p class="small muted">{{ card.note }}</p>
+                    }
+                    @if (card.action === 'define-sales-goal') {
+                      <button
+                        type="button"
+                        class="btn btn-secondary"
+                        (click)="selectTab('ajustes')"
+                      >
+                        Definir meta
+                      </button>
+                    } @else if (card.action === 'define-savings-goal') {
+                      <button
+                        type="button"
+                        class="btn btn-secondary"
+                        (click)="selectTab('repartos'); openRulesEditor()"
+                      >
+                        Ponerle meta
+                      </button>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+            <p class="hint">
+              Las proyecciones usan tu ritmo de este mes. Cuando una obligación
+              completa su cuota, su parte de cada venta vuelve a ser ganancia
+              tuya hasta el próximo mes.
+            </p>
+          </section>
+        }
+
+        <!-- Repartos ========================================================== -->
+        @if (tab() === 'repartos') {
+          <section class="view stack" aria-labelledby="rules-title">
+            <section class="card stack">
+              <div class="row between">
+                <h1 class="h1-sm" id="rules-title">Repartos</h1>
+                @if (!editingRules()) {
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    (click)="openRulesEditor()"
+                  >
+                    Editar repartos
+                  </button>
+                }
+              </div>
+
+              @if (!editingRules()) {
+                <ul class="list">
+                  @for (group of groupedRules(); track group.name) {
+                    <li class="stack-sm">
+                      <h3 class="eyebrow">{{ group.name }}</h3>
+                      <ul class="list">
+                        @for (r of group.rules; track r.id) {
+                          <li class="list-item">
+                            <div class="row between">
+                              <strong>{{ r.label }}</strong>
+                              <span [class]="r.kind === 'debt' ? 'badge badge-wait' : 'badge badge-info'">
+                                {{ ruleKindLabel(r.kind) }}
+                              </span>
+                            </div>
+                            <p class="muted small">
+                              {{ (r.shareBps / 100).toLocaleString('es-CO', { maximumFractionDigits: 2 }) }}% de cada venta
+                            </p>
+                            <p class="mono muted">{{ walletName(r.destination) }}</p>
+
+                            @if (r.kind === 'debt') {
+                              <div class="progress is-gold">
+                                <span [style.width.%]="debtProgress(r)"></span>
+                              </div>
+                              @if (toNumber(r.monthlyQuota) > 0 && toNumber(r.paidThisMonth) >= toNumber(r.monthlyQuota)) {
+                                <span class="badge badge-ok">
+                                  Cuota del mes completa: el resto es ganancia
+                                </span>
+                              } @else {
+                                <p class="small">
+                                  Este mes: apartado {{ formatAmount(r.paidThisMonth) }} de {{ formatAmount(r.monthlyQuota) }}
+                                </p>
+                              }
+                              <div class="row between">
+                                <p class="small">
+                                  <strong>Por enviar: {{ formatAmount(r.reserved) }}</strong>
+                                  <span class="muted"> · {{ dueText(r) }}</span>
+                                </p>
+                                <button
+                                  type="button"
+                                  class="btn btn-secondary"
+                                  [disabled]="toNumber(r.reserved) <= 0 || payoutBusy()"
+                                  (click)="runManualPayout(r.id)"
+                                >
+                                  Pagar ahora
+                                </button>
+                              </div>
+                              @if (r.outstanding) {
+                                @if (toNumber(r.outstanding) <= 0) {
+                                  <span class="badge badge-ok">¡Deuda pagada!</span>
+                                } @else {
+                                  <p class="muted small">
+                                    Deuda total: faltan {{ formatAmount(r.outstanding) }} (pagado {{ formatAmount(r.repaid) }})
+                                  </p>
+                                }
+                              }
+                            } @else {
+                              @if (toNumber(r.savingsGoal) > 0) {
+                                <div class="progress">
+                                  <span [style.width.%]="savingsProgress(r)"></span>
+                                </div>
+                              }
+                              <p class="small">
+                                Este mes: {{ formatAmount(r.paidThisMonth) }} · ahorrado en total: {{ formatAmount(r.repaid) }}{{
+                                  toNumber(r.savingsGoal) > 0 ? ' de ' + formatAmount(r.savingsGoal) : ''
+                                }}
+                              </p>
+                            }
+                          </li>
+                        }
+                      </ul>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <form class="stack" (ngSubmit)="saveRules()" (input)="rulesError.set('')" novalidate>
+                  <p class="muted small">
+                    Cambia los porcentajes, las cuotas del mes, las metas de
+                    ahorro o las billeteras, o agrega otras. Aplica desde la
+                    próxima venta y no necesitas volver a autorizar: el límite
+                    mensual sigue igual.
+                  </p>
+                  <div class="stack">
+                    @for (draft of ruleDrafts(); track draft.key) {
+                      <fieldset class="rule-row">
+                        <legend class="sr-only">Billetera del reparto</legend>
+                        <label class="field">
+                          <span>Nombre</span>
+                          <input
+                            [name]="'r-label-' + draft.key"
+                            required
+                            maxlength="60"
+                            placeholder="Microcrédito"
+                            [ngModel]="draft.label"
+                            (ngModelChange)="updateRuleDraft(draft.key, { label: $event })"
+                          />
+                        </label>
+                        <label class="field">
+                          <span>Categoría</span>
+                          <input
+                            [name]="'r-cat-' + draft.key"
+                            required
+                            maxlength="40"
+                            list="category-options"
+                            placeholder="Proveedores"
+                            [ngModel]="draft.category"
+                            (ngModelChange)="updateRuleDraft(draft.key, { category: $event })"
+                          />
+                        </label>
+                        <label class="field">
+                          <span>Tipo</span>
+                          <select
+                            [name]="'r-kind-' + draft.key"
+                            [ngModel]="draft.kind"
+                            (ngModelChange)="updateRuleDraft(draft.key, { kind: $event })"
+                          >
+                            <option value="debt">Obligación mensual</option>
+                            <option value="savings">Ahorro</option>
+                          </select>
+                        </label>
+                        <label class="field">
+                          <span>% de cada venta</span>
+                          <input
+                            [name]="'r-share-' + draft.key"
+                            type="number"
+                            required
+                            min="0.01"
+                            max="99"
+                            step="0.01"
+                            inputmode="decimal"
+                            [ngModel]="draft.sharePercent"
+                            (ngModelChange)="updateRuleDraft(draft.key, { sharePercent: $event })"
+                          />
+                        </label>
+                        @if (draft.kind === 'debt') {
+                          <label class="field">
+                            <span>Cuota del mes</span>
+                            <input
+                              [name]="'r-quota-' + draft.key"
+                              inputmode="decimal"
+                              autocomplete="off"
+                              placeholder="200.000"
+                              [ngModel]="draft.monthlyQuota"
+                              (ngModelChange)="updateRuleDraft(draft.key, { monthlyQuota: $event })"
+                            />
+                          </label>
+                          <label class="field">
+                            <span>Deuda total (opcional)</span>
+                            <input
+                              [name]="'r-out-' + draft.key"
+                              inputmode="decimal"
+                              autocomplete="off"
+                              placeholder="300.000"
+                              [ngModel]="draft.outstanding"
+                              (ngModelChange)="updateRuleDraft(draft.key, { outstanding: $event })"
+                            />
+                          </label>
+                          <label class="field">
+                            <span>Día de pago (1–28)</span>
+                            <input
+                              [name]="'r-due-' + draft.key"
+                              type="number"
+                              min="1"
+                              max="28"
+                              step="1"
+                              inputmode="numeric"
+                              placeholder="25"
+                              [ngModel]="draft.dueDay"
+                              (ngModelChange)="updateRuleDraft(draft.key, { dueDay: $event })"
+                            />
+                          </label>
+                        } @else {
+                          <label class="field savings-only">
+                            <span>Meta de ahorro (opcional)</span>
+                            <input
+                              [name]="'r-goal-' + draft.key"
+                              inputmode="decimal"
+                              autocomplete="off"
+                              placeholder="1.000.000"
+                              [ngModel]="draft.savingsGoal"
+                              (ngModelChange)="updateRuleDraft(draft.key, { savingsGoal: $event })"
+                            />
+                          </label>
+                        }
+                        <label class="field destination-field">
+                          <span>Billetera de destino</span>
+                          <input
+                            [name]="'r-dest-' + draft.key"
+                            required
+                            maxlength="300"
+                            autocomplete="off"
+                            spellcheck="false"
+                            autocapitalize="off"
+                            placeholder="Ej: distribuidora-central"
+                            [ngModel]="draft.destination"
+                            (ngModelChange)="updateRuleDraft(draft.key, { destination: $event })"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          class="btn btn-danger remove-rule"
+                          [disabled]="ruleDrafts().length <= 1"
+                          (click)="removeRuleDraft(draft.key)"
+                        >
+                          Quitar
+                        </button>
+                      </fieldset>
+                    }
+                  </div>
+
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    [disabled]="ruleDrafts().length >= maxRules"
+                    (click)="addRuleDraft()"
+                  >
+                    + Agregar billetera
+                  </button>
+
+                  <div class="stack-sm" aria-live="polite">
+                    <h3>Así se reparte una venta</h3>
+                    <p class="small">{{ rulesPreview().sentence }}</p>
+                    <div class="stacked-bar" aria-hidden="true">
+                      <span
+                        class="seg-kept"
+                        [style.width.%]="rulesPreview().keptPercent"
+                      ></span>
+                      @for (item of rulesPreview().items; track $index) {
+                        <span
+                          [class]="item.kind === 'debt' ? 'seg-debt' : 'seg-savings'"
+                          [style.width.%]="item.widthPercent"
+                        ></span>
+                      }
+                    </div>
+                    <ul class="split">
+                      <li class="split-item is-kept">
+                        <span class="split-label">Tú te quedas</span>
+                        <span class="split-amount">{{ rulesPreview().keptFormatted }}</span>
+                      </li>
+                      @for (item of rulesPreview().items; track $index) {
+                        <li class="split-item">
+                          <span class="split-label">{{ item.label }}</span>
+                          <span class="split-amount">{{ item.formatted }}</span>
+                        </li>
+                      }
+                    </ul>
+                    @if (rulesPreview().warning) {
+                      <p class="banner banner-bad">{{ rulesPreview().warning }}</p>
+                    }
+                    @if (rulesPreview().capWarning) {
+                      <p class="hint">{{ rulesPreview().capWarning }}</p>
+                    }
+                  </div>
+
+                  @if (rulesError()) {
+                    <p class="banner banner-bad" role="alert">{{ rulesError() }}</p>
+                  }
+                  <div class="row">
+                    <button
+                      type="submit"
+                      class="btn btn-primary"
+                      [disabled]="rulesSaving()"
+                    >
+                      {{ rulesSaving() ? 'Guardando…' : 'Guardar repartos' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      (click)="editingRules.set(false)"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              }
+
+              @if (rulesSavedMsg()) {
+                <p class="banner banner-ok" role="status">{{ rulesSavedMsg() }}</p>
+              }
+            </section>
+
+            <section class="card stack" aria-labelledby="payouts-title">
+              <div class="stack-sm">
+                <h2 id="payouts-title">Pagos a proveedores y créditos</h2>
+                <p class="muted small">
+                  De cada venta se aparta su parte en tu billetera. El día de pago
+                  se le envía la cuota del mes en un solo pago: lo apartado y, si
+                  no alcanza, lo que falte de tus ganancias. "Pagar ahora" envía
+                  solo lo apartado.
+                </p>
+              </div>
+              @if (payoutMessage(); as pm) {
+                <p [class]="'banner banner-' + pm.tone" role="status">{{ pm.text }}</p>
+              }
+              @if (!m.payouts?.length) {
+                <p class="muted small">Todavía no hay pagos.</p>
+              } @else {
+                <ul class="list">
+                  @for (p of m.payouts; track p.id) {
+                    <li class="list-item">
+                      <div class="row between">
+                        <strong>{{ p.label }}</strong>
+                        <span [class]="payoutStatusBadgeClass(p.status)">
+                          {{ payoutStatusText(p.status) }}
+                        </span>
+                      </div>
+                      <p class="small">
+                        {{ formatAmount(p.amount) }} ·
+                        {{ p.reason === 'manual' ? 'pagado antes de su fecha' : 'pago de su fecha' }} ·
+                        {{ formatShortDate(p.createdAt) }} {{ formatTime(p.createdAt) }}
+                      </p>
+                      @if (p.topUp) {
+                        <p class="muted small">
+                          {{ formatAmount(p.topUp) }} salieron de tus ganancias para completar la cuota.
+                        </p>
+                      }
+                      @if (p.error) {
+                        <p class="error-text small">{{ p.error }}</p>
+                      }
+                      @if (p.status === 'failed' && !p.resolution) {
+                        <button
+                          type="button"
+                          class="btn btn-secondary"
+                          (click)="selectTab('avisos')"
+                        >
+                          Revisar en Avisos
+                        </button>
+                      }
+                      @if (p.resolution === 'marked-paid') {
+                        <p class="muted small">Lo marcaste como pagado.</p>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </section>
+          </section>
+        }
+
+        <!-- Avisos ============================================================ -->
+        @if (tab() === 'avisos') {
+          <section class="view stack" aria-labelledby="avisos-title">
+            <div class="stack-sm">
+              <h1 class="h1-sm" id="avisos-title">Avisos</h1>
+              <p class="muted">
+                Lo que tienes que revisar, los pagos que vienen y los que ya
+                salieron. Un pago que falla no se vuelve a intentar solo: tú
+                decides, para no pagar dos veces.
+              </p>
+            </div>
+            @if (noticeMessage(); as nm) {
+              <p [class]="'banner banner-' + nm.tone" role="status">{{ nm.text }}</p>
+            }
+            @if (!m.notifications?.length) {
+              <p class="muted small">No tienes avisos por ahora.</p>
+            } @else {
+              <ul class="list notices">
+                @for (n of m.notifications; track n.id) {
+                  <li [class]="'list-item notice is-' + n.tone">
+                    <div class="row between">
+                      <strong>{{ n.title }}</strong>
+                      <span [class]="'badge ' + noticeBadgeClass(n.tone)">
+                        {{ noticeKindLabel(n.kind) }}
+                      </span>
+                    </div>
+                    <p class="small">{{ n.text }}</p>
+                    <p class="muted small">{{ formatDateTime(n.createdAt) }}</p>
+
+                    @if (n.actions?.length && n.payoutId) {
+                      <div class="row notice-actions">
+                        @if (confirmingNotice()[n.id] === 'mark-paid') {
+                          <p class="small">
+                            ¿Viste el dinero en la billetera de quien recibe? No se enviará de nuevo.
+                          </p>
+                          <button
+                            type="button"
+                            class="btn btn-primary"
+                            [disabled]="noticeBusy()"
+                            (click)="resolveNoticePayout(n.id, n.payoutId!, 'mark-paid', 'Listo: lo marcamos como pagado y no se envía nada más.')"
+                          >
+                            Sí, el dinero llegó
+                          </button>
+                          <button
+                            type="button"
+                            class="btn btn-ghost"
+                            (click)="setNoticeConfirm(n.id, null)"
+                          >
+                            Cancelar
+                          </button>
+                        } @else if (confirmingNotice()[n.id] === 'use-emergency') {
+                          <p class="small">
+                            Es tu último recurso: pasaremos el monto de este pago de tu fondo de emergencia a tu tienda, y de ahí se le paga completo.
+                          </p>
+                          <button
+                            type="button"
+                            class="btn btn-primary"
+                            [disabled]="noticeBusy()"
+                            (click)="resolveNoticePayout(n.id, n.payoutId!, 'use-emergency', 'Listo: estamos pasando la plata de tu fondo de emergencia a tu tienda. Cuando llegue, enviamos el pago completo.')"
+                          >
+                            Sí, usar mi fondo
+                          </button>
+                          <button
+                            type="button"
+                            class="btn btn-ghost"
+                            (click)="setNoticeConfirm(n.id, null)"
+                          >
+                            Cancelar
+                          </button>
+                        } @else {
+                          <button
+                            type="button"
+                            class="btn btn-primary"
+                            [disabled]="noticeBusy()"
+                            (click)="resolveNoticePayout(n.id, n.payoutId!, 'retry', 'Listo: enviamos el pago otra vez.')"
+                          >
+                            Reintentar el pago
+                          </button>
+                          <button
+                            type="button"
+                            class="btn btn-secondary"
+                            [disabled]="noticeBusy()"
+                            (click)="setNoticeConfirm(n.id, 'mark-paid')"
+                          >
+                            Ya llegó, marcar como pagado
+                          </button>
+                          @if (n.actions?.includes('use-emergency')) {
+                            <button
+                              type="button"
+                              class="btn btn-ghost"
+                              [disabled]="noticeBusy()"
+                              (click)="setNoticeConfirm(n.id, 'use-emergency')"
+                            >
+                              Usar mi fondo de emergencia
+                            </button>
+                          }
+                        }
+                      </div>
+                    }
+
+                    @if (n.kind === 'consent' || n.kind === 'cap-pending') {
+                      <button
+                        type="button"
+                        class="btn btn-secondary"
+                        (click)="selectTab('ajustes')"
+                      >
+                        Ir a Ajustes
+                      </button>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+        }
+
+        <!-- Ajustes =========================================================== -->
+        @if (tab() === 'ajustes') {
+          <section class="view stack" aria-labelledby="ajustes-title">
+            <h1 class="h1-sm" id="ajustes-title">Ajustes</h1>
+            <div class="panel-grid">
+              <form class="card stack" (ngSubmit)="saveShopName()" novalidate>
+                <h2>Tu tienda</h2>
+                <label class="field">
+                  <span>Nombre del negocio</span>
+                  <input
+                    name="shopName"
+                    maxlength="80"
+                    autocomplete="organization"
+                    [(ngModel)]="shopNameInput"
+                  />
+                </label>
+                <div class="field">
+                  <span>Billetera del negocio</span>
+                  <p class="mono">{{ walletName(m.wallet) }}</p>
+                </div>
+                @if (shopMessage(); as sm) {
+                  <p [class]="'banner banner-' + sm.tone" role="status">{{ sm.text }}</p>
+                }
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  [disabled]="settingsBusy()"
+                >
+                  Guardar nombre
+                </button>
+              </form>
+
+              <form class="card stack" (ngSubmit)="saveSalesGoal()" novalidate>
+                <h2>Meta de ventas del mes</h2>
+                <label class="field">
+                  <span>¿Cuánto quieres vender al mes?</span>
+                  <input
+                    name="salesGoal"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="Ej: 3.000.000"
+                    [ngModel]="salesGoalInput"
+                    (ngModelChange)="onSalesGoalInput($event)"
+                  />
+                  <small class="hint">
+                    Opcional. Solo es una meta: no cambia cómo se reparte.
+                  </small>
+                </label>
+                @if (goalMessage(); as gm) {
+                  <p [class]="'banner banner-' + gm.tone" role="status">{{ gm.text }}</p>
+                }
+                <div class="row">
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    [disabled]="settingsBusy()"
+                  >
+                    Guardar meta
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    [disabled]="settingsBusy()"
+                    (click)="clearSalesGoal()"
+                  >
+                    Quitar meta
+                  </button>
+                </div>
+              </form>
+
+              <form class="card stack" (ngSubmit)="saveNewCap()" novalidate>
+                <h2>Límite mensual</h2>
+                <p>
+                  Hoy: <strong>{{ formatAmount(m.monthlyCap) }}</strong>
+                  @if (totalQuotasAmount() > 0) {
+                    <span class="muted small">
+                      · tus cuotas suman {{ money(totalQuotasAmount()) }}
+                    </span>
+                  }
+                </p>
+                @if (m.pendingCap) {
+                  <p class="banner banner-wait" role="status">
+                    Pediste cambiarlo a {{ formatAmount(m.pendingCap) }}: falta que lo
+                    apruebes en tu billetera. Mientras tanto sigue el límite actual.
+                  </p>
+                }
+                <label class="field">
+                  <span>Nuevo límite mensual</span>
+                  <input
+                    name="capNew"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    [ngModel]="capNewInput"
+                    (ngModelChange)="onCapNewInput($event)"
+                  />
+                </label>
+                <p class="hint">
+                  Cambiarlo pide una autorización nueva en tu billetera. Tu
+                  límite actual sigue funcionando hasta que la apruebes.
+                </p>
+                @if (capMessage(); as cm) {
+                  <p [class]="'banner banner-' + cm.tone" role="status">{{ cm.text }}</p>
+                }
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  [disabled]="settingsBusy()"
+                >
+                  Cambiar en mi billetera →
+                </button>
+              </form>
+
+              <section class="card stack" aria-labelledby="emergency-title">
+                <h2 id="emergency-title">Fondo de emergencia como último recurso</h2>
+                <p class="muted small">
+                  Si lo apartado no alcanza la cuota de un acreedor, lo que falta
+                  sale de tus ganancias. Si aun así el pago falla porque en tu
+                  tienda no hay plata, puedes elegir sacarlo de tu fondo de
+                  emergencia: pasa primero a tu tienda y de ahí se le paga
+                  completo. Nunca se toca sin que tú lo elijas en el aviso.
+                </p>
+                <p
+                  [class]="'banner banner-' + emergencyBanner().tone"
+                  role="status"
+                >
+                  {{ emergencyBanner().text }}
+                </p>
+                @if (savingsRules().length >= 2 && m.emergency?.status !== 'active') {
+                  <label class="field">
+                    <span>¿Cuál de tus ahorros?</span>
+                    <select name="emergencyPick" [(ngModel)]="emergencyPickId">
+                      @for (sr of savingsRules(); track sr.id) {
+                        <option [value]="sr.id">
+                          {{ sr.label }} · {{ walletName(sr.destination) }}
+                        </option>
+                      }
+                    </select>
+                  </label>
+                }
+                @if (emergencyMessage(); as em) {
+                  <p [class]="'banner banner-' + em.tone" role="status">{{ em.text }}</p>
+                }
+                @if (savingsRules().length > 0 && m.emergency?.status !== 'active') {
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    [disabled]="settingsBusy()"
+                    (click)="authorizeEmergency()"
+                  >
+                    {{
+                      m.emergency?.status === 'awaiting-consent'
+                        ? 'Abrir de nuevo mi billetera →'
+                        : 'Autorizar mi fondo de emergencia →'
+                    }}
+                  </button>
+                }
+              </section>
+
+              <section class="card stack" aria-labelledby="simulate-title">
+                <h2 id="simulate-title">Simular fecha de pago</h2>
+                <p class="muted small">
+                  Para la demo: envía ya a cada proveedor y crédito su cuota del
+                  mes, como si hoy fuera su día de pago: lo apartado y, si no
+                  alcanza, lo que falte de tus ganancias. Ese mes ya no se vuelve
+                  a pagar en su fecha.
+                </p>
+                @if (simulateMessage(); as sim) {
+                  <p [class]="'banner banner-' + sim.tone" role="status">{{ sim.text }}</p>
+                }
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  [disabled]="payoutBusy()"
+                  (click)="simulateDueDate()"
+                >
+                  Simular que llegó la fecha de pago
+                </button>
+              </section>
+
+              <section class="card stack">
+                <h2>Tu cuenta</h2>
+                <p>
+                  <strong>{{ account()?.name }}</strong><br />
+                  <span class="muted">{{ account()?.email }}</span>
+                </p>
+                <button type="button" class="btn btn-secondary" (click)="logout()">
+                  Cerrar sesión
+                </button>
+              </section>
+            </div>
+          </section>
+        }
+      </div>
+    }
+  </main>
+
+  <app-site-footer [panelFooter]="true" />
+</div>
+
+<datalist id="category-options">
+  <option value="Proveedores"></option>
+  <option value="Microcréditos"></option>
+  <option value="Ahorro"></option>
+</datalist>

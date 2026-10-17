@@ -1,12 +1,13 @@
 import { APP_LINKS } from '../../../../core/app-links';
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { MOTION, animate, gsap } from '../../../../core/motion';
 import { Doodle } from '../../../../shared/brand/doodle';
 import { Logo } from '../../../../shared/brand/logo';
 
 @Component({
   selector: 'app-closing',
-  imports: [Doodle, Logo],
+  imports: [Doodle, Logo, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="closing" aria-labelledby="closing-title">
@@ -18,8 +19,8 @@ import { Logo } from '../../../../shared/brand/logo';
           con el celular que ya tienes.
         </p>
         <div class="actions">
-          <a class="button" [href]="app.register">Registra tu negocio</a>
-          <a class="button button-ghost" [href]="app.till">Abrir mi caja</a>
+          <a class="button" [routerLink]="app.register">Registra tu negocio</a>
+          <a class="button button-ghost" [routerLink]="app.till">Abrir mi caja</a>
         </div>
         <a class="again" href="#caja">Volver a probar la caja</a>
       </div>
