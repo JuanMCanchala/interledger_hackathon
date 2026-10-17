@@ -4,7 +4,7 @@
 
 Split every sale a micro-merchant receives into the merchant's own profit and a set of obligations
 (supplier credit, microcredit, savings), in real time and in proportion to the sale. All money moves
-through Open Payments, and is capped by a daily limit the merchant approved once in their own wallet.
+through Open Payments, and is capped by a monthly limit the merchant approved once in their own wallet.
 
 Product context: [`product/PRODUCT_BRIEF.md`](product/PRODUCT_BRIEF.md). Decisions:
 [`adr/`](adr/README.md).
@@ -15,8 +15,8 @@ Product context: [`product/PRODUCT_BRIEF.md`](product/PRODUCT_BRIEF.md). Decisio
 
 | ID  | Requirement                                                                                                                                  |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1  | A merchant registers their wallet, a daily cap and 1–5 rules: debt rules (share + outstanding balance) or savings rules (share).             |
-| F2  | The merchant approves a single Open Payments grant: outgoing payments from their wallet up to the daily cap per day.                         |
+| F1  | A shopkeeper signs up, then registers their wallet, a monthly cap and 1–10 rules by category: obligations (share + monthly quota) or savings (share). |
+| F2  | The merchant approves a single Open Payments grant: outgoing payments from their wallet up to the monthly cap per calendar month.            |
 | F3  | The merchant creates a sale for an amount and gets a link and QR code for the customer.                                                      |
 | F4  | The customer pays the sale from their own wallet, approving it in their wallet (payment request → authorization → execution → completion).   |
 | F5  | When the payment completes, the sale is split by the rules: one outgoing payment per rule from the merchant's wallet. Debt balances go down. |
@@ -28,7 +28,7 @@ Product context: [`product/PRODUCT_BRIEF.md`](product/PRODUCT_BRIEF.md). Decisio
 | ID  | Requirement                                                                                                                                      |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | N1  | **Consent.** No money leaves a wallet without a grant its owner approved in their wallet.                                                        |
-| N2  | **Safety cap.** The merchant can never be debited more than the daily cap, even if our code is wrong.                                            |
+| N2  | **Safety cap.** The merchant can never be debited more than the monthly cap, even if our code is wrong.                                          |
 | N3  | **Exact money.** Integer arithmetic only; the parts of a split add up exactly to the sale.                                                       |
 | N4  | **Exactly-once settlement.** A sale is split once, even with concurrent polls, reloads or restarts.                                              |
 | N5  | **Security.** Tokens and nonces never leave the server; callbacks are verified; only allow-listed wallet hosts are called; inputs are validated. |
@@ -69,7 +69,7 @@ flowchart LR
   merchant -- "onboards, creates sales" --> frontend
   backend -- "GNAP grants, quotes, payments<br/>(HTTP Message Signatures)" --> Wallets
   customer -. "approves payment" .-> cw
-  merchant -. "approves daily cap" .-> mw
+  merchant -. "approves monthly cap" .-> mw
   cw == "ILP (COP / USD → COP)" ==> mw
   mw == "ILP Auto-Split" ==> dw
 ```
@@ -97,7 +97,7 @@ flowchart TB
     controllers["Express routes + zod validation<br/>merchants · sales · payments · mandates · callbacks"]
     merchants["MerchantService · SalesService · DashboardService<br/>settlement sweeper"]
     domain["Domain (pure TypeScript)<br/>planAllocations (BigInt) · Bogotá calendar"]
-    flows["PaymentFlows<br/>one-off payments · daily-cap mandates · split charges"]
+    flows["PaymentFlows<br/>one-off payments · monthly-cap mandates · split charges"]
     ops["OpenPaymentsOperations<br/>wallet discovery · grants · quotes · incoming/outgoing · GNAP hash"]
     prisma["PrismaStore (Store port)<br/>claimSettlement · transitionSale · recordRepayment"]
   end
@@ -139,7 +139,7 @@ flowchart TB
 
 ```mermaid
 erDiagram
-  MERCHANT ||--|| MANDATE : "daily-cap grant"
+  MERCHANT ||--|| MANDATE : "monthly-cap grant"
   MERCHANT ||--o{ RULE : has
   MERCHANT ||--o{ SALE : sells
   SALE ||--o| PAYMENT : "customer payment"
@@ -150,7 +150,7 @@ erDiagram
 
 | Record                            | Key fields                                                                                                                                      |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Merchant**                      | `id`, `name`, `wallet`, `asset` (code + scale), `dailyCap`, `rules[]`, `mandateId`                                                              |
+| **Merchant**                      | `id`, `name`, `wallet`, `asset` (code + scale), `monthlyCap`, `rules[]`, `mandateId`, `ownerId`                                                              |
 | **Rule**                          | `id`, `label`, `kind` (`debt` \| `savings`), `destination` wallet, `shareBps`, `outstanding` (debt), `repaid`                                   |
 | **Sale**                          | `id`, `merchantId`, `amount`, `status` (`open` → `awaiting-consent` → `processing` → `paid` \| `failed`), `paymentId`, `customer`, `settlement` |
 | **Settlement**                    | `status` (`pending` → `running` → `done` \| `skipped`), `items[]` (rule, amount, status, `capped`, `paymentId`), `kept`                         |
@@ -159,16 +159,16 @@ erDiagram
 
 ## 6. Key flows
 
-### 6.1 Onboarding: one consent with a daily cap
+### 6.1 Onboarding: one consent with a monthly cap
 
 ```mermaid
 sequenceDiagram
   actor M as Merchant
   participant A as MiPlante API
   participant W as Merchant wallet (auth server)
-  M->>A: POST /api/merchants {wallet, dailyCap, rules}
+  M->>A: POST /api/merchants {wallet, monthlyCap, rules} (Bearer session)
   A->>W: GET wallet address (asset, authServer)
-  A->>W: grant request: outgoing-payment, limits {debitAmount: dailyCap, interval: R/now/P1D}, interact redirect + finish
+  A->>W: grant request: outgoing-payment, limits {debitAmount: monthlyCap, interval: R/1st of month/P1M}, interact redirect + finish
   W-->>A: pending grant (redirect URL, continue token, finish nonce)
   A-->>M: redirectUrl
   M->>W: approves in the wallet
@@ -220,13 +220,13 @@ sequenceDiagram
   participant MW as Merchant wallet
   participant DW as Destination wallets
   S->>S: sale paid and settlement pending, so mark it running (written first)
-  S->>F: spent amount of the daily grant in the current interval
-  S->>D: planAllocations(sale, rules, remaining cap)
-  D-->>S: allocations (floor rounding, debt ≤ outstanding, cap respected)
+  S->>F: spent amount of the monthly grant in the current interval
+  S->>D: planAllocations(sale, rules, remaining cap, paid this month)
+  D-->>S: allocations (floor rounding, debt ≤ quota left and outstanding, cap respected)
   loop each allocation > 0, in rule order
     S->>F: chargeMandate(rule.destination, amount, send)
     F->>DW: incoming payment (open amount)
-    F->>MW: quote (debitAmount) + outgoing payment with the merchant's daily-cap token
+    F->>MW: quote (debitAmount) + outgoing payment with the merchant's monthly-cap token
     S->>S: add amount to rule.repaid, subtract it from the debt outstanding
   end
   S->>S: settlement done, kept = sale − Σ allocations
@@ -240,7 +240,7 @@ sequenceDiagram
 | Payment request      | `incoming-payment` grant (create, read) + incoming payment                          | non-interactive                     | `operations.createIncomingPayment`       |
 | Price it             | `quote` grant + quote                                                               | non-interactive                     | `operations.createQuote`                 |
 | Customer consent     | `outgoing-payment` grant, `limits.debitAmount` = quote                              | **interactive** (redirect + finish) | `flows.startPayment` / `completePayment` |
-| Merchant's daily cap | `outgoing-payment` grant, `limits.debitAmount` = cap, `limits.interval` = `R/…/P1D` | **interactive**, once               | `flows.startMandate` / `completeMandate` |
+| Merchant's monthly cap | `outgoing-payment` grant, `limits.debitAmount` = cap, `limits.interval` = `R/…/P1M` | **interactive**, once               | `flows.startMandate` / `completeMandate` |
 | Execute              | outgoing payment (`quoteId`)                                                        | uses the grant token                | `operations.createOutgoingPayment`       |
 | Track                | incoming payment `completed` / `receivedAmount`, outgoing payment `failed`          | —                                   | `flows.refreshPayment`                   |
 | Cap spent            | `GET /outgoing-payment-grant` (spent amounts in the current interval)               | —                                   | `operations.getGrantSpentAmounts`        |
@@ -287,7 +287,7 @@ the merchant keeps 8,000.00.
 | Forged consent callback                | GNAP interaction hash verified with a constant-time comparison; one-shot interactions                                          |
 | SSRF through user-supplied wallet URLs | Only hosts in `OP_ALLOWED_WALLET_HOSTS` are called (default `ilp.interledger-test.dev`); `https` only                          |
 | Token leakage                          | Tokens, nonces and continuation data are stripped from every API response and stay in PostgreSQL, which is never exposed publicly |
-| Over-collection                        | Wallet-enforced daily cap (ADR 0004), debt ≤ outstanding, total shares ≤ 50%                                                   |
+| Over-collection                        | Wallet-enforced monthly cap (ADR 0004, 0013), debt ≤ monthly quota, total shares ≤ 50%                                                   |
 | Malicious input                        | zod validation on every body and query; JSON limited to 20 kB; amounts validated against the asset scale                       |
 | Script injection in the UI             | Server data rendered with `textContent` only                                                                                   |
 | Secrets in a public repo               | `private.key`, `*.pem`, `.env*` git-ignored; the key can also come from `OP_PRIVATE_KEY`                                       |
@@ -299,7 +299,7 @@ the merchant keeps 8,000.00.
 | Customer rejects in the wallet | Payment `rejected`, sale `failed`; the customer can try again                                        |
 | Quote expired during consent   | Quote again; fail with 409 if the new cost exceeds the approved amount                               |
 | Access token expired           | Rotate before expiry and once more on 401                                                            |
-| Daily cap reached              | Allocations reduced to the remaining cap; the rest is not collected that day (`capped`)              |
+| Monthly cap reached            | Allocations reduced to the remaining cap; the rest is not collected that month (`capped`)            |
 | Cap spent amount unavailable   | Allocate without pre-capping; the wallet still rejects excess debits, so the item is marked `failed` |
 | Merchant revoked the grant     | Settlement `skipped` with a reason; sales still reach the merchant                                   |
 | Destination wallet missing     | That item `failed`; other items continue                                                             |

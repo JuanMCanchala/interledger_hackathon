@@ -28,9 +28,11 @@ Details and sources: [`docs/product/PROBLEM.md`](docs/product/PROBLEM.md).
 
 ## How it works
 
-1. **Set up once.** The merchant lists their obligations, for example a microcredit repaid with 15% of
-   each sale until 300,000 COP are covered, and an emergency fund that gets 5%. They also set a daily
-   cap and approve **one Open Payments grant** in their own wallet.
+1. **Set up once.** The merchant creates an account and sets up the shop in three steps. They list
+   their obligations by category, for example a supplier paid with 10% of each sale up to 200,000 COP
+   a month and a microcredit with 15% up to 100,000 COP a month, plus an emergency fund that gets 5%.
+   They set a monthly cap and approve **one Open Payments grant** in their own wallet. Once a month's
+   quotas are paid, the rest of the month's sales are profit.
 2. **Sell.** The till shows a QR code. The customer scans it and pays from their own wallet, at any
    provider, approving the payment in that wallet.
 3. **Split.** As soon as the payment arrives, the sale splits itself:
@@ -40,12 +42,13 @@ Details and sources: [`docs/product/PROBLEM.md`](docs/product/PROBLEM.md).
    | 10,000 COP |      **8,000** |             1,500 |                 500 |
 
 4. **See.** The dashboard shows today's sales and split, how much of each debt is left, the savings,
-   the cap used today and a seven-day income history.
+   how much of each monthly quota is paid, the savings, the cap used this month and a seven-day
+   income history.
 
 **The four promises.** These are guaranteed by Open Payments, not just by our code:
 
 - **No sales, no collection.** Shares are taken only from real sales.
-- **Never above the cap.** The merchant's wallet enforces the daily cap.
+- **Never above the cap.** The merchant's wallet enforces the monthly cap.
 - **The merchant always keeps the majority.** Rules can take at most 50% of a sale.
 - **Revocable at any time** from the merchant's own wallet.
 
@@ -56,7 +59,7 @@ Details and sources: [`docs/product/PROBLEM.md`](docs/product/PROBLEM.md).
 | **Payment request** | The merchant creates a sale and shows its QR code; the customer enters their wallet    | `incoming-payment` grant and incoming payment on the merchant's wallet; `quote` grant and quote on the customer's                                                   |
 | **Authorization**   | The customer approves in their own wallet                                              | Interactive `outgoing-payment` grant (GNAP redirect and finish, interaction hash verified)                                                                          |
 | **Execution**       | MiPlante creates the payment; Interledger delivers it, converting currencies if needed | Outgoing payment from the quote                                                                                                                                     |
-| **Completion**      | The incoming payment completes, and the sale splits itself                             | Incoming payment polled until completed; one outgoing payment per rule under the merchant's grant (`limits.debitAmount` = daily cap, `limits.interval` = `R/…/P1D`) |
+| **Completion**      | The incoming payment completes, and the sale splits itself                             | Incoming payment polled until completed; one outgoing payment per rule under the merchant's grant (`limits.debitAmount` = monthly cap, `limits.interval` = `R/<1st of the month>/P1M`) |
 
 Integration details: [`docs/OPEN_PAYMENTS.md`](docs/OPEN_PAYMENTS.md).
 
@@ -150,8 +153,8 @@ from the repository root, and the backend applies the migrations when it starts.
 
 Then open:
 
-- `/onboard` to register a merchant (or `npm run demo:merchant` for the demo shop with the
-  team's wallets);
+- `/register` to create an account and set up a shop, or `/login` to open its till (or
+  `npm run demo:merchant` for the demo shop with the team's wallets);
 - `/merchant?id=…` for the till, where the shop can also change its splits;
 - `/pay?sale=…` for the customer, from the QR code;
 - `/sandbox` for the raw Open Payments flows.

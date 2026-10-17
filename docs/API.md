@@ -9,8 +9,8 @@ JSON over HTTP, served under `/api`. Amounts in requests are decimal strings in 
 
 Wallet addresses accept the payment pointer form (`$ilp.interledger-test.dev/rosa`) or `https://`.
 
-Errors have this shape. Status codes: 400 invalid input, 404 unknown resource, 409 invalid state,
-422 a charge failed, 502 the wallet rejected a request.
+Errors have this shape. Status codes: 400 invalid input, 401 no valid session, 404 unknown resource,
+409 invalid state, 422 a charge failed, 502 the wallet rejected a request.
 
 ```json
 {
@@ -19,27 +19,69 @@ Errors have this shape. Status codes: 400 invalid input, 404 unknown resource, 4
 }
 ```
 
+## Accounts
+
+Shopkeepers sign up with an email and a password. The password is stored only as a salted scrypt
+hash. Signing up or in returns a random session token valid for 30 days; the shopkeeper's routes
+need it as `Authorization: Bearer <token>`. The customer's routes (`/api/sales/:id`, its `pay` and
+`callback`) need no session.
+
+### `POST /api/auth/register`
+
+`{ "name": "Rosa", "email": "rosa@example.com", "password": "at least 8 characters" }` →
+`201 { "token": "…", "user": { "id", "name", "email" } }`. The email is stored in lowercase, and a
+second account with it answers `409`.
+
+### `POST /api/auth/login`
+
+`{ "email", "password" }` → `200 { "token", "user" }`. A wrong email or password answers `401` with
+the same message for both.
+
+### `POST /api/auth/logout`
+
+Ends the session in the `Authorization` header. `204`.
+
+### `GET /api/auth/me`
+
+`200 { "user": { "id", "name", "email" }, "merchant": Merchant | null }`. `merchant` is the shop
+the account registered, or `null` before it sets one up: the web app uses it to send the
+shopkeeper to their till or to the setup stepper.
+
 ## MiPlante
+
+Every `/api/merchants` route needs a session. A shop answers only to the account that registered
+it: for any other account it does not exist (`404`).
 
 ### `POST /api/merchants`
 
-Registers a merchant and starts the single consent MiPlante needs.
+Registers the signed-in account's shop and starts the single consent MiPlante needs.
 
 ```json
 {
   "name": "Tienda Doña Rosa",
   "wallet": "$ilp.interledger-test.dev/tienda-rosa",
-  "dailyCap": "30000",
+  "monthlyCap": "500000",
   "rules": [
     {
+      "label": "Distribuidora",
+      "category": "Proveedores",
+      "kind": "debt",
+      "destination": "$ilp.interledger-test.dev/proveedor-billeticos",
+      "sharePercent": 10,
+      "monthlyQuota": "200000"
+    },
+    {
       "label": "Microcrédito",
+      "category": "Microcréditos",
       "kind": "debt",
       "destination": "$ilp.interledger-test.dev/cooperativa",
       "sharePercent": 15,
+      "monthlyQuota": "100000",
       "outstanding": "300000"
     },
     {
       "label": "Fondo de emergencia",
+      "category": "Ahorro",
       "kind": "savings",
       "destination": "$ilp.interledger-test.dev/ahorro-rosa",
       "sharePercent": 5
@@ -48,14 +90,20 @@ Registers a merchant and starts the single consent MiPlante needs.
 }
 ```
 
-- 1–5 rules, applied in order (their priority when the daily cap runs out).
+- 1–10 rules, applied in order (their priority when the monthly cap runs out). `category` is free
+  text (1–40 characters) the shop uses to group its wallets; several rules can share one.
 - `sharePercent`: from 0.01 to 50, with at most two decimals. The rules together can take at most 50%
   of each sale.
-- `outstanding` is required for debt rules, in the merchant's currency.
+- A debt (an obligation: supplier, microcredit, rent…) needs a `monthlyQuota`. It takes its share of
+  each sale until this calendar month's quota is paid; after that its share stays with the shop
+  until the 1st of next month. `outstanding`, the total balance, is optional: when set, the debt
+  also stops once it is paid off.
+- Savings have no quota and always take their share, within the monthly cap.
+- `monthlyCap` must be at least the sum of the quotas; what is left is room for savings.
 
 `201` → `{ "merchant": Merchant, "redirectUrl": "…" }`. Send the browser to `redirectUrl`: the
-merchant approves a grant capped at `dailyCap` per day and comes back to
-`/merchant?id=<merchantId>`.
+merchant approves a grant capped at `monthlyCap` per calendar month (interval
+`R/<1st of the month, 00:00 Bogotá>/P1M`) and comes back to `/merchant?id=<merchantId>`.
 
 ### `GET /api/merchants/:id`
 
@@ -65,10 +113,12 @@ The till and dashboard.
 {
   "id": "…", "name": "Tienda Doña Rosa", "wallet": "https://ilp.interledger-test.dev/tienda-rosa",
   "asset": { "assetCode": "COP", "assetScale": 2 },
-  "dailyCap": Amount,
+  "monthlyCap": Amount,
   "status": "awaiting-consent" | "active" | "rejected" | "revoked" | "failed",
-  "spentToday": Amount | null,          // spent from the grant in its current 24 h interval
-  "rules": [{ "id", "label", "kind", "destination", "shareBps", "outstanding"?: Amount, "repaid": Amount }],
+  "spentThisMonth": Amount | null,      // spent from the grant in its current interval (this month)
+  "rules": [{ "id", "label", "category", "kind", "destination", "shareBps",
+              "monthlyQuota"?: Amount, "outstanding"?: Amount, "repaid": Amount,
+              "paidThisMonth": Amount }],
   "today": { "salesCount", "gross": Amount, "kept": Amount, "allocated": Amount,
              "byRule": [{ "ruleId", "label", "amount": Amount }] },
   "history": [{ "date": "2026-10-16", "salesCount", "gross": Amount }],   // 7 Bogotá days, oldest first
@@ -79,16 +129,19 @@ The till and dashboard.
 
 ### `PUT /api/merchants/:id/rules`
 
-The shop changes how its **next** sales split. No new consent is needed: the wallet grant only caps
-the daily total, and the percentages are applied by MiPlante (ADR 0004).
+The shop changes how its **next** sales split. No new consent is needed as long as the quotas fit
+in the monthly cap: the wallet grant only caps the monthly total, and the percentages and quotas
+are applied by MiPlante (ADR 0004, ADR 0013).
 
 ```jsonc
 { "rules": [
-  { "id": "<existing rule>", "label": "Microcrédito", "kind": "debt",
-    "destination": "$ilp.interledger-test.dev/microcredito", "sharePercent": 10 },
-  { "label": "Proveedor", "kind": "debt", "destination": "$ilp.interledger-test.dev/proveedor-billeticos",
-    "sharePercent": 10, "outstanding": "200000" },
-  { "id": "<existing rule>", "label": "Ahorro", "kind": "savings",
+  { "id": "<existing rule>", "label": "Microcrédito", "category": "Microcréditos", "kind": "debt",
+    "destination": "$ilp.interledger-test.dev/microcredito", "sharePercent": 10,
+    "monthlyQuota": "100000" },
+  { "label": "Lácteos", "category": "Proveedores", "kind": "debt",
+    "destination": "$ilp.interledger-test.dev/proveedor-billeticos", "sharePercent": 10,
+    "monthlyQuota": "50000" },
+  { "id": "<existing rule>", "label": "Ahorro", "category": "Ahorro", "kind": "savings",
     "destination": "$ilp.interledger-test.dev/ahorro-billeticos", "sharePercent": 5 }
 ] }
 ```
@@ -99,12 +152,13 @@ the daily total, and the percentages are applied by MiPlante (ADR 0004).
   and missing ones are removed.
 - What each rule has repaid is always kept. A debt keeps its stored balance unless `outstanding`
   is sent, so an edit never undoes a repayment recorded meanwhile.
-- The same limits as onboarding apply: 1–5 rules, at most 50% in total, and never the shop's own
-  wallet as a destination. Otherwise the answer is `400` and nothing changes.
+- The same limits as onboarding apply: 1–10 rules, at most 50% in total, a quota for every debt,
+  quotas within the monthly cap, and never the shop's own wallet as a destination. Otherwise the
+  answer is `400` and nothing changes.
 
 ### `POST /api/merchants/:id/consent`
 
-Asks for the daily-capped consent again, with the same cap and rules, when the first attempt was
+Asks for the monthly-capped consent again, with the same cap and rules, when the first attempt was
 never approved, was rejected (for example, the merchant logged in with another account) or was
 revoked. `201` → `{ "merchant": Merchant, "redirectUrl": "…" }`. Answers `409` if the
 consent is already active.
