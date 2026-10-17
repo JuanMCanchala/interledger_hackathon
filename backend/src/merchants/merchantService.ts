@@ -260,7 +260,8 @@ export class MerchantService {
    * an active grant switches to the new cap at once.
    */
   async changeCap(id: string, monthlyCap: string) {
-    const merchant = await this.require(id);
+    // A cap approved since the last look applies first, so the new request never orphans it.
+    const merchant = await this.syncPendingCap(await this.require(id));
     const cap = toAmount(monthlyCap, merchant.asset);
     assertCapCoversQuotas(cap, merchant.rules);
     const current = await this.flows.findMandate(merchant.mandateId);

@@ -29,6 +29,23 @@ describe("changing the monthly cap", () => {
     expect((await env.flows.findMandate(before.mandateId)).status).toBe("revoked");
   });
 
+  it("applies an approved cap before asking for another one", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa();
+    const first = (await env.store.getMerchant(id))!.mandateId;
+    await env.merchants.changeCap(id, "60000");
+    const approved = (await env.store.getMerchant(id))!.pendingCap!.mandateId;
+    await env.approveMandate(approved);
+
+    // Straight to another change, without opening the dashboard in between.
+    const { merchant } = await env.merchants.changeCap(id, "90000");
+
+    expect(merchant.monthlyCap).toEqual(cop("6000000"));
+    expect(merchant.pendingCap).toEqual(cop("9000000"));
+    expect((await env.store.getMerchant(id))!.mandateId).toBe(approved);
+    expect((await env.flows.findMandate(first)).status).toBe("revoked");
+  });
+
   it("drops a new cap the merchant rejects, and keeps the current one", async () => {
     const env = setupMiPlante();
     const id = await env.onboardRosa();
