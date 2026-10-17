@@ -41,7 +41,10 @@ export async function reservedBalances(
  */
 export class PayoutService {
   private readonly now: () => Date;
-  /** Rules being paid right now, so two clicks or the scheduler never pay the same balance twice. */
+  /**
+   * Shops whose debts are being paid right now. One pass at a time per shop, and each balance is
+   * read inside it, so a click and the scheduler never pay the same reserved money twice.
+   */
   private readonly paying = new Set<string>();
   private readonly refreshing = new Set<string>();
   private running = false;
@@ -73,15 +76,19 @@ export class PayoutService {
     if (input.ruleId && debts.length === 0) {
       throw new AppError(`El comercio no tiene la obligación ${input.ruleId}`, 404);
     }
-    const balances = await reservedBalances(this.store, merchant.id);
-    const due = debts.filter((rule) => (balances[rule.id] ?? 0n) > 0n);
-    if (due.length === 0) {
-      throw new AppError("No hay dinero apartado para pagar todavía", 409);
+    const payouts = await this.exclusive(merchant.id, async () => {
+      const sent: PayoutRecord[] = [];
+      for (const rule of debts) {
+        const payout = await this.payRule(merchant, rule, input.reason);
+        if (payout) sent.push(payout);
+      }
+      return sent;
+    });
+    if (payouts === undefined) {
+      throw new AppError("Ya se están enviando los pagos de esta tienda: intenta en un momento", 409);
     }
-    const payouts: PayoutRecord[] = [];
-    for (const rule of due) {
-      const payout = await this.payRule(merchant, rule, balances[rule.id]!, input.reason);
-      if (payout) payouts.push(payout);
+    if (payouts.length === 0) {
+      throw new AppError("No hay dinero apartado para pagar todavía", 409);
     }
     return payouts;
   }
@@ -115,11 +122,10 @@ export class PayoutService {
           );
           if (dueToday.length === 0) continue;
           if ((await this.flows.findMandate(merchant.mandateId)).status !== "active") continue;
-          const balances = await reservedBalances(this.store, merchant.id);
-          for (const rule of dueToday) {
-            const balance = balances[rule.id] ?? 0n;
-            if (balance > 0n) await this.payRule(merchant, rule, balance, "due-date");
-          }
+          // A shop being paid by hand right now is picked up on the next pass.
+          await this.exclusive(merchant.id, async () => {
+            for (const rule of dueToday) await this.payRule(merchant, rule, "due-date");
+          });
         } catch (error) {
           console.warn(`[payouts] comercio ${merchant.id}: ${describeError(error)}`);
         }
@@ -161,64 +167,75 @@ export class PayoutService {
     }
   }
 
+  /** Runs `task` unless the shop is already being paid; returns undefined when it was. */
+  private async exclusive<T>(merchantId: string, task: () => Promise<T>): Promise<T | undefined> {
+    if (this.paying.has(merchantId)) return undefined;
+    this.paying.add(merchantId);
+    try {
+      return await task();
+    } finally {
+      this.paying.delete(merchantId);
+    }
+  }
+
+  /**
+   * Pays a debt everything it has reserved, never more than what is still owed. Called inside
+   * `exclusive`, so the balance read here is the one being paid. The payout is written before the
+   * charge: if the process dies mid-charge, the money counts as on its way rather than reserved, so
+   * it is never sent twice.
+   */
   private async payRule(
     merchant: MerchantRecord,
     rule: MerchantRule,
-    balance: bigint,
     reason: PayoutRecord["reason"],
   ): Promise<PayoutRecord | undefined> {
-    if (this.paying.has(rule.id)) return undefined;
-    this.paying.add(rule.id);
+    let value = (await reservedBalances(this.store, merchant.id))[rule.id] ?? 0n;
+    const owed = (await this.store.getMerchant(merchant.id))?.rules.find((r) => r.id === rule.id)
+      ?.outstanding;
+    if (owed && BigInt(owed.value) < value) value = BigInt(owed.value);
+    if (value <= 0n) return undefined;
+
+    const timestamp = this.now().toISOString();
+    const amount: Amount = { ...merchant.asset, value: value.toString() };
+    let payout = await this.store.savePayout({
+      id: randomUUID(),
+      merchantId: merchant.id,
+      ruleId: rule.id,
+      label: rule.label,
+      destination: rule.destination,
+      amount,
+      reason,
+      month: bogotaDay(this.now()).slice(0, 7),
+      status: "processing",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    let payment;
     try {
-      const timestamp = this.now().toISOString();
-      const month = bogotaDay(this.now()).slice(0, 7);
-      const amount: Amount = { ...merchant.asset, value: balance.toString() };
-      const base: PayoutRecord = {
-        id: randomUUID(),
-        merchantId: merchant.id,
-        ruleId: rule.id,
-        label: rule.label,
-        destination: rule.destination,
-        amount,
-        reason,
-        month,
-        status: "processing",
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
-      try {
-        const payment = await this.flows.chargeMandate(merchant.mandateId, {
-          receiver: rule.destination,
-          amount: fromMinorUnits(amount.value, amount.assetScale),
-          amountType: "send",
-          description: `MiPlante · ${rule.label} · pago del mes`,
-        });
-        const payout = await this.store.savePayout({
-          ...base,
-          paymentId: payment.id,
-          status:
-            payment.status === "completed"
-              ? "completed"
-              : payment.status === "failed" || payment.status === "rejected"
-                ? "failed"
-                : "processing",
-          error: payment.error,
-        });
-        if (payout.status === "completed") {
-          await this.merchants.recordRepayment(merchant.id, rule.id, amount);
-        }
-        return payout;
-      } catch (error) {
-        // Nothing left the wallet: the balance stays reserved for the next try.
-        return this.store.savePayout({
-          ...base,
-          status: "failed",
-          error: describeError(error),
-        });
-      }
-    } finally {
-      this.paying.delete(rule.id);
+      payment = await this.flows.chargeMandate(merchant.mandateId, {
+        receiver: rule.destination,
+        amount: fromMinorUnits(amount.value, amount.assetScale),
+        amountType: "send",
+        description: `MiPlante · ${rule.label} · pago del mes`,
+      });
+    } catch (error) {
+      // Nothing left the wallet: the balance stays reserved for the next try.
+      return this.save(payout, { status: "failed", error: describeError(error) });
     }
+    payout = await this.save(payout, {
+      paymentId: payment.id,
+      status:
+        payment.status === "completed"
+          ? "completed"
+          : payment.status === "failed" || payment.status === "rejected"
+            ? "failed"
+            : "processing",
+      error: payment.error,
+    });
+    if (payout.status === "completed") {
+      await this.merchants.recordRepayment(merchant.id, rule.id, amount);
+    }
+    return payout;
   }
 
   private save(payout: PayoutRecord, changes: Partial<PayoutRecord>) {

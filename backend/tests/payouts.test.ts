@@ -132,4 +132,56 @@ describe("paying creditors on their due day", () => {
     const id = await env.onboardRosa({ rules: [withoutDay] });
     expect((await env.store.getMerchant(id))!.rules[0]!.dueDay).toBe(28);
   });
+
+  it("never pays the same reserved money twice, even when a click and the scheduler meet", async () => {
+    const env = setupMiPlante();
+    const SUPPLIER_RULE = { ...MICROCREDIT, label: "Proveedor", category: "Proveedores", destination: COOP, outstanding: undefined, monthlyQuota: "5000" };
+    const id = await env.onboardRosa({ rules: [MICROCREDIT, { ...SUPPLIER_RULE, sharePercent: 10 }] });
+    await sellAndPay(env, id);
+    env.clock.now = new Date("2026-10-20T15:00:00Z");
+
+    const results = await Promise.allSettled([
+      env.payouts.pay(id, { reason: "manual" }),
+      env.payouts.runDue(),
+      env.payouts.pay(id, { reason: "manual" }),
+    ]);
+    await env.payouts.runDue();
+
+    const payouts = await env.store.listPayouts(id);
+    const perRule = new Map<string, number>();
+    for (const p of payouts) perRule.set(p.ruleId, (perRule.get(p.ruleId) ?? 0) + 1);
+    expect([...perRule.values()]).toEqual([1, 1]);
+    // The click that found the shop busy says so instead of paying.
+    expect(results.some((r) => r.status === "rejected" && /intenta en un momento|apartado/.test(String(r.reason)))).toBe(true);
+  });
+
+  it("never pays a creditor more than what is still owed", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa({ rules: [{ ...MICROCREDIT, outstanding: "1000" }] });
+    await sellAndPay(env, id); // 1,500 share, 1,000 owed: 1,000 reserved
+    const [payout] = await env.payouts.pay(id, { reason: "manual" });
+    expect(payout!.amount).toEqual(cop("100000"));
+  });
+
+  it("keeps a payout that was sent even if recording it fails afterwards", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa({ rules: [MICROCREDIT] });
+    await sellAndPay(env, id);
+    const sent = env.ops.createOutgoingPayment.mock.calls.length;
+    const real = env.store.savePayout.bind(env.store);
+    let writes = 0;
+    env.store.savePayout = async (record) => {
+      writes += 1;
+      if (writes === 2) throw new Error("database down");
+      return real(record);
+    };
+
+    await expect(env.payouts.pay(id, { reason: "manual" })).rejects.toThrow("database down");
+    env.store.savePayout = real;
+
+    // The charge went out; the payout stays on its way, so the money is not reserved again.
+    expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(sent + 1);
+    expect((await env.store.listPayouts(id)).map((p) => p.status)).toEqual(["processing"]);
+    await expect(env.payouts.pay(id, { reason: "manual" })).rejects.toThrow(/apartado/);
+  });
 });
