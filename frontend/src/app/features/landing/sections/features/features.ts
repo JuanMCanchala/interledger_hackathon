@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { FINE_POINTER, animate } from '../../../../core/motion';
-import { ChangeTile } from './tiles/change';
 import { ConsentTile } from './tiles/consent';
 import { CurrenciesTile } from './tiles/currencies';
 import { ElasticTile } from './tiles/elastic';
@@ -10,7 +9,7 @@ import { RemindersTile } from './tiles/reminders';
 
 @Component({
   selector: 'app-features',
-  imports: [NetworkTile, ConsentTile, CurrenciesTile, ChangeTile, ElasticTile, HistoryTile, RemindersTile],
+  imports: [NetworkTile, ConsentTile, CurrenciesTile, ElasticTile, HistoryTile, RemindersTile],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="features" id="funciones" aria-labelledby="features-title">
@@ -23,7 +22,6 @@ import { RemindersTile } from './tiles/reminders';
           <article class="tile network"><app-network-tile /></article>
           <article class="tile consent"><app-consent-tile /></article>
           <article class="tile currencies"><app-currencies-tile /></article>
-          <article class="tile change"><app-change-tile /></article>
           <article class="tile elastic"><app-elastic-tile /></article>
           <article class="tile history"><app-history-tile /></article>
           <article class="tile reminders"><app-reminders-tile /></article>
