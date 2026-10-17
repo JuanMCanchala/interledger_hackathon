@@ -27,7 +27,7 @@
         [total]="steps().length"
         [busy]="busy()"
         [nextLabel]="stepId() === 'review' ? 'Autorizar en mi billetera' : 'Continuar'"
-        [busyLabel]="stepId() === 'review' ? 'Abriendo tu billetera…' : 'Revisando…'"
+        [busyLabel]="stepId() === 'review' ? 'Abriendo tu billetera…' : stepId() === 'wallet' ? 'Buscando tu billetera…' : 'Validando billeteras…'"
         (back)="back()"
         (next)="advance()"
       >
@@ -249,6 +249,8 @@
                       <label class="field">
                         <span>Su billetera</span>
                         <input
+                          [class.input-invalid]="!!walletErrors()[wallet.id]"
+                          [attr.aria-invalid]="walletErrors()[wallet.id] ? 'true' : null"
                           [ngModel]="wallet.destination"
                           (ngModelChange)="updateWallet(pocket.id, wallet.id, { destination: $event })"
                           maxlength="300"
@@ -257,6 +259,9 @@
                           autocapitalize="off"
                           [placeholder]="pocket.kind === 'debt' ? 'Ej: distribuidora-central' : 'Ej: mi-ahorro'"
                         />
+                        @if (walletErrors()[wallet.id]; as walletError) {
+                          <small class="check check-bad">{{ walletError }}</small>
+                        }
                       </label>
                       <div class="field field-full">
                         <span id="share-{{ wallet.id }}">Parte de cada venta</span>

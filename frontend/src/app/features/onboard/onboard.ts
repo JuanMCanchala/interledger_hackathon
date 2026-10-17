@@ -109,6 +109,8 @@ export default class OnboardPage implements OnInit {
   protected businessName = '';
   protected readonly businessWallet = signal('');
   protected readonly checkedWallet = signal<WalletInfo | null>(null);
+  /** Destination wallets that failed to check, by wallet draft id. */
+  protected readonly walletErrors = signal<Record<number, string>>({});
   protected readonly walletCheck = signal<{ text: string; ok: boolean } | null>(null);
 
   protected readonly pockets = signal<Pocket[]>(
@@ -265,6 +267,7 @@ export default class OnboardPage implements OnInit {
 
   protected updateWallet(pocketId: number, walletId: number, patch: Partial<WalletDraft>): void {
     this.error.set('');
+    if ('destination' in patch) this.clearWalletError(walletId);
     this.pockets.update((list) =>
       list.map((p) =>
         p.id !== pocketId
@@ -285,7 +288,13 @@ export default class OnboardPage implements OnInit {
     );
   }
 
+  private clearWalletError(walletId: number): void {
+    if (!this.walletErrors()[walletId]) return;
+    this.walletErrors.update(({ [walletId]: _, ...rest }) => rest);
+  }
+
   protected removeWallet(pocket: Pocket, walletId: number): void {
+    this.clearWalletError(walletId);
     this.pockets.update((list) =>
       list.map((p) => (p.id !== pocket.id ? p : { ...p, wallets: p.wallets.filter((w) => w.id !== walletId) })),
     );
@@ -354,7 +363,9 @@ export default class OnboardPage implements OnInit {
       }
     }
     if (id === 'pick' && !this.pockets().length) return 'Elige al menos un bolsillo.';
-    if (id.startsWith('pocket:')) return this.pocketProblem(this.currentPocket()!);
+    if (id.startsWith('pocket:')) {
+      return this.pocketProblem(this.currentPocket()!) || (await this.destinationProblem(this.currentPocket()!));
+    }
     if (id.startsWith('quota:')) return this.quotaProblem(this.currentPocket()!);
     if (id === 'cap' || id === 'review') return this.capProblem();
     return '';
@@ -375,6 +386,36 @@ export default class OnboardPage implements OnInit {
       return `Entre todos tus bolsillos suman ${total.toLocaleString('es-CO')}%. Lo máximo es ${MAX_TOTAL_PERCENT}%, para que siempre te quede una parte.`;
     }
     return '';
+  }
+
+  /** Checks that each destination exists and is not the shop's own wallet. */
+  private async destinationProblem(pocket: Pocket): Promise<string> {
+    const shopWallet = this.checkedWallet()?.wallet ?? normalizeWallet(this.businessWallet());
+    const errors: Record<number, string> = {};
+    this.busy.set(true);
+    try {
+      await Promise.all(
+        pocket.wallets.map(async (w) => {
+          if (normalizeWallet(w.destination) === shopWallet) {
+            errors[w.id] = 'No puede ser la misma billetera de tu negocio.';
+            return;
+          }
+          try {
+            await this.api.checkWallet(w.destination);
+          } catch (err: unknown) {
+            errors[w.id] = (err as Error)?.message || 'No encontramos esta billetera. Revisa que esté bien escrita.';
+          }
+        }),
+      );
+    } finally {
+      this.busy.set(false);
+    }
+    this.walletErrors.update((prev) => ({ ...prev, ...errors }));
+    const failed = pocket.wallets.filter((w) => errors[w.id]).map((w) => `«${w.label.trim()}»`);
+    if (!failed.length) return '';
+    return failed.length === 1
+      ? `Revisa la billetera de ${failed[0]}: está marcada en rojo.`
+      : `Revisa las billeteras de ${failed.join(', ')}: están marcadas en rojo.`;
   }
 
   private quotaProblem(pocket: Pocket): string {

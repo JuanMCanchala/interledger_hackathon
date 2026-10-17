@@ -1,0 +1,470 @@
+@if (merchant(); as m) {
+  <section class="view stack" aria-label="Repartos de cada venta">
+    @if (repartosStats(); as rs) {
+      <section class="metrics-ribbon" aria-label="Resumen operativo de tus bolsillos">
+        <div class="metric-cell is-highlight">
+          <span class="metric-label">Tu parte libre por venta</span>
+          <strong class="metric-value-xl">{{ rs.keptPctText }}%</strong>
+          <small class="metric-foot">
+            Tus bolsillos apartan el {{ rs.allocatedPctText }}% restante
+          </small>
+        </div>
+
+        <div class="metric-cell">
+          <span class="metric-label">Apartado este mes</span>
+          <strong class="metric-value">{{ rs.paidMonthTotalFormatted }}</strong>
+          <small class="metric-foot">
+            En {{ rs.debtCount }} {{ rs.debtCount === 1 ? 'obligación' : 'obligaciones' }} y {{ rs.savingsCount }} {{ rs.savingsCount === 1 ? 'ahorro' : 'ahorros' }}
+          </small>
+        </div>
+
+        <div class="metric-cell">
+          <span class="metric-label">Listo por enviar hoy</span>
+          <strong class="metric-value">{{ rs.reservedTotalFormatted }}</strong>
+          <small class="metric-foot">
+            Reservado para cuotas de proveedores y créditos
+          </small>
+        </div>
+
+        <div class="metric-cell">
+          <span class="metric-label">Reglas activas</span>
+          <strong class="metric-value">{{ m.rules.length }} / {{ maxRules }}</strong>
+          <div>
+            @if (!editingRules()) {
+              <button
+                type="button"
+                class="btn btn-lima btn-sm"
+                (click)="openRulesEditor()"
+              >
+                Editar repartos
+              </button>
+            } @else {
+              <span class="badge badge-info">Editando reglas</span>
+            }
+          </div>
+        </div>
+      </section>
+    }
+
+    <section class="workspace-panel stack">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Presente y operación</p>
+          <h2>Estado real de cada bolsillo</h2>
+          <p class="muted small">
+            Porcentaje por venta, billetera destino, apartado del mes, deuda total y pago anticipado
+          </p>
+        </div>
+        @if (!editingRules()) {
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            (click)="openRulesEditor()"
+          >
+            Editar bolsillos
+          </button>
+        }
+      </div>
+
+      @if (!editingRules()) {
+        <div class="stack">
+          @for (group of groupedRules(); track group.name) {
+            <div class="stack-sm">
+              <h3 class="eyebrow">{{ group.name }}</h3>
+              <ul class="pocket-rows">
+                @for (r of group.rules; track r.id) {
+                  <li class="pocket-row">
+                    <div class="pocket-row-top">
+                      <div>
+                        <strong>{{ r.label }}</strong>
+                        <p class="muted small">
+                          <strong>{{ (r.shareBps / 100).toLocaleString('es-CO', { maximumFractionDigits: 2 }) }}%</strong> de cada venta · Destino:
+                          <span class="mono">{{ walletName(r.destination) }}</span>
+                        </p>
+                      </div>
+                      <span [class]="r.kind === 'debt' ? 'badge badge-wait' : 'badge badge-info'">
+                        {{ ruleKindLabel(r.kind) }}
+                      </span>
+                    </div>
+
+                    @if (r.inCash && toNumber(r.inCash) > 0) {
+                      <p class="small muted">
+                        En efectivo pendiente por consignar: <strong>{{ formatAmount(r.inCash) }}</strong>
+                      </p>
+                    }
+
+                    @if (r.kind === 'debt') {
+                      <div class="progress is-gold">
+                        <span [style.width.%]="debtProgress(r)"></span>
+                      </div>
+                      <div class="pocket-row-top">
+                        @if (toNumber(r.monthlyQuota) > 0 && toNumber(r.paidThisMonth) >= toNumber(r.monthlyQuota)) {
+                          <span class="badge badge-ok">
+                            Cuota del mes completa · El resto es ganancia tuya
+                          </span>
+                        } @else {
+                          <p class="small">
+                            Apartado este mes: <strong>{{ formatAmount(r.paidThisMonth) }}</strong> de {{ formatAmount(r.monthlyQuota) }}
+                          </p>
+                        }
+                        @if (r.outstanding) {
+                          @if (toNumber(r.outstanding) <= 0) {
+                            <span class="badge badge-ok">¡Deuda total saldada!</span>
+                          } @else {
+                            <span class="small muted">
+                              Deuda total: faltan <strong>{{ formatAmount(r.outstanding) }}</strong> (abonado {{ formatAmount(r.repaid) }})
+                            </span>
+                          }
+                        }
+                      </div>
+                      <div class="pocket-row-top">
+                        <p class="small">
+                          <strong>Por enviar: {{ formatAmount(r.reserved) }}</strong>
+                          <span class="muted"> · {{ dueText(r) }}</span>
+                        </p>
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm"
+                          [disabled]="toNumber(r.reserved) <= 0 || payoutBusy()"
+                          (click)="runManualPayout(r.id)"
+                        >
+                          Pagar ahora
+                        </button>
+                      </div>
+                    } @else {
+                      @if (toNumber(r.savingsGoal) > 0) {
+                        <div class="progress">
+                          <span [style.width.%]="savingsProgress(r)"></span>
+                        </div>
+                      }
+                      <div class="pocket-row-top">
+                        <p class="small">
+                          Apartado este mes: <strong>{{ formatAmount(r.paidThisMonth) }}</strong> · Total ahorrado: <strong>{{ formatAmount(r.repaid) }}</strong>{{
+                            toNumber(r.savingsGoal) > 0 ? ' de ' + formatAmount(r.savingsGoal) : ''
+                          }}
+                        </p>
+                        <button
+                          type="button"
+                          class="metric-link"
+                          (click)="navigateTab.emit('metas')"
+                        >
+                          Ver proyección →
+                        </button>
+                      </div>
+                    }
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        </div>
+      } @else {
+        <form class="stack" (ngSubmit)="saveRules()" (input)="rulesError.set('')" novalidate>
+          <p class="muted small">
+            Cambia los porcentajes, las cuotas del mes, las metas de
+            ahorro o las billeteras, o agrega otras. Aplica desde la
+            próxima venta y no necesitas volver a autorizar: el límite
+            mensual sigue igual.
+          </p>
+          <ul class="rule-cards">
+            @for (draft of ruleDrafts(); track draft.key) {
+              <li class="rule-card">
+                <div>
+                  <strong>{{ draft.label || 'Bolsillo sin nombre' }}</strong>
+                  <small>{{ draftSummary(draft) }}</small>
+                </div>
+                <span class="rule-card-share">{{ draft.sharePercent ?? '—' }}%</span>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  [attr.aria-label]="'Editar ' + (draft.label || 'bolsillo')"
+                  (click)="openRuleDraft(draft.key)"
+                >
+                  Editar
+                </button>
+              </li>
+            }
+          </ul>
+
+          <button
+            type="button"
+            class="btn btn-secondary"
+            [disabled]="ruleDrafts().length >= maxRules"
+            (click)="addRuleDraft()"
+          >
+            + Agregar bolsillo
+          </button>
+
+          <div class="stack-sm" aria-live="polite">
+            <h3>Así se reparte una venta</h3>
+            <p class="small">{{ rulesPreview().sentence }}</p>
+            <div class="stacked-bar" aria-hidden="true">
+              <span
+                class="seg-kept"
+                [style.width.%]="rulesPreview().keptPercent"
+              ></span>
+              @for (item of rulesPreview().items; track $index) {
+                <span
+                  [class]="item.kind === 'debt' ? 'seg-debt' : 'seg-savings'"
+                  [style.width.%]="item.widthPercent"
+                ></span>
+              }
+            </div>
+            <ul class="split">
+              <li class="split-item is-kept">
+                <span class="split-label">Tú te quedas</span>
+                <span class="split-amount">{{ rulesPreview().keptFormatted }}</span>
+              </li>
+              @for (item of rulesPreview().items; track $index) {
+                <li class="split-item">
+                  <span class="split-label">{{ item.label }}</span>
+                  <span class="split-amount">{{ item.formatted }}</span>
+                </li>
+              }
+            </ul>
+            @if (rulesPreview().warning) {
+              <p class="banner banner-bad">{{ rulesPreview().warning }}</p>
+            }
+            @if (rulesPreview().capWarning) {
+              <p class="hint">{{ rulesPreview().capWarning }}</p>
+            }
+          </div>
+
+          @if (rulesError()) {
+            <p class="banner banner-bad" role="alert">{{ rulesError() }}</p>
+          }
+          <div class="row">
+            <button
+              type="submit"
+              class="btn btn-lima"
+              [disabled]="rulesSaving()"
+            >
+              {{ rulesSaving() ? 'Guardando…' : 'Guardar repartos' }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost"
+              (click)="editingRules.set(false)"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+
+        <dialog #ruleDialog class="rule-dialog" aria-labelledby="rule-dialog-title" (close)="editingRuleKey.set(null)">
+          @if (editingRule(); as draft) {
+            <div class="rule-dialog-body">
+              <div class="rule-dialog-head">
+                <h2 id="rule-dialog-title">{{ draft.label || 'Nuevo bolsillo' }}</h2>
+                <button type="button" class="btn btn-ghost btn-sm" (click)="closeRuleDraft()">Cerrar</button>
+              </div>
+
+              <div class="segmented" role="group" aria-label="Tipo de bolsillo">
+                <button type="button" [attr.aria-selected]="draft.kind === 'debt'" (click)="updateRuleDraft(draft.key, { kind: 'debt' })">
+                  Con cuota cada mes
+                </button>
+                <button type="button" [attr.aria-selected]="draft.kind === 'savings'" (click)="updateRuleDraft(draft.key, { kind: 'savings' })">
+                  Ahorro
+                </button>
+              </div>
+
+              <div class="field-grid">
+                <label class="field">
+                  <span>Nombre</span>
+                  <input
+                    maxlength="60"
+                    placeholder="Ej: Distribuidora Central"
+                    [ngModel]="draft.label"
+                    (ngModelChange)="updateRuleDraft(draft.key, { label: $event })"
+                  />
+                </label>
+                <label class="field">
+                  <span>Categoría</span>
+                  <input
+                    maxlength="40"
+                    list="category-options"
+                    placeholder="Ej: Proveedores"
+                    [ngModel]="draft.category"
+                    (ngModelChange)="updateRuleDraft(draft.key, { category: $event })"
+                  />
+                </label>
+                <div class="field field-full">
+                  <span id="rule-share-label">Parte de cada venta</span>
+                  <div class="range-row">
+                    <input
+                      type="range"
+                      min="1"
+                      max="40"
+                      step="1"
+                      aria-labelledby="rule-share-label"
+                      [ngModel]="draft.sharePercent ?? 0"
+                      (ngModelChange)="updateRuleDraft(draft.key, { sharePercent: +$event })"
+                    />
+                    <div class="input-suffix">
+                      <input
+                        type="number"
+                        min="0.01"
+                        max="99"
+                        step="0.01"
+                        inputmode="decimal"
+                        aria-labelledby="rule-share-label"
+                        [ngModel]="draft.sharePercent"
+                        (ngModelChange)="updateRuleDraft(draft.key, { sharePercent: $event })"
+                      />
+                      <span aria-hidden="true">%</span>
+                    </div>
+                  </div>
+                </div>
+                @if (draft.kind === 'debt') {
+                  <label class="field">
+                    <span>Cuota del mes</span>
+                    <input
+                      inputmode="numeric"
+                      autocomplete="off"
+                      placeholder="Ej: 200.000"
+                      [ngModel]="draft.monthlyQuota"
+                      (ngModelChange)="updateRuleMoney(draft.key, 'monthlyQuota', $event)"
+                    />
+                  </label>
+                  <label class="field">
+                    <span>Día de pago</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="28"
+                      step="1"
+                      inputmode="numeric"
+                      [ngModel]="draft.dueDay"
+                      (ngModelChange)="updateRuleDraft(draft.key, { dueDay: $event })"
+                    />
+                  </label>
+                  <label class="field">
+                    <span>Cuánto debes en total <small class="muted">(opcional)</small></span>
+                    <input
+                      inputmode="numeric"
+                      autocomplete="off"
+                      placeholder="Ej: 300.000"
+                      [ngModel]="draft.outstanding"
+                      (ngModelChange)="updateRuleMoney(draft.key, 'outstanding', $event)"
+                    />
+                  </label>
+                } @else {
+                  <label class="field">
+                    <span>Meta de ahorro <small class="muted">(opcional)</small></span>
+                    <input
+                      inputmode="numeric"
+                      autocomplete="off"
+                      placeholder="Ej: 1.000.000"
+                      [ngModel]="draft.savingsGoal"
+                      (ngModelChange)="updateRuleMoney(draft.key, 'savingsGoal', $event)"
+                    />
+                  </label>
+                }
+                <label class="field">
+                  <span>Su billetera</span>
+                  <input
+                    maxlength="300"
+                    autocomplete="off"
+                    spellcheck="false"
+                    autocapitalize="off"
+                    placeholder="Ej: distribuidora-central"
+                    [ngModel]="draft.destination"
+                    (ngModelChange)="updateRuleDraft(draft.key, { destination: $event })"
+                  />
+                </label>
+              </div>
+
+              <div class="rule-dialog-actions">
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  [disabled]="ruleDrafts().length <= 1"
+                  (click)="removeRuleDraft(draft.key); closeRuleDraft()"
+                >
+                  Quitar bolsillo
+                </button>
+                <button type="button" class="btn btn-lima" (click)="closeRuleDraft()">Listo</button>
+              </div>
+            </div>
+          }
+        </dialog>
+      }
+
+      @if (rulesSavedMsg()) {
+        <p class="banner banner-ok" role="status">{{ rulesSavedMsg() }}</p>
+      }
+    </section>
+
+    <section class="workspace-panel stack" aria-labelledby="payouts-title">
+      <div class="panel-head">
+        <div>
+          <h2 id="payouts-title">Pagos enviados a proveedores y créditos</h2>
+          <p class="muted small">
+            El día de pago se envía la cuota del mes en un solo giro.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          [disabled]="payoutBusy()"
+          (click)="simulateDueDate()"
+        >
+          Simular fecha de pago
+        </button>
+      </div>
+      @if (simulateMessage(); as sim) {
+        <p [class]="'banner banner-' + sim.tone" role="status">{{ sim.text }}</p>
+      }
+      @if (payoutMessage(); as pm) {
+        <p [class]="'banner banner-' + pm.tone" role="status">{{ pm.text }}</p>
+      }
+      @if (!m.payouts?.length) {
+        <p class="muted small">Todavía no se han enviado pagos este mes.</p>
+      } @else {
+        <ul class="list">
+          @for (p of m.payouts; track p.id) {
+            <li class="list-item">
+              <div class="row between">
+                <strong>{{ p.label }}</strong>
+                <span [class]="payoutStatusBadgeClass(p.status)">
+                  {{ payoutStatusText(p.status) }}
+                </span>
+              </div>
+              <p class="small">
+                {{ formatAmount(p.amount) }} ·
+                {{ p.reason === 'manual' ? 'pagado antes de su fecha' : 'pago de su fecha' }} ·
+                {{ formatShortDate(p.createdAt) }} {{ formatTime(p.createdAt) }}
+              </p>
+              @if (p.topUp) {
+                <p class="muted small">
+                  {{ formatAmount(p.topUp) }} salieron de tus ganancias para completar la cuota.
+                </p>
+              }
+              @if (p.error) {
+                <p class="error-text small">{{ p.error }}</p>
+              }
+              @if (p.status === 'failed' && !p.resolution) {
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  (click)="navigateTab.emit('avisos')"
+                >
+                  Revisar en Avisos
+                </button>
+              }
+              @if (p.resolution === 'marked-paid') {
+                <p class="muted small">Lo marcaste como pagado.</p>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </section>
+
+  <datalist id="category-options">
+    <option value="Proveedores"></option>
+    <option value="Microcréditos"></option>
+    <option value="Ahorro"></option>
+  </datalist>
+}

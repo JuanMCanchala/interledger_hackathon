@@ -53,7 +53,12 @@ const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
         [disabled]="busy()"
         [attr.aria-busy]="busy() ? 'true' : null"
       >
-        {{ busy() ? busyLabel() : nextLabel() }}
+        @if (busy()) {
+          <span class="btn-spinner" aria-hidden="true"></span>
+          {{ busyLabel() }}
+        } @else {
+          {{ nextLabel() }}
+        }
       </button>
     </form>
   `,

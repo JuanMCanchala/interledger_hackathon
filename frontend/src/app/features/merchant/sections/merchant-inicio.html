@@ -1,0 +1,237 @@
+@if (merchant(); as m) {
+  <section class="view stack" aria-label="Resumen de tu negocio">
+    @if (reviewBannerText()) {
+      <button
+        type="button"
+        class="banner banner-bad review-banner"
+        (click)="navigateTab.emit('avisos')"
+      >
+        <span>{{ reviewBannerText() }}</span>
+        <span class="badge badge-bad">Revisar</span>
+      </button>
+    }
+
+    <!-- Unified Top Metrics Strip -->
+    <section class="metrics-ribbon" aria-label="Indicadores principales">
+      <div class="metric-cell is-highlight">
+        <span class="metric-label">Ventas de hoy</span>
+        <strong class="metric-value-xl">{{ formatAmount(m.today.gross) }}</strong>
+        <small class="metric-foot">
+          {{
+            m.today.salesCount === 1
+              ? '1 venta cobrada hoy'
+              : m.today.salesCount + ' ventas cobradas hoy'
+          }}
+        </small>
+      </div>
+
+      <div class="metric-cell">
+        <div class="row between">
+          <span class="metric-label">Reparto de hoy</span>
+          <button type="button" class="metric-link" (click)="navigateTab.emit('repartos')">
+            Bolsillos
+          </button>
+        </div>
+        <strong class="metric-value">{{ formatAmount(m.today.kept) }}</strong>
+        <small class="metric-foot">
+          Libre hoy · Apartado: <strong>{{ formatAmount(m.today.allocated) }}</strong>
+        </small>
+      </div>
+
+      <div class="metric-cell">
+        <div class="row between">
+          <span class="metric-label">Ganancia real del mes</span>
+          <button type="button" class="metric-link" (click)="navigateTab.emit('metas')">
+            Ver metas
+          </button>
+        </div>
+        <strong
+          class="metric-value"
+          [class.is-negative]="toNumber(m.month.realProfit) < 0"
+        >
+          {{ formatAmount(m.month.realProfit ?? m.month.kept) }}
+        </strong>
+        <small class="metric-foot">
+          Vendido este mes: <strong>{{ formatAmount(m.month.gross) }}</strong>
+        </small>
+      </div>
+
+      <div class="metric-cell">
+        <div class="row between">
+          <span class="metric-label">Límite mensual</span>
+          <button type="button" class="metric-link" (click)="navigateTab.emit('ajustes')">
+            Ajustar
+          </button>
+        </div>
+        <strong class="metric-value">
+          {{ m.spentThisMonth ? formatAmount(m.spentThisMonth) : '—' }}
+        </strong>
+        <div class="progress progress-sm is-gold">
+          <span [style.width.%]="capBarWidth()"></span>
+        </div>
+        <small class="metric-foot">
+          de {{ formatAmount(m.monthlyCap) }} autorizado
+        </small>
+      </div>
+    </section>
+
+    <!-- Clean 2-Column Workspace Grid -->
+    <div class="workspace-columns">
+      <!-- Left Column: Unified Daily Chart + Monthly Money Split -->
+      <div class="stack">
+        <section class="workspace-panel stack" aria-labelledby="chart-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="chart-title">
+                {{ chartMode() === 'sales' ? 'Ventas del mes por día' : 'Ganancia real por día' }}
+              </h2>
+              <p class="muted small">
+                {{ chartMode() === 'sales' ? monthChartCaption() : profitChartCaption() }}
+              </p>
+            </div>
+            <div class="segmented segmented-sm" role="tablist" aria-label="Indicador diario">
+              <button
+                type="button"
+                role="tab"
+                [attr.aria-selected]="chartMode() === 'sales'"
+                (click)="chartMode.set('sales')"
+              >
+                Ventas
+              </button>
+              <button
+                type="button"
+                role="tab"
+                [attr.aria-selected]="chartMode() === 'profit'"
+                (click)="chartMode.set('profit')"
+              >
+                Ganancia
+              </button>
+            </div>
+          </div>
+
+          @if (chartMode() === 'sales') {
+            <app-bar-chart
+              [bars]="monthSalesBars()"
+              [goal]="monthDailyGoal()"
+              [goalLabel]="monthDailyGoalLabel()"
+              [summary]="monthSalesSummary()"
+            />
+            <p class="chart-legend small">
+              <span class="legend legend-sales">Ventas por día</span>
+              @if (monthDailyGoal()) {
+                <span class="legend legend-goal">Ritmo para tu meta</span>
+              }
+            </p>
+          } @else {
+            <app-bar-chart
+              [bars]="monthProfitBars()"
+              [summary]="monthProfitSummary()"
+            />
+          }
+        </section>
+
+        <section class="workspace-panel stack" aria-labelledby="money-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="money-title">A dónde fue tu dinero este mes</h2>
+              <p class="muted small">
+                Distribución acumulada del mes entre tu ganancia y tus bolsillos
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              (click)="navigateTab.emit('repartos')"
+            >
+              Ver bolsillos ({{ m.rules.length }})
+            </button>
+          </div>
+          <div class="stacked-bar" aria-hidden="true">
+            @for (row of monthSplitRows(); track row.label) {
+              @if (row.widthPercent > 0) {
+                <span
+                  [class]="row.seg"
+                  [style.width.%]="row.widthPercent"
+                ></span>
+              }
+            }
+          </div>
+          <ul class="split">
+            @for (row of monthSplitRows(); track row.label) {
+              <li class="split-item" [class.is-kept]="row.kept">
+                <span class="split-label">{{ row.label }}</span>
+                <span
+                  class="split-amount"
+                  [class.is-negative]="row.value < 0"
+                >
+                  {{ formatAmount(row.amount) }}
+                </span>
+                @if (row.note) {
+                  <p class="split-detail small muted">{{ row.note }}</p>
+                }
+              </li>
+            }
+          </ul>
+        </section>
+      </div>
+
+      <div class="stack">
+      <section class="plant-panel" aria-labelledby="plant-title">
+        <app-plant [stage]="monthPlant().stage" />
+        <div class="plant-panel-copy">
+          <h2 id="plant-title">Tu planta de {{ monthName }}</h2>
+          <p>{{ monthPlant().text }}</p>
+          <div class="progress progress-sm" aria-hidden="true">
+            <span [style.width.%]="monthPlant().percent"></span>
+          </div>
+          <small>Día {{ m.month.dayOfMonth }} de {{ m.month.daysInMonth }}</small>
+        </div>
+      </section>
+
+      <!-- Right Column: Recent Sales Activity -->
+      <section class="workspace-panel stack" aria-labelledby="sales-title">
+        <div class="panel-head">
+          <div>
+            <h2 id="sales-title">Últimas ventas</h2>
+            <p class="muted small">Toca una venta con QR para ver su recibo</p>
+          </div>
+          <span class="badge badge-info">{{ m.sales.length }} registradas</span>
+        </div>
+        @if (m.sales.length === 0) {
+          <p class="muted small">
+            Todavía no hay ventas registradas. Entra a
+            <strong>Vender</strong> en el menú lateral para registrar tu primera venta.
+          </p>
+        } @else {
+          <ul class="list">
+            @for (s of m.sales.slice(0, 6); track s.id) {
+              <li>
+                <button
+                  type="button"
+                  class="list-button"
+                  [class.is-cash]="s.method === 'cash'"
+                  (click)="s.method !== 'cash' && openSale.emit(s)"
+                >
+                  <span>
+                    <strong class="num">{{ formatAmount(s.amount) }}</strong>
+                    <span class="meta">
+                      · {{ formatTime(s.createdAt) }}{{ s.description ? ' · ' + s.description : '' }}
+                    </span>
+                  </span>
+                  @if (s.method === 'cash') {
+                    <span class="badge badge-ok">Efectivo</span>
+                  } @else {
+                    <span [class]="saleStatusBadgeClass(s.status)">
+                      {{ saleStatusText(s.status) }}
+                    </span>
+                  }
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+      </div>
+    </div>
+  </section>
+}
