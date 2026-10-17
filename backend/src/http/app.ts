@@ -230,7 +230,14 @@ async function returnPath(
 }
 
 /** Pages people open from links and QR codes; each one is public/<page>.html. */
-export const PAGES = ["onboard", "merchant", "pay", "sandbox"] as const;
+export const PAGES = [
+  "login",
+  "register",
+  "onboard",
+  "merchant",
+  "pay",
+  "sandbox",
+] as const;
 
 /**
  * /onboard and /onboard/ serve onboard.html. The old /onboard.html links (printed QR codes, consent

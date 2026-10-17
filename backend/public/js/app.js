@@ -4,6 +4,7 @@
  */
 
 export const STORAGE_KEYS = {
+  session: "miplante.session",
   merchantId: "miplante.merchantId",
   merchantWallet: "miplante.merchantWallet",
   customerWallet: "miplante.customerWallet",
@@ -51,6 +52,9 @@ export const RULE_KIND = {
 // API ---------------------------------------------------------------------------------------------
 
 export async function api(path, options = {}) {
+  const token = session.token();
+  // Signing in or up never carries an old session, so a wrong password is not taken for an expired one.
+  const sendToken = Boolean(token) && !/^\/api\/auth\/(login|register)$/.test(path);
   let res;
   try {
     res = await fetch(path, {
@@ -58,6 +62,7 @@ export async function api(path, options = {}) {
       headers: {
         accept: "application/json",
         ...(options.body ? { "content-type": "application/json" } : {}),
+        ...(sendToken ? { authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
     });
@@ -67,6 +72,11 @@ export async function api(path, options = {}) {
     );
   }
   const body = await res.json().catch(() => ({}));
+  if (res.status === 401 && sendToken) {
+    // The session ended (signed out elsewhere or expired): sign in again and come back here.
+    session.clear();
+    goToLogin();
+  }
   if (!res.ok) {
     const details = Array.isArray(body.details)
       ? body.details.join(" · ")
@@ -83,6 +93,53 @@ export async function api(path, options = {}) {
 
 export function postJson(path, body) {
   return api(path, { method: "POST", body: JSON.stringify(body) });
+}
+
+// Session -----------------------------------------------------------------------------------------
+
+/** The shopkeeper's session token, kept on this device after signing in. */
+export const session = {
+  token: () => remember.get(STORAGE_KEYS.session),
+  start: (token) => remember.set(STORAGE_KEYS.session, token),
+  clear: () => remember.remove(STORAGE_KEYS.session),
+};
+
+/** Sends the shopkeeper to sign in, and back to this page afterwards. */
+export function goToLogin() {
+  const here = `${window.location.pathname}${window.location.search}`;
+  window.location.href = `/login?next=${encodeURIComponent(here)}`;
+}
+
+/** Shopkeeper pages call this first: without a session it goes to sign in and returns false. */
+export function requireSession() {
+  if (session.token()) return true;
+  goToLogin();
+  return false;
+}
+
+export async function logout() {
+  try {
+    await postJson("/api/auth/logout", {});
+  } catch {
+    // Signing out on this device is what matters.
+  }
+  session.clear();
+  window.location.href = "/login";
+}
+
+/** Where a signed-in shopkeeper goes: their till, or setting up their shop if they have none yet. */
+export async function homeOfSignedIn() {
+  const { merchant } = await api("/api/auth/me");
+  return merchant
+    ? `/merchant?id=${encodeURIComponent(merchant.id)}`
+    : "/onboard";
+}
+
+/** A `next` page from the URL, only if it is a path on this site (never another domain). */
+export function safeNext(next) {
+  return next && /^\/(?!\/)/.test(next) && !next.startsWith("/login")
+    ? next
+    : "";
 }
 
 /**
@@ -429,6 +486,13 @@ export const remember = {
       localStorage.setItem(key, value);
     } catch {
       // Storage can be unavailable (private mode); remembering is only a convenience.
+    }
+  },
+  remove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Nothing was stored.
     }
   },
 };

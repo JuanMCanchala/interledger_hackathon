@@ -2,7 +2,6 @@ import {
   MERCHANT_STATUS,
   RULE_KIND,
   SALE_STATUS,
-  STORAGE_KEYS,
   absoluteUrl,
   api,
   badge,
@@ -12,14 +11,16 @@ import {
   formatDay,
   formatMoney,
   formatTime,
+  homeOfSignedIn,
   localDate,
+  logout,
   normalizeDecimal,
   param,
   poll,
   postJson,
-  remember,
   renderSplit,
   renderSteps,
+  requireSession,
   showMessage,
   statusBadge,
   toNumber,
@@ -61,7 +62,7 @@ async function loadMerchant() {
   } catch (error) {
     if (error.status === 404) {
       showMissing(
-        "No encontramos esa caja. Revisa el enlace o registra tu negocio.",
+        "Esta caja no existe o es de otra cuenta. Entra con la cuenta que la registró.",
       );
       return false;
     }
@@ -72,8 +73,6 @@ async function loadMerchant() {
     return true;
   }
   showMessage($("load-error"), "");
-  // Remember only IDs that exist, so a typo does not stick in "Abrir mi caja".
-  remember.set(STORAGE_KEYS.merchantId, merchantId);
   renderMerchant(merchant);
   resumeLatestSale(merchant);
   return true;
@@ -629,16 +628,15 @@ window.addEventListener("load", () => {
   }
 });
 
-const rememberedId = remember.get(STORAGE_KEYS.merchantId);
-if (!merchantId && rememberedId) {
-  // "Abrir mi caja" without a code: this device remembers the merchant it registered.
-  window.location.replace(
-    `/merchant?id=${encodeURIComponent(rememberedId)}`,
-  );
-} else if (!merchantId) {
-  showMissing(
-    "Este celular o computador no tiene una caja guardada. Registra tu negocio o abre el enlace de tu caja.",
-  );
-} else {
-  poll(loadMerchant, 5000);
+$("logout").addEventListener("click", logout);
+
+if (requireSession()) {
+  if (merchantId) {
+    poll(loadMerchant, 5000);
+  } else {
+    // "/merchant" alone: the till of the signed-in account, or setting up its shop.
+    homeOfSignedIn()
+      .then((home) => window.location.replace(home))
+      .catch((error) => showMessage($("load-error"), error.message));
+  }
 }

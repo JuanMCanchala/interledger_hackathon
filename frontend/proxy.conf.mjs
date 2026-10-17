@@ -11,6 +11,8 @@ const BACKEND_PATHS = [
   '/js',
   '/img',
   // Clean page URLs (/onboard, /onboard/) and the old .html links, which the backend redirects.
+  '/login',
+  '/register',
   '/onboard',
   '/merchant',
   '/pay',

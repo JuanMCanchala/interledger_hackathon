@@ -11,7 +11,6 @@
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/css/miplante.css" />
-    <script type="module" src="/js/landing.js"></script>
   </head>
   <body>
     <div class="container">
@@ -35,7 +34,7 @@
           </span>
           MiPlante
         </a>
-        <a class="btn btn-ghost" href="#abrir-caja">Abrir mi caja</a>
+        <a class="btn btn-ghost" href="/login">Abrir mi caja</a>
       </header>
 
       <main>
@@ -49,13 +48,13 @@
               Con MiPlante cada venta se reparte sola: tu ganancia, tu crédito o
               proveedor y tu ahorro. Pagas tus deudas en proporción a lo que
               vendes, sin cuotas fijas ni gota a gota, y nunca se descuenta más
-              del límite diario que autorizaste en tu billetera.
+              del límite mensual que autorizaste en tu billetera.
             </p>
             <div class="cta-row">
-              <a class="btn btn-primary btn-lg" href="/onboard"
+              <a class="btn btn-primary btn-lg" href="/register"
                 >Registrar mi negocio</a
               >
-              <a class="btn btn-secondary btn-lg" href="#abrir-caja"
+              <a class="btn btn-secondary btn-lg" href="/login"
                 >Abrir mi caja</a
               >
             </div>
@@ -116,29 +115,6 @@
           </article>
         </section>
 
-        <section class="card stack" id="abrir-caja" style="margin-top: 16px">
-          <div>
-            <h2>Abrir mi caja</h2>
-            <p class="muted small">
-              En el celular o computador donde registraste tu negocio, tu caja
-              se abre sola. En otro equipo, usa el código de tu caja: es lo que
-              aparece después de <code>id=</code> en el enlace de tu caja.
-            </p>
-          </div>
-          <form class="open-form" id="open-form">
-            <label class="field">
-              <span>Código de tu caja</span>
-              <input
-                id="merchant-id"
-                required
-                autocomplete="off"
-                spellcheck="false"
-                autocapitalize="off"
-              />
-            </label>
-            <button class="btn btn-primary" type="submit">Abrir mi caja</button>
-          </form>
-        </section>
       </main>
 
       <footer class="site-footer">

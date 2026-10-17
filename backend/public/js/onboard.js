@@ -8,11 +8,14 @@ import {
   postJson,
   previewSplit,
   remember,
+  requireSession,
   showMessage,
   toMinor,
   walletName,
   withBusy,
 } from "./app.js";
+
+requireSession();
 
 const MAX_TOTAL_PERCENT = 50;
 /** The preview shows a 10,000 COP sale, like the demo. */
