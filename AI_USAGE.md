@@ -23,6 +23,7 @@ Living document: we update it as the project evolves during the Open Payments Ha
 
 - `frontend/`: Claude Code scaffolded the Angular + GSAP PWA and wrote the landing page from the team's brief and brand kit. It also extracted the vector logo and the doodles from `Recursos Front/`.
 - Integration of the landing (ADR 0011): Claude Code replaced the Next.js scaffold with the Angular app, wrote the nginx and `ng serve` proxies to the backend, kept the service worker away from the wallet callbacks, and linked the landing to the real app.
+- App screens redesign: Claude Code turned sign-up and the shop onboarding into one-question-per-screen steps (shared `app-wizard`), rebuilt the sign-in page with the brand, moved the till's pocket editor into one dialog per pocket, and added the month's plant to the till's home.
 
 ## What We Did Ourselves
 

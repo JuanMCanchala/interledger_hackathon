@@ -1,6 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -8,6 +11,7 @@ import {
   output,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/api.service';
@@ -20,7 +24,9 @@ import {
   badgeClass,
   formatAmount,
   formatMoney,
+  formatThousandsInput,
   formatTime,
+  groupThousands,
   normalizeDecimal,
   normalizeWallet,
   previewSplit,
@@ -57,6 +63,11 @@ let nextRuleDraftKey = 1;
 })
 export class MerchantRepartos {
   private readonly api = inject(ApiService);
+  private readonly injector = inject(Injector);
+  private readonly ruleDialog = viewChild<ElementRef<HTMLDialogElement>>('ruleDialog');
+
+  /** The pocket open in the editor dialog, one at a time. */
+  protected readonly editingRuleKey = signal<number | null>(null);
 
   readonly merchant = input.required<MerchantDashboard>();
   readonly merchantPath = input.required<string>();
@@ -74,6 +85,9 @@ export class MerchantRepartos {
 
   protected readonly editingRules = signal(false);
   protected readonly ruleDrafts = signal<RuleDraft[]>([]);
+  protected readonly editingRule = computed(
+    () => this.ruleDrafts().find((d) => d.key === this.editingRuleKey()) ?? null,
+  );
   protected readonly rulesError = signal('');
   protected readonly rulesSavedMsg = signal('');
   protected readonly rulesSaving = signal(false);
@@ -257,9 +271,9 @@ export class MerchantRepartos {
         category: r.category || '',
         kind: r.kind,
         sharePercent: r.shareBps / 100,
-        monthlyQuota: toDecimal(r.monthlyQuota),
-        outstanding: toDecimal(r.outstanding),
-        savingsGoal: toDecimal(r.savingsGoal),
+        monthlyQuota: groupThousands(toDecimal(r.monthlyQuota)),
+        outstanding: groupThousands(toDecimal(r.outstanding)),
+        savingsGoal: groupThousands(toDecimal(r.savingsGoal)),
         dueDay: r.dueDay ?? (r.kind === 'debt' ? 28 : null),
         destination: walletName(r.destination),
       })),
@@ -271,10 +285,11 @@ export class MerchantRepartos {
 
   protected addRuleDraft(): void {
     if (this.ruleDrafts().length >= MAX_RULES) return;
+    const key = nextRuleDraftKey++;
     this.ruleDrafts.update((list) => [
       ...list,
       {
-        key: nextRuleDraftKey++,
+        key,
         label: 'Proveedor',
         category: 'Proveedores',
         kind: 'debt',
@@ -286,6 +301,39 @@ export class MerchantRepartos {
         destination: '',
       },
     ]);
+    this.openRuleDraft(key);
+  }
+
+  protected openRuleDraft(key: number): void {
+    this.rulesError.set('');
+    this.editingRuleKey.set(key);
+    const dialog = this.ruleDialog()?.nativeElement;
+    dialog?.showModal();
+    afterNextRender(() => dialog?.querySelector('input')?.focus(), { injector: this.injector });
+  }
+
+  protected closeRuleDraft(): void {
+    this.ruleDialog()?.nativeElement.close();
+  }
+
+  protected updateRuleMoney(
+    key: number,
+    field: 'monthlyQuota' | 'outstanding' | 'savingsGoal',
+    raw: string,
+  ): void {
+    this.updateRuleDraft(key, { [field]: formatThousandsInput(raw) });
+  }
+
+  protected draftSummary(draft: RuleDraft): string {
+    const category = draft.category.trim() || 'Sin categoría';
+    const code = this.merchant().asset.assetCode;
+    if (draft.kind === 'savings') {
+      const goal = normalizeDecimal(draft.savingsGoal);
+      return goal ? `${category} · meta de ${formatMoney(Number(goal), code)}` : `${category} · sin tope`;
+    }
+    const quota = normalizeDecimal(draft.monthlyQuota);
+    const quotaText = quota ? formatMoney(Number(quota), code) : 'sin cuota';
+    return `${category} · ${quotaText} al mes, día ${draft.dueDay ?? '—'}`;
   }
 
   protected removeRuleDraft(key: number): void {
@@ -320,7 +368,7 @@ export class MerchantRepartos {
     }
 
     return this.ruleDrafts().map((d, index) => {
-      const position = `Regla ${index + 1}`;
+      const position = d.label.trim() || `Bolsillo ${index + 1}`;
       const label = d.label.trim();
       const category = d.category.trim();
       const dest = d.destination.trim();

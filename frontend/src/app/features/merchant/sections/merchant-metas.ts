@@ -59,9 +59,10 @@ export class MerchantMetas {
     });
   }
 
+  /** Paces come from divisions: round up to whole units so the goal is still met. */
   private money(value: number): string {
     const asset = this.merchant().asset ?? { assetCode: 'COP', assetScale: 2 };
-    return formatMoney(value, asset.assetCode, asset.assetScale);
+    return formatMoney(Math.ceil(value), asset.assetCode, asset.assetScale);
   }
 
   private projection({

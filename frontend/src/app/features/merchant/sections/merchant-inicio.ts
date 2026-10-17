@@ -10,12 +10,13 @@ import {
   statusInfo,
   toNumber,
 } from '../../../core/miplante.utils';
+import { Plant, PlantStage } from '../../../shared/brand/plant';
 import { BarChart, BarEntry } from '../../../shared/ui/bar-chart';
 import { TabName } from '../merchant.types';
 
 @Component({
   selector: 'app-merchant-inicio',
-  imports: [BarChart],
+  imports: [BarChart, Plant],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './merchant-inicio.html',
 })
@@ -29,6 +30,35 @@ export class MerchantInicio {
   protected readonly toNumber = toNumber;
 
   protected readonly chartMode = signal<'sales' | 'profit'>('sales');
+  protected readonly monthName = new Date().toLocaleDateString('es-CO', { month: 'long' });
+
+  /** Grows with the month's quotas covered so far (sales goal or days when there are none). */
+  protected readonly monthPlant = computed(() => {
+    const m = this.merchant();
+    const debts = m.rules.filter((r) => r.kind === 'debt' && toNumber(r.monthlyQuota) > 0);
+    const quotas = debts.reduce((sum, r) => sum + toNumber(r.monthlyQuota), 0);
+    const covered = debts.reduce(
+      (sum, r) => sum + Math.min(toNumber(r.paidThisMonth), toNumber(r.monthlyQuota)),
+      0,
+    );
+    const goal = toNumber(m.monthlySalesGoal);
+    const ratio = quotas > 0
+      ? covered / quotas
+      : goal > 0
+        ? toNumber(m.month.gross) / goal
+        : m.month.dayOfMonth / m.month.daysInMonth;
+    const percent = Math.min(100, Math.round(ratio * 100));
+    const stage: PlantStage = ratio >= 1 ? 'bloom' : ratio >= 0.35 ? 'sprout' : 'seed';
+    const what = quotas > 0 ? 'de tus cuotas del mes' : goal > 0 ? 'de tu meta de ventas' : 'del mes';
+    const text = {
+      bloom: quotas > 0
+        ? '¡Cuotas del mes completas! Lo que vendas ahora queda libre para ti.'
+        : `¡Florecida! Llevas el ${percent} % ${what}.`,
+      sprout: `Va creciendo: llevas el ${percent} % ${what}.`,
+      seed: `Está empezando: llevas el ${percent} % ${what}. Cada venta la riega.`,
+    }[stage];
+    return { stage, percent, text };
+  });
 
   protected readonly reviewBannerText = computed(() => {
     const notices = this.merchant().notifications ?? [];
@@ -72,7 +102,7 @@ export class MerchantInicio {
     const daily = this.monthDailyGoal();
     if (!daily) return '';
     const asset = this.merchant().asset ?? { assetCode: 'COP', assetScale: 2 };
-    return `Para tu meta: ${formatMoney(daily, asset.assetCode, asset.assetScale)} por día`;
+    return `Para tu meta: ${formatMoney(Math.ceil(daily), asset.assetCode, asset.assetScale)} por día`;
   });
 
   protected readonly monthSalesSummary = computed(() => {

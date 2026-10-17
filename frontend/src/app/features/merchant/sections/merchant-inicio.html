@@ -175,6 +175,19 @@
         </section>
       </div>
 
+      <div class="stack">
+      <section class="plant-panel" aria-labelledby="plant-title">
+        <app-plant [stage]="monthPlant().stage" />
+        <div class="plant-panel-copy">
+          <h2 id="plant-title">Tu planta de {{ monthName }}</h2>
+          <p>{{ monthPlant().text }}</p>
+          <div class="progress progress-sm" aria-hidden="true">
+            <span [style.width.%]="monthPlant().percent"></span>
+          </div>
+          <small>Día {{ m.month.dayOfMonth }} de {{ m.month.daysInMonth }}</small>
+        </div>
+      </section>
+
       <!-- Right Column: Recent Sales Activity -->
       <section class="workspace-panel stack" aria-labelledby="sales-title">
         <div class="panel-head">
@@ -218,6 +231,7 @@
           </ul>
         }
       </section>
+      </div>
     </div>
   </section>
 }
