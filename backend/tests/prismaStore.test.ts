@@ -91,29 +91,6 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect((await store.getSale(saleId))!.settlement.status).toBe("done");
   });
 
-  it("lets one QR payment pay only one sale, even when claims race", async () => {
-    const env = setupMiPlante(store);
-    const merchantId = await env.onboardRosa();
-    const first = await env.sales.createSale(merchantId, { amount: "10000" });
-    const second = await env.sales.createSale(merchantId, { amount: "10000" });
-    const url = "https://ilp.interledger-test.dev/incoming-payments/provider-x";
-    const at = new Date().toISOString();
-
-    const claims = await Promise.all([
-      store.claimIncomingPayment(first.sale.id, url, at),
-      store.claimIncomingPayment(second.sale.id, url, at),
-      store.claimIncomingPayment(first.sale.id, url, at),
-    ]);
-
-    expect(claims.filter(Boolean)).toHaveLength(1);
-    const paid = [
-      await store.getSale(first.sale.id),
-      await store.getSale(second.sale.id),
-    ].filter((s) => s!.status === "paid");
-    expect(paid).toHaveLength(1);
-    expect(paid[0]!.incomingPaymentUrl).toBe(url);
-  });
-
   it("lets only one claim win", async () => {
     const env = setupMiPlante(store);
     const { saleId } = await paidSale(env);

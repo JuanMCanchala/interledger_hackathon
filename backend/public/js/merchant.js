@@ -100,10 +100,8 @@ function renderMerchant(m) {
   $("merchant-name").textContent = m.name;
   $("merchant-wallet").textContent = `Billetera: ${walletName(m.wallet)}`;
   $("merchant-status").replaceChildren(statusBadge(MERCHANT_STATUS, m.status));
-  // An active consent from before QR payments asks to be renewed once.
-  const bannerState = m.status === "active" && !m.qrPayments ? "no-qr" : m.status;
-  if (bannerState !== lastStatus) renderStatusBanner(bannerState, m.wallet);
-  lastStatus = bannerState;
+  if (m.status !== lastStatus) renderStatusBanner(m.status, m.wallet);
+  lastStatus = m.status;
   syncSaleForm();
 
   $("today-date").textContent = new Date().toLocaleDateString("es-CO", {
@@ -162,10 +160,6 @@ function renderStatusBanner(status, wallet) {
       "Cancelaste la autorización, así que tus ventas ya no se reparten solas.",
     ],
     failed: ["bad", "No pudimos activar tu autorización."],
-    "no-qr": [
-      "info",
-      "Activa los cobros con QR: autoriza una vez más para que tu caja reconozca los pagos que llegan a tu billetera.",
-    ],
   };
   const entry = messages[status];
   if (!entry) {

@@ -10,7 +10,6 @@ import {
   toStoredToken,
   type OutgoingGrantLimits,
   type PaymentOperations,
-  type ReceivedPayment,
 } from "./operations.js";
 import type { Interaction, MandateRecord, PaymentRecord } from "./records.js";
 import {
@@ -54,8 +53,6 @@ export interface StartMandateInput {
   description?: string;
   /** Page (path starting with "/") where the browser lands after the consent screen. */
   returnTo?: string;
-  /** In the same consent, let MiPlante read every payment that reaches the sender's wallet. */
-  watchIncoming?: boolean;
 }
 
 export interface ChargeInput {
@@ -265,7 +262,6 @@ export class PaymentFlows {
       sender,
       { debitAmount: maxAmount, interval },
       `/api/mandates/${id}/callback`,
-      input.watchIncoming,
     );
     const timestamp = this.timestamp();
     const record = await this.store.saveMandate({
@@ -276,7 +272,6 @@ export class PaymentFlows {
       sender: sender.id,
       maxAmount,
       interval,
-      incomingAccess: input.watchIncoming || undefined,
       interaction,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -447,24 +442,6 @@ export class PaymentFlows {
     };
   }
 
-  /**
-   * Newest payments that reached the mandate's wallet, from any app (the wallet provider's own
-   * payment page included). Needs an active mandate approved with `watchIncoming`.
-   */
-  async listReceivedPayments(id: string): Promise<ReceivedPayment[]> {
-    const mandate = await this.requireActiveMandate(id);
-    if (!mandate.incomingAccess) {
-      throw new AppError(
-        "La autorización no incluye ver los pagos que llegan a la billetera",
-        409,
-      );
-    }
-    const wallet = await this.resolve(mandate.sender);
-    return this.withMandateToken(id, (token) =>
-      this.ops.listIncomingPayments(wallet, token),
-    );
-  }
-
   async revokeMandate(id: string) {
     const mandate = await this.requireMandate(id);
     if (mandate.status !== "active" || !mandate.continuation) {
@@ -494,14 +471,12 @@ export class PaymentFlows {
     sender: WalletAddress,
     limits: OutgoingGrantLimits,
     callbackPath: string,
-    watchIncoming = false,
   ) {
     const clientNonce = randomUUID();
     const pending = await this.ops.requestOutgoingPaymentGrant(sender, {
       limits,
       finishUri: `${this.options.publicBaseUrl}${callbackPath}`,
       clientNonce,
-      watchIncoming,
     });
     const interaction: Interaction = {
       continueUri: pending.continue.uri,

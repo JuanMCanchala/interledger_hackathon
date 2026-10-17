@@ -58,17 +58,6 @@ export interface Store {
   ): Promise<SaleRecord | undefined>;
 
   /**
-   * Marks an open sale paid by an incoming payment that reached the merchant's wallet from the QR,
-   * in one atomic step. Returns false if the sale is no longer open or that incoming payment
-   * already paid another sale: each incoming payment pays at most one sale.
-   */
-  claimIncomingPayment(
-    saleId: string,
-    incomingPaymentUrl: string,
-    paidAt: string,
-  ): Promise<boolean>;
-
-  /**
    * Moves a paid sale's settlement from "pending" to "running" in one atomic step (ADR 0006).
    * Returns false when the sale is not paid or someone else already claimed it, so a sale is split
    * exactly once even across concurrent polls or several server instances.
@@ -173,26 +162,6 @@ export class MemoryStore implements Store {
     if (!sale || !from.includes(sale.status)) return undefined;
     Object.assign(sale, changes, { updatedAt });
     return copy(sale);
-  }
-
-  async claimIncomingPayment(
-    saleId: string,
-    incomingPaymentUrl: string,
-    paidAt: string,
-  ) {
-    const sale = this.sales.get(saleId);
-    const taken = [...this.sales.values()].some(
-      (s) => s.incomingPaymentUrl === incomingPaymentUrl,
-    );
-    if (!sale || taken || sale.status !== "open" || sale.paymentId) return false;
-    Object.assign(sale, {
-      status: "paid",
-      incomingPaymentUrl,
-      paidAt,
-      updatedAt: paidAt,
-      error: undefined,
-    });
-    return true;
   }
 
   async claimSettlement(saleId: string, updatedAt: string) {

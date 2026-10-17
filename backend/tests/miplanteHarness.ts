@@ -48,7 +48,7 @@ export const ROSA: OnboardInput = {
 export function setupMiPlante(store: Store = new MemoryStore()) {
   const clock = { now: NOW };
   const now = () => clock.now;
-  const { ops, deliver, payFromProviderPage } = createFakeOperations();
+  const { ops, deliver } = createFakeOperations();
   const flows = new PaymentFlows(ops, store, {
     publicBaseUrl: BASE_URL,
     allowedWalletHosts: ["ilp.interledger-test.dev"],
@@ -93,7 +93,6 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     now,
     ops,
     deliver,
-    payFromProviderPage,
     store,
     flows,
     merchants,

@@ -79,12 +79,6 @@ export function createFakeOperations() {
   let quoteCount = 0;
   let outgoingCount = 0;
   const incoming = new Map<string, { completed: boolean; received: Amount }>();
-  /** Payments other apps made to a wallet (e.g. its provider's payment page), newest first. */
-  const external = new Map<
-    string,
-    { url: string; createdAt: string; completed: boolean; receivedAmount: Amount }[]
-  >();
-  let externalCount = 0;
 
   const ops = {
     getWalletAddress: vi.fn(async (url: string) => {
@@ -199,9 +193,6 @@ export function createFakeOperations() {
       expiresAt: new Date(NOW.getTime() + 24 * 60 * 60_000).toISOString(),
     })),
     cancelGrant: vi.fn(async () => {}),
-    listIncomingPayments: vi.fn(async (wallet: WalletAddress) => [
-      ...(external.get(wallet.id) ?? []),
-    ]),
   } satisfies PaymentOperations;
 
   /** Simulates Interledger delivering the money to an incoming payment. */
@@ -209,19 +200,5 @@ export function createFakeOperations() {
     incoming.set(incomingPaymentUrl, { completed: true, received });
   };
 
-  /** Simulates a customer paying `wallet` from its provider's own page (the sale's QR). */
-  const payFromProviderPage = (
-    wallet: string,
-    receivedAmount: Amount,
-    createdAt = NOW.toISOString(),
-    url = `https://ilp.interledger-test.dev/incoming-payments/provider-${++externalCount}`,
-  ) => {
-    external.set(wallet, [
-      { url, createdAt, completed: true, receivedAmount },
-      ...(external.get(wallet) ?? []),
-    ]);
-    return url;
-  };
-
-  return { ops, deliver, payFromProviderPage };
+  return { ops, deliver };
 }

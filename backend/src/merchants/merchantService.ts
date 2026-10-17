@@ -89,8 +89,6 @@ export class MerchantService {
       interval: DAILY_INTERVAL,
       description: `MiPlante · ${input.name}`,
       returnTo: `/merchant?id=${id}`,
-      // Same consent: see the QR payments that reach the wallet, to match them to sales.
-      watchIncoming: true,
     });
     const timestamp = this.now().toISOString();
     const merchant = await this.store.saveMerchant({
@@ -176,9 +174,9 @@ export class MerchantService {
    */
   async renewConsent(id: string) {
     const merchant = await this.require(id);
-    const current = await this.flows.findMandate(merchant.mandateId);
-    // An active consent from before QR payments lacks incomingAccess: it can be renewed too.
-    if (current.status === "active" && current.incomingAccess) {
+    if (
+      (await this.flows.findMandate(merchant.mandateId)).status === "active"
+    ) {
       throw new AppError("Este negocio ya tiene su autorización activa", 409);
     }
     const { mandate, redirectUrl } = await this.flows.startMandate({
@@ -190,7 +188,6 @@ export class MerchantService {
       interval: DAILY_INTERVAL,
       description: `MiPlante · ${merchant.name}`,
       returnTo: `/merchant?id=${merchant.id}`,
-      watchIncoming: true,
     });
     const updated = await this.store.saveMerchant({
       ...merchant,
@@ -230,8 +227,6 @@ export class MerchantService {
       asset: merchant.asset,
       dailyCap: merchant.dailyCap,
       status: mandate.status,
-      /** The till can detect payments made from the wallet provider's page (the QR). */
-      qrPayments: mandate.status === "active" && Boolean(mandate.incomingAccess),
       rules: merchant.rules,
       createdAt: merchant.createdAt,
     };

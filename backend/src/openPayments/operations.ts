@@ -19,14 +19,6 @@ export type OutgoingGrantLimits =
   | { debitAmount: Amount; interval?: string }
   | { receiveAmount: Amount; interval?: string };
 
-/** An incoming payment on a wallet, as MiPlante sees it when watching that wallet. */
-export interface ReceivedPayment {
-  url: string;
-  createdAt: string;
-  completed: boolean;
-  receivedAmount: Amount;
-}
-
 export interface IncomingPaymentOptions {
   /** Fixed amount the receiver gets. Omit for an open payment request. */
   incomingAmount?: Amount;
@@ -69,15 +61,8 @@ export interface PaymentOperations {
       limits: OutgoingGrantLimits;
       finishUri: string;
       clientNonce: string;
-      /** Also ask to read every incoming payment on the sender's wallet (list-all, read-all). */
-      watchIncoming?: boolean;
     },
   ): Promise<PendingGrant>;
-  /** Newest incoming payments on a wallet, from any app, with a token that has list-all. */
-  listIncomingPayments(
-    wallet: WalletAddress,
-    accessToken: string,
-  ): Promise<ReceivedPayment[]>;
   continueGrant(
     continuation: Continuation,
     interactRef: string,
@@ -179,22 +164,6 @@ export class OpenPaymentsOperations implements PaymentOperations {
     );
   }
 
-  async listIncomingPayments(
-    wallet: WalletAddress,
-    accessToken: string,
-  ): Promise<ReceivedPayment[]> {
-    const page = await this.client.incomingPayment.list(
-      { url: wallet.resourceServer, walletAddress: wallet.id, accessToken },
-      { "wallet-address": wallet.id, first: 50 },
-    );
-    return page.result.map((payment) => ({
-      url: payment.id,
-      createdAt: payment.createdAt,
-      completed: payment.completed,
-      receivedAmount: payment.receivedAmount,
-    }));
-  }
-
   /** Reads an incoming payment, requesting a fresh read grant if the stored token expired. */
   async readIncomingPayment(
     url: string,
@@ -260,7 +229,6 @@ export class OpenPaymentsOperations implements PaymentOperations {
       limits: OutgoingGrantLimits;
       finishUri: string;
       clientNonce: string;
-      watchIncoming?: boolean;
     },
   ): Promise<PendingGrant> {
     const { limits } = options;
@@ -279,17 +247,6 @@ export class OpenPaymentsOperations implements PaymentOperations {
                   ? { debitAmount: limits.debitAmount, ...interval }
                   : { receiveAmount: limits.receiveAmount, ...interval },
             },
-            // Same consent: read what reaches the wallet, so payments made from the wallet
-            // provider's own page (the sale's QR) can be matched to the sale.
-            ...(options.watchIncoming
-              ? [
-                  {
-                    type: "incoming-payment" as const,
-                    actions: ["list-all" as const, "read-all" as const],
-                    identifier: sender.id,
-                  },
-                ]
-              : []),
           ],
         },
         interact: {
