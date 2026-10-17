@@ -300,6 +300,9 @@ export function toMinor(decimal, scale = 2) {
 /**
  * Same split the server applies to a sale: floor(amount × bps / 10 000) per rule,
  * a debt never takes more than what is still owed. Amounts are BigInt minor units.
+ * While the shopkeeper is typing, the shares can add up to more than the sale; the preview then
+ * gives each rule only what is left, in order, so the shop never shows a negative amount (the
+ * form refuses to save it anyway).
  */
 export function previewSplit(saleMinor, rules) {
   let allocated = 0n;
@@ -312,6 +315,8 @@ export function previewSplit(saleMinor, rules) {
     ) {
       amount = rule.outstandingMinor;
     }
+    if (amount > saleMinor - allocated) amount = saleMinor - allocated;
+    if (amount < 0n) amount = 0n;
     allocated += amount;
     return { label: rule.label, kind: rule.kind, amount };
   });
