@@ -52,6 +52,25 @@
 
       <button
         type="button"
+        [class.is-active]="tab() === 'efectivo'"
+        [attr.aria-current]="tab() === 'efectivo' ? 'page' : null"
+        (click)="selectTab('efectivo')"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="2" y="6" width="20" height="12" rx="2" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="M6 12h.01M18 12h.01" />
+        </svg>
+        <span>Efectivo</span>
+        @if (merchant()?.cash; as c) {
+          @if (toNumber(c.toDeposit) > 0) {
+            <span class="panel-nav-badge">!</span>
+          }
+        }
+      </button>
+
+      <button
+        type="button"
         [class.is-active]="tab() === 'metas'"
         [attr.aria-current]="tab() === 'metas' ? 'page' : null"
         (click)="selectTab('metas')"
@@ -139,30 +158,34 @@
         <div class="topbar-heading">
           @switch (tab()) {
             @case ('inicio') {
-              <h1 id="inicio-title">Resumen del día</h1>
+              <h1 id="inicio-title">Resumen del negocio</h1>
               <p class="muted small">{{ todayDateText }} · {{ m.name }}</p>
             }
             @case ('vender') {
               <h1 id="register-title">Caja registradora</h1>
               <p class="muted small">Cobro inmediato con código QR o registro en efectivo</p>
             }
+            @case ('efectivo') {
+              <h1 id="efectivo-title">Efectivo y consignaciones</h1>
+              <p class="muted small">Control de repartos en efectivo pendientes por consignar a tu billetera</p>
+            }
             @case ('metas') {
-              <h1 id="metas-title">Tus metas del mes</h1>
+              <h1 id="metas-title">Metas y proyecciones</h1>
               <p class="muted small">
-                Día {{ m.month.dayOfMonth }} de {{ m.month.daysInMonth }} de {{ currentMonthName }}
+                Futuro y aspiración · Meta de ventas del mes y metas de ahorro
               </p>
             }
             @case ('repartos') {
-              <h1 id="rules-title">Repartos de cada venta</h1>
-              <p class="muted small">Bolsillos automáticos de proveedores, créditos y ahorro</p>
+              <h1 id="rules-title">Repartos y bolsillos</h1>
+              <p class="muted small">Presente y operación · Estado real de cada bolsillo, pagos y giros</p>
             }
             @case ('avisos') {
               <h1 id="avisos-title">Avisos y confirmaciones</h1>
               <p class="muted small">Pagos recibidos, cuotas enviadas y alertas por revisar</p>
             }
             @case ('ajustes') {
-              <h1 id="ajustes-title">Ajustes de tu tienda</h1>
-              <p class="muted small">Pantalla de cobro, voz, límite mensual y fondo de emergencia</p>
+              <h1 id="ajustes-title">Ajustes</h1>
+              <p class="muted small">Negocio, autorizaciones Open Payments, mostrador y voz</p>
             }
           }
         </div>
@@ -172,7 +195,7 @@
             <button
               type="button"
               class="topbar-cash-pill"
-              (click)="selectTab('inicio')"
+              (click)="selectTab('efectivo')"
               title="Efectivo pendiente por consignar a tu billetera"
             >
               <span class="cash-dot" aria-hidden="true"></span>
@@ -238,7 +261,7 @@
       @if (merchant(); as m) {
         <div class="stack">
           <!-- ===============================================================
-               TAB 1: INICIO (Cohesive Dashboard)
+               TAB 1: INICIO (Clean Executive Summary)
                =============================================================== -->
           @if (tab() === 'inicio') {
             <section class="view stack" aria-label="Resumen de tu negocio">
@@ -268,7 +291,12 @@
                 </div>
 
                 <div class="metric-cell">
-                  <span class="metric-label">Reparto de hoy</span>
+                  <div class="row between">
+                    <span class="metric-label">Reparto de hoy</span>
+                    <button type="button" class="metric-link" (click)="selectTab('repartos')">
+                      Bolsillos
+                    </button>
+                  </div>
                   <strong class="metric-value">{{ formatAmount(m.today.kept) }}</strong>
                   <small class="metric-foot">
                     Libre hoy · Apartado: <strong>{{ formatAmount(m.today.allocated) }}</strong>
@@ -312,104 +340,67 @@
                 </div>
               </section>
 
-              @if (m.cash && (toNumber(m.cash.toDeposit) > 0 || toNumber(m.cash.month) > 0 || cashMessage())) {
-                <section class="workspace-panel stack cash-inline-panel" aria-labelledby="cash-title">
-                  <div>
-                    <p class="eyebrow">
-                      Efectivo · hoy {{ formatAmount(m.cash.today) }} · este mes {{ formatAmount(m.cash.month) }}
-                    </p>
-                    <h2 id="cash-title">
-                      @if (toNumber(m.cash.toDeposit) > 0) {
-                        Por consignar: {{ formatAmount(m.cash.toDeposit) }}
-                      } @else {
-                        Todo tu efectivo está al día
-                      }
-                    </h2>
-                  </div>
-                  @if (toNumber(m.cash.toDeposit) > 0) {
-                    <p class="muted small">
-                      Solo los repartos de tus ventas en efectivo tienen que llegar a tu billetera:
-                      consigna esto y MiPlante los envía. El resto del efectivo es tuyo.
-                    </p>
-                    <ul class="cash-shares">
-                      @for (r of m.rules; track r.id) {
-                        @if (r.inCash && toNumber(r.inCash) > 0) {
-                          <li>
-                            <span>{{ r.label }}</span>
-                            <strong class="num">{{ formatAmount(r.inCash) }}</strong>
-                          </li>
-                        }
-                      }
-                    </ul>
-                    <form class="cash-deposit" (ngSubmit)="depositCash()">
-                      <label class="field">
-                        <span>¿Cuánto consignaste?</span>
-                        <input
-                          name="deposit"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          [placeholder]="groupThousandsOf(m.cash.toDeposit)"
-                          [(ngModel)]="depositInput"
-                        />
-                      </label>
-                      <button type="submit" class="btn btn-lima" [disabled]="cashBusy()">
-                        {{ cashBusy() ? 'Registrando…' : 'Ya consigné' }}
-                      </button>
-                    </form>
-                  }
-                  @if (cashMessage(); as cm) {
-                    <p [class]="'banner banner-' + cm.tone" role="status">{{ cm.text }}</p>
-                  }
-                </section>
-              }
-
-              <!-- Structured 2-Column Workspace Grid -->
+              <!-- Clean 2-Column Workspace Grid -->
               <div class="workspace-columns">
-                <!-- Left Column: Charts -->
+                <!-- Left Column: Unified Daily Chart + Monthly Money Split -->
                 <div class="stack">
                   <section class="workspace-panel stack" aria-labelledby="chart-title">
                     <div class="panel-head">
                       <div>
-                        <h2 id="chart-title">Ventas del mes</h2>
-                        <p class="muted small">{{ monthChartCaption() }}</p>
+                        <h2 id="chart-title">
+                          {{ chartMode() === 'sales' ? 'Ventas del mes por día' : 'Ganancia real por día' }}
+                        </h2>
+                        <p class="muted small">
+                          {{ chartMode() === 'sales' ? monthChartCaption() : profitChartCaption() }}
+                        </p>
+                      </div>
+                      <div class="segmented segmented-sm" role="tablist" aria-label="Indicador diario">
+                        <button
+                          type="button"
+                          role="tab"
+                          [attr.aria-selected]="chartMode() === 'sales'"
+                          (click)="chartMode.set('sales')"
+                        >
+                          Ventas
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          [attr.aria-selected]="chartMode() === 'profit'"
+                          (click)="chartMode.set('profit')"
+                        >
+                          Ganancia
+                        </button>
                       </div>
                     </div>
-                    <app-bar-chart
-                      [bars]="monthSalesBars()"
-                      [goal]="monthDailyGoal()"
-                      [goalLabel]="monthDailyGoalLabel()"
-                      [summary]="monthSalesSummary()"
-                    />
-                    <p class="chart-legend small">
-                      <span class="legend legend-sales">Ventas por día</span>
-                      @if (monthDailyGoal()) {
-                        <span class="legend legend-goal">Ritmo para tu meta</span>
-                      }
-                    </p>
+
+                    @if (chartMode() === 'sales') {
+                      <app-bar-chart
+                        [bars]="monthSalesBars()"
+                        [goal]="monthDailyGoal()"
+                        [goalLabel]="monthDailyGoalLabel()"
+                        [summary]="monthSalesSummary()"
+                      />
+                      <p class="chart-legend small">
+                        <span class="legend legend-sales">Ventas por día</span>
+                        @if (monthDailyGoal()) {
+                          <span class="legend legend-goal">Ritmo para tu meta</span>
+                        }
+                      </p>
+                    } @else {
+                      <app-bar-chart
+                        [bars]="monthProfitBars()"
+                        [summary]="monthProfitSummary()"
+                      />
+                    }
                   </section>
 
-                  <section class="workspace-panel stack" aria-labelledby="profit-title">
-                    <div class="panel-head">
-                      <div>
-                        <h2 id="profit-title">Tu ganancia real por día</h2>
-                        <p class="muted small">{{ profitChartCaption() }}</p>
-                      </div>
-                    </div>
-                    <app-bar-chart
-                      [bars]="monthProfitBars()"
-                      [summary]="monthProfitSummary()"
-                    />
-                  </section>
-                </div>
-
-                <!-- Right Column: Monthly Money Distribution & Recent Sales -->
-                <div class="stack">
                   <section class="workspace-panel stack" aria-labelledby="money-title">
                     <div class="panel-head">
                       <div>
                         <h2 id="money-title">A dónde fue tu dinero este mes</h2>
                         <p class="muted small">
-                          Tu ganancia real ya descuenta lo que salió para completar cuotas.
+                          Distribución acumulada del mes entre tu ganancia y tus bolsillos
                         </p>
                       </div>
                       <button
@@ -417,7 +408,7 @@
                         class="btn btn-secondary btn-sm"
                         (click)="selectTab('repartos')"
                       >
-                        Bolsillos ({{ m.rules.length }})
+                        Ver bolsillos ({{ m.rules.length }})
                       </button>
                     </div>
                     <div class="stacked-bar" aria-hidden="true">
@@ -447,50 +438,51 @@
                       }
                     </ul>
                   </section>
-
-                  <section class="workspace-panel stack" aria-labelledby="sales-title">
-                    <div class="panel-head">
-                      <div>
-                        <h2 id="sales-title">Últimas ventas</h2>
-                        <p class="muted small">Toca una venta con QR para ver su estado</p>
-                      </div>
-                      <span class="badge badge-info">{{ m.sales.length }} registradas</span>
-                    </div>
-                    @if (m.sales.length === 0) {
-                      <p class="muted small">
-                        Todavía no hay ventas registradas. Entra a
-                        <strong>Vender</strong> en el menú lateral para registrar tu primera venta.
-                      </p>
-                    } @else {
-                      <ul class="list">
-                        @for (s of m.sales.slice(0, 8); track s.id) {
-                          <li>
-                            <button
-                              type="button"
-                              class="list-button"
-                              [class.is-cash]="s.method === 'cash'"
-                              (click)="s.method !== 'cash' && openSaleFromHistory(s)"
-                            >
-                              <span>
-                                <strong class="num">{{ formatAmount(s.amount) }}</strong>
-                                <span class="meta">
-                                  · {{ formatTime(s.createdAt) }}{{ s.description ? ' · ' + s.description : '' }}
-                                </span>
-                              </span>
-                              @if (s.method === 'cash') {
-                                <span class="badge badge-ok">Efectivo</span>
-                              } @else {
-                                <span [class]="saleStatusBadgeClass(s.status)">
-                                  {{ saleStatusText(s.status) }}
-                                </span>
-                              }
-                            </button>
-                          </li>
-                        }
-                      </ul>
-                    }
-                  </section>
                 </div>
+
+                <!-- Right Column: Recent Sales Activity -->
+                <section class="workspace-panel stack" aria-labelledby="sales-title">
+                  <div class="panel-head">
+                    <div>
+                      <h2 id="sales-title">Últimas ventas</h2>
+                      <p class="muted small">Toca una venta con QR para ver su recibo</p>
+                    </div>
+                    <span class="badge badge-info">{{ m.sales.length }} registradas</span>
+                  </div>
+                  @if (m.sales.length === 0) {
+                    <p class="muted small">
+                      Todavía no hay ventas registradas. Entra a
+                      <strong>Vender</strong> en el menú lateral para registrar tu primera venta.
+                    </p>
+                  } @else {
+                    <ul class="list">
+                      @for (s of m.sales.slice(0, 6); track s.id) {
+                        <li>
+                          <button
+                            type="button"
+                            class="list-button"
+                            [class.is-cash]="s.method === 'cash'"
+                            (click)="s.method !== 'cash' && openSaleFromHistory(s)"
+                          >
+                            <span>
+                              <strong class="num">{{ formatAmount(s.amount) }}</strong>
+                              <span class="meta">
+                                · {{ formatTime(s.createdAt) }}{{ s.description ? ' · ' + s.description : '' }}
+                              </span>
+                            </span>
+                            @if (s.method === 'cash') {
+                              <span class="badge badge-ok">Efectivo</span>
+                            } @else {
+                              <span [class]="saleStatusBadgeClass(s.status)">
+                                {{ saleStatusText(s.status) }}
+                              </span>
+                            }
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </section>
               </div>
             </section>
           }
@@ -517,7 +509,7 @@
                         type="button"
                         role="tab"
                         [attr.aria-selected]="sellMode() === 'qr'"
-                        (click)="sellMode.set('qr'); saleFormError.set('')"
+                        (click)="setSellMode('qr')"
                       >
                         Con QR
                       </button>
@@ -525,7 +517,7 @@
                         type="button"
                         role="tab"
                         [attr.aria-selected]="sellMode() === 'cash'"
-                        (click)="sellMode.set('cash'); saleFormError.set('')"
+                        (click)="setSellMode('cash')"
                       >
                         En efectivo
                       </button>
@@ -685,21 +677,22 @@
                       <p class="eyebrow">Recibo de cobro · {{ formatTime(cur.sale.createdAt) }}</p>
                       <p class="amount-xl">{{ formatAmount(cur.sale.amount) }}</p>
                     </div>
-                    <span [class]="saleStatusBadgeClass(cur.sale.status)">
-                      {{ saleStatusText(cur.sale.status) }}
+                    <span
+                      [class]="saleStatusBadgeClass(cur.sale.status)"
+                      [class.badge-live]="cur.sale.status !== 'paid' && cur.sale.status !== 'failed' && cur.sale.status !== 'cancelled'"
+                    >
+                      @if (cur.sale.status !== 'paid' && cur.sale.status !== 'failed' && cur.sale.status !== 'cancelled') {
+                        <span class="live-status-pulse" aria-hidden="true">
+                          <span class="live-status-core"></span>
+                        </span>
+                      }
+                      <span>{{ saleStatusText(cur.sale.status) }}</span>
                     </span>
                   </div>
 
                   @if (cur.sale.description) {
                     <p class="muted">{{ cur.sale.description }}</p>
                   }
-
-                  <app-steps-indicator
-                    [labels]="saleStages"
-                    [doneFlags]="saleStageFlags(cur.sale)"
-                    [active]="cur.sale.status !== 'failed'"
-                    ariaLabel="Progreso de la venta"
-                  />
 
                   @if (waitingForCustomer(cur.sale)) {
                     <div class="stack">
@@ -849,149 +842,511 @@
           }
 
           <!-- ===============================================================
-               TAB 3: METAS (Goals & Monthly Obligations)
+               TAB 2.5: EFECTIVO (Consignaciones y repartos en efectivo)
                =============================================================== -->
-          @if (tab() === 'metas') {
-            <section class="view stack" aria-label="Tus metas del mes">
-              <div class="goals">
-                @for (card of goalCards(); track $index) {
-                  <article class="workspace-panel goal-card">
-                    <app-progress-ring
-                      [ratio]="card.ratio"
-                      [tone]="card.tone"
-                      [label]="card.ringLabel"
-                    />
-                    <div class="stack-sm goal-card-body">
-                      <p class="eyebrow">{{ card.eyebrow }}</p>
-                      <h2>{{ card.title }}</h2>
-                      <p class="num"><strong>{{ card.detail }}</strong></p>
-                      @if (card.note) {
-                        <p class="small muted">{{ card.note }}</p>
-                      }
-                      @if (card.action === 'define-sales-goal') {
-                        <button
-                          type="button"
-                          class="btn btn-lima"
-                          (click)="selectTab('ajustes')"
-                        >
-                          Definir meta
-                        </button>
-                      } @else if (card.action === 'define-savings-goal') {
-                        <button
-                          type="button"
-                          class="btn btn-lima"
-                          (click)="selectTab('repartos'); openRulesEditor()"
-                        >
-                          Ponerle meta
-                        </button>
-                      }
+          @if (tab() === 'efectivo') {
+            <section class="view stack" aria-label="Efectivo y consignaciones">
+              <section class="metrics-ribbon" aria-label="Estado de tu efectivo">
+                <div class="metric-cell is-highlight">
+                  <span class="metric-label">Efectivo pendiente por consignar</span>
+                  <strong class="metric-value-xl">
+                    {{ formatAmount(m.cash?.toDeposit) }}
+                  </strong>
+                  <small class="metric-foot">
+                    @if (m.cash && toNumber(m.cash.toDeposit) > 0) {
+                      Parte de tus bolsillos que aún está en efectivo sin consignar
+                    } @else {
+                      No tienes repartos en efectivo pendientes por consignar
+                    }
+                  </small>
+                </div>
+
+                <div class="metric-cell">
+                  <span class="metric-label">Consignado a favor</span>
+                  <strong class="metric-value">
+                    {{ formatAmount(m.cash?.credit) }}
+                  </strong>
+                  <small class="metric-foot">
+                    Saldo abonado que cubre los siguientes repartos en efectivo
+                  </small>
+                </div>
+
+                <div class="metric-cell">
+                  <span class="metric-label">Vendido en efectivo hoy</span>
+                  <strong class="metric-value">
+                    {{ formatAmount(m.cash?.today) }}
+                  </strong>
+                  <small class="metric-foot">
+                    Total de ventas cobradas en efectivo hoy
+                  </small>
+                </div>
+
+                <div class="metric-cell">
+                  <span class="metric-label">Vendido en efectivo este mes</span>
+                  <strong class="metric-value">
+                    {{ formatAmount(m.cash?.month) }}
+                  </strong>
+                  <small class="metric-foot">
+                    Acumulado de ventas en efectivo del mes
+                  </small>
+                </div>
+              </section>
+
+              <div class="workspace-columns">
+                <!-- Left Column: Registrar consignación y desglose por bolsillo -->
+                <section class="workspace-panel stack" aria-labelledby="cash-title">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">
+                        @if (m.cash && toNumber(m.cash.toDeposit) > 0) {
+                          Pendiente por llevar a tu billetera
+                        } @else {
+                          Al día con tus bolsillos
+                        }
+                      </p>
+                      <h2 id="cash-title">
+                        @if (m.cash && toNumber(m.cash.toDeposit) > 0) {
+                          Falta por consignar: {{ formatAmount(m.cash.toDeposit) }}
+                        } @else {
+                          Todo tu efectivo por repartir ya fue consignado
+                        }
+                      </h2>
                     </div>
-                  </article>
-                }
+                    @if (m.cash && toNumber(m.cash.credit) > 0) {
+                      <span class="badge badge-info">
+                        A favor: {{ formatAmount(m.cash.credit) }}
+                      </span>
+                    }
+                  </div>
+
+                  <p class="muted small">
+                    Cuando vendes en efectivo, tu ganancia se queda contigo en el cajón. Solo la
+                    parte que le corresponde a tus bolsillos debe consignarse a tu billetera para
+                    que MiPlante la envíe por Open Payments.
+                  </p>
+
+                  @if (m.cash && toNumber(m.cash.toDeposit) > 0) {
+                    <div class="stack-sm">
+                      <span class="eyebrow">Pendiente en efectivo por bolsillo</span>
+                      <ul class="cash-shares">
+                        @for (r of m.rules; track r.id) {
+                          @if (r.inCash && toNumber(r.inCash) > 0) {
+                            <li>
+                              <span>{{ r.label }}</span>
+                              <strong class="num">{{ formatAmount(r.inCash) }}</strong>
+                            </li>
+                          }
+                        }
+                      </ul>
+                    </div>
+                  }
+
+                  <form class="cash-deposit" (ngSubmit)="depositCash()">
+                    <label class="field">
+                      <span>¿Cuánto consignaste a tu billetera?</span>
+                      <input
+                        name="deposit"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        [disabled]="!m.cash || toNumber(m.cash.toDeposit) <= 0 || cashBusy()"
+                        [placeholder]="m.cash && toNumber(m.cash.toDeposit) > 0 ? groupThousandsOf(m.cash.toDeposit) : 'Sin saldo pendiente por consignar'"
+                        [(ngModel)]="depositInput"
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      class="btn btn-lima"
+                      [disabled]="!m.cash || toNumber(m.cash.toDeposit) <= 0 || cashBusy()"
+                    >
+                      {{ cashBusy() ? 'Registrando…' : 'Registrar consignación' }}
+                    </button>
+                  </form>
+
+                  @if (cashMessage(); as cm) {
+                    <p [class]="'banner banner-' + cm.tone" role="status">{{ cm.text }}</p>
+                  }
+                </section>
+
+                <!-- Right Column: Ventas en efectivo registradas -->
+                <section class="workspace-panel stack" aria-labelledby="cash-sales-title">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">Historial de efectivo</p>
+                      <h2 id="cash-sales-title">Ventas en efectivo recientes</h2>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      (click)="selectTab('vender'); setSellMode('cash')"
+                    >
+                      + Registrar venta en efectivo
+                    </button>
+                  </div>
+
+                  @if (cashSales().length === 0) {
+                    <div class="empty-inline">
+                      <p class="muted small">
+                        Aún no has registrado ventas en efectivo. Cuando cobres en efectivo en el
+                        mostrador, regístralo para que tus bolsillos lleven la cuenta exacta.
+                      </p>
+                    </div>
+                  } @else {
+                    <ul class="list">
+                      @for (s of cashSales().slice(0, 8); track s.id) {
+                        <li class="list-button is-cash">
+                          <span>
+                            <strong>{{ formatAmount(s.amount) }}</strong>
+                            <small>
+                              {{ formatTime(s.createdAt) }} · En efectivo{{
+                                s.description ? ' · ' + s.description : ''
+                              }}
+                            </small>
+                          </span>
+                          <span class="badge badge-ok">Registrada</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </section>
               </div>
-              <p class="hint">
-                Las proyecciones usan tu ritmo de este mes. Cuando una obligación
-                completa su cuota, su parte de cada venta vuelve a ser ganancia
-                tuya hasta el próximo mes.
-              </p>
             </section>
           }
 
           <!-- ===============================================================
-               TAB 4: REPARTOS (Rules & Payouts)
+               TAB 3: METAS (Futuro + Aspiración: Meta de ventas y Ahorro con meta)
+               =============================================================== -->
+          @if (tab() === 'metas') {
+            <section class="view stack" aria-label="Tus metas y proyecciones">
+              <!-- Aspiration 1: Monthly Sales Goal -->
+              @if (salesGoalCard(); as sg) {
+                <section class="workspace-panel stack" aria-labelledby="sales-goal-title">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">Aspiración del mes</p>
+                      <h2 id="sales-goal-title">Meta de ventas de {{ currentMonthName }}</h2>
+                      <p class="muted small">
+                        Día {{ m.month.dayOfMonth }} de {{ m.month.daysInMonth }} · Proyección según tu ritmo actual
+                      </p>
+                    </div>
+                    @if (!editingSalesGoal()) {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="editingSalesGoal.set(true); goalMessage.set(null)"
+                      >
+                        {{ sg.hasGoal ? 'Cambiar meta' : 'Definir meta' }}
+                      </button>
+                    }
+                  </div>
+
+                  <div class="aspiration-hero">
+                    <div class="goal-ring">
+                      <app-progress-ring
+                        [ratio]="sg.ratio"
+                        tone="brand"
+                        [label]="sg.ringLabel"
+                      />
+                    </div>
+                    <div class="stack-sm">
+                      @if (sg.hasGoal) {
+                        <p class="amount-lg num">
+                          {{ sg.soldFormatted }}
+                          <span class="muted small">de {{ sg.goalFormatted }}</span>
+                        </p>
+                        <p class="small">
+                          Ritmo ideal diario: <strong>{{ sg.dailyPaceFormatted }}</strong> por día
+                        </p>
+                      } @else {
+                        <p class="amount-lg num">{{ sg.soldFormatted }} vendidos este mes</p>
+                      }
+                      <p class="muted small">{{ sg.note }}</p>
+                    </div>
+                  </div>
+
+                  @if (editingSalesGoal()) {
+                    <form
+                      class="inline-goal-form"
+                      (ngSubmit)="saveSalesGoal()"
+                      novalidate
+                    >
+                      <label class="field">
+                        <span>¿Cuánto te propones vender al mes?</span>
+                        <input
+                          name="salesGoal"
+                          inputmode="numeric"
+                          autocomplete="off"
+                          placeholder="Ej: 3.000.000"
+                          [ngModel]="salesGoalInput"
+                          (ngModelChange)="onSalesGoalInput($event)"
+                        />
+                      </label>
+                      <div class="row">
+                        <button
+                          type="submit"
+                          class="btn btn-lima"
+                          [disabled]="settingsBusy()"
+                        >
+                          {{ settingsBusy() ? 'Guardando…' : 'Guardar meta' }}
+                        </button>
+                        @if (sg.hasGoal) {
+                          <button
+                            type="button"
+                            class="btn btn-secondary"
+                            [disabled]="settingsBusy()"
+                            (click)="clearSalesGoal()"
+                          >
+                            Quitar meta
+                          </button>
+                        }
+                        <button
+                          type="button"
+                          class="btn btn-ghost"
+                          (click)="editingSalesGoal.set(false)"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  }
+
+                  @if (goalMessage(); as gm) {
+                    <p [class]="'banner banner-' + gm.tone" role="status">{{ gm.text }}</p>
+                  }
+                </section>
+              }
+
+              <!-- Aspiration 2: Savings Pockets & Projections -->
+              <section class="workspace-panel stack" aria-labelledby="savings-goals-title">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Futuro y colchón financiero</p>
+                    <h2 id="savings-goals-title">Metas de ahorro y proyección</h2>
+                    <p class="muted small">
+                      Calculamos cuándo alcanzas cada meta según lo que llevas ahorrado este mes
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    (click)="selectTab('repartos'); openRulesEditor()"
+                  >
+                    Configurar ahorros
+                  </button>
+                </div>
+
+                @if (savingsGoalCards().length === 0) {
+                  <div class="empty-inline">
+                    <p class="muted small">
+                      Todavía no tienes bolsillos de ahorro. Agrega uno en Repartos para separar un porcentaje de cada venta hacia una meta futura.
+                    </p>
+                    <button
+                      type="button"
+                      class="btn btn-lima"
+                      (click)="selectTab('repartos'); openRulesEditor()"
+                    >
+                      + Crear bolsillo de ahorro
+                    </button>
+                  </div>
+                } @else {
+                  <div class="goals">
+                    @for (card of savingsGoalCards(); track card.id) {
+                      <article class="pocket-row goal-card">
+                        <app-progress-ring
+                          [ratio]="card.ratio"
+                          [tone]="card.tone"
+                          [label]="card.ringLabel"
+                        />
+                        <div class="stack-sm goal-card-body">
+                          <p class="eyebrow">{{ card.eyebrow }}</p>
+                          <h3>{{ card.title }}</h3>
+                          <p class="num"><strong>{{ card.detail }}</strong></p>
+                          <p class="small muted">
+                            Ahorrado este mes: <strong>{{ card.thisMonthFormatted }}</strong>
+                          </p>
+                          <p class="small muted">{{ card.note }}</p>
+                          @if (!card.hasGoal) {
+                            <div>
+                              <button
+                                type="button"
+                                class="btn btn-lima btn-sm"
+                                (click)="selectTab('repartos'); openRulesEditor()"
+                              >
+                                Ponerle meta
+                              </button>
+                            </div>
+                          }
+                        </div>
+                      </article>
+                    }
+                  </div>
+                }
+              </section>
+            </section>
+          }
+
+          <!-- ===============================================================
+               TAB 4: REPARTOS (Presente + Operación: Estado real por bolsillo, editor y payouts)
                =============================================================== -->
           @if (tab() === 'repartos') {
             <section class="view stack" aria-label="Repartos de cada venta">
+              @if (repartosStats(); as rs) {
+                <section class="metrics-ribbon" aria-label="Resumen operativo de tus bolsillos">
+                  <div class="metric-cell is-highlight">
+                    <span class="metric-label">Tu parte libre por venta</span>
+                    <strong class="metric-value-xl">{{ rs.keptPctText }}%</strong>
+                    <small class="metric-foot">
+                      Tus bolsillos apartan el {{ rs.allocatedPctText }}% restante
+                    </small>
+                  </div>
+
+                  <div class="metric-cell">
+                    <span class="metric-label">Apartado este mes</span>
+                    <strong class="metric-value">{{ rs.paidMonthTotalFormatted }}</strong>
+                    <small class="metric-foot">
+                      En {{ rs.debtCount }} {{ rs.debtCount === 1 ? 'obligación' : 'obligaciones' }} y {{ rs.savingsCount }} {{ rs.savingsCount === 1 ? 'ahorro' : 'ahorros' }}
+                    </small>
+                  </div>
+
+                  <div class="metric-cell">
+                    <span class="metric-label">Listo por enviar hoy</span>
+                    <strong class="metric-value">{{ rs.reservedTotalFormatted }}</strong>
+                    <small class="metric-foot">
+                      Reservado para cuotas de proveedores y créditos
+                    </small>
+                  </div>
+
+                  <div class="metric-cell">
+                    <span class="metric-label">Reglas activas</span>
+                    <strong class="metric-value">{{ m.rules.length }} / {{ maxRules }}</strong>
+                    <div>
+                      @if (!editingRules()) {
+                        <button
+                          type="button"
+                          class="btn btn-lima btn-sm"
+                          (click)="openRulesEditor()"
+                        >
+                          Editar repartos
+                        </button>
+                      } @else {
+                        <span class="badge badge-info">Editando reglas</span>
+                      }
+                    </div>
+                  </div>
+                </section>
+              }
+
               <section class="workspace-panel stack">
                 <div class="panel-head">
                   <div>
-                    <p class="eyebrow">Tus bolsillos automáticos</p>
-                    <h2>Configuración de repartos</h2>
+                    <p class="eyebrow">Presente y operación</p>
+                    <h2>Estado real de cada bolsillo</h2>
+                    <p class="muted small">
+                      Porcentaje por venta, billetera destino, apartado del mes, deuda total y pago anticipado
+                    </p>
                   </div>
                   @if (!editingRules()) {
                     <button
                       type="button"
-                      class="btn btn-lima"
+                      class="btn btn-secondary btn-sm"
                       (click)="openRulesEditor()"
                     >
-                      Editar repartos
+                      Editar bolsillos
                     </button>
                   }
                 </div>
 
                 @if (!editingRules()) {
-                  <ul class="list">
+                  <div class="stack">
                     @for (group of groupedRules(); track group.name) {
-                      <li class="stack-sm">
+                      <div class="stack-sm">
                         <h3 class="eyebrow">{{ group.name }}</h3>
-                        <ul class="list">
+                        <ul class="pocket-rows">
                           @for (r of group.rules; track r.id) {
-                            <li class="list-item">
-                              <div class="row between">
-                                <strong>{{ r.label }}</strong>
+                            <li class="pocket-row">
+                              <div class="pocket-row-top">
+                                <div>
+                                  <strong>{{ r.label }}</strong>
+                                  <p class="muted small">
+                                    <strong>{{ (r.shareBps / 100).toLocaleString('es-CO', { maximumFractionDigits: 2 }) }}%</strong> de cada venta · Destino:
+                                    <span class="mono">{{ walletName(r.destination) }}</span>
+                                  </p>
+                                </div>
                                 <span [class]="r.kind === 'debt' ? 'badge badge-wait' : 'badge badge-info'">
                                   {{ ruleKindLabel(r.kind) }}
                                 </span>
                               </div>
-                              <p class="muted small">
-                                {{ (r.shareBps / 100).toLocaleString('es-CO', { maximumFractionDigits: 2 }) }}% de cada venta ·
-                                <span class="mono">{{ walletName(r.destination) }}</span>
-                              </p>
+
+                              @if (r.inCash && toNumber(r.inCash) > 0) {
+                                <p class="small muted">
+                                  En efectivo pendiente por consignar: <strong>{{ formatAmount(r.inCash) }}</strong>
+                                </p>
+                              }
 
                               @if (r.kind === 'debt') {
                                 <div class="progress is-gold">
                                   <span [style.width.%]="debtProgress(r)"></span>
                                 </div>
-                                @if (toNumber(r.monthlyQuota) > 0 && toNumber(r.paidThisMonth) >= toNumber(r.monthlyQuota)) {
-                                  <span class="badge badge-ok">
-                                    Cuota del mes completa: el resto es ganancia tuya
-                                  </span>
-                                } @else {
-                                  <p class="small">
-                                    Este mes: apartado {{ formatAmount(r.paidThisMonth) }} de {{ formatAmount(r.monthlyQuota) }}
-                                  </p>
-                                }
-                                <div class="row between">
+                                <div class="pocket-row-top">
+                                  @if (toNumber(r.monthlyQuota) > 0 && toNumber(r.paidThisMonth) >= toNumber(r.monthlyQuota)) {
+                                    <span class="badge badge-ok">
+                                      Cuota del mes completa · El resto es ganancia tuya
+                                    </span>
+                                  } @else {
+                                    <p class="small">
+                                      Apartado este mes: <strong>{{ formatAmount(r.paidThisMonth) }}</strong> de {{ formatAmount(r.monthlyQuota) }}
+                                    </p>
+                                  }
+                                  @if (r.outstanding) {
+                                    @if (toNumber(r.outstanding) <= 0) {
+                                      <span class="badge badge-ok">¡Deuda total saldada!</span>
+                                    } @else {
+                                      <span class="small muted">
+                                        Deuda total: faltan <strong>{{ formatAmount(r.outstanding) }}</strong> (abonado {{ formatAmount(r.repaid) }})
+                                      </span>
+                                    }
+                                  }
+                                </div>
+                                <div class="pocket-row-top">
                                   <p class="small">
                                     <strong>Por enviar: {{ formatAmount(r.reserved) }}</strong>
                                     <span class="muted"> · {{ dueText(r) }}</span>
                                   </p>
                                   <button
                                     type="button"
-                                    class="btn btn-secondary"
+                                    class="btn btn-secondary btn-sm"
                                     [disabled]="toNumber(r.reserved) <= 0 || payoutBusy()"
                                     (click)="runManualPayout(r.id)"
                                   >
                                     Pagar ahora
                                   </button>
                                 </div>
-                                @if (r.outstanding) {
-                                  @if (toNumber(r.outstanding) <= 0) {
-                                    <span class="badge badge-ok">¡Deuda pagada!</span>
-                                  } @else {
-                                    <p class="muted small">
-                                      Deuda total: faltan {{ formatAmount(r.outstanding) }} (pagado {{ formatAmount(r.repaid) }})
-                                    </p>
-                                  }
-                                }
                               } @else {
                                 @if (toNumber(r.savingsGoal) > 0) {
                                   <div class="progress">
                                     <span [style.width.%]="savingsProgress(r)"></span>
                                   </div>
                                 }
-                                <p class="small">
-                                  Este mes: {{ formatAmount(r.paidThisMonth) }} · ahorrado en total: {{ formatAmount(r.repaid) }}{{
-                                    toNumber(r.savingsGoal) > 0 ? ' de ' + formatAmount(r.savingsGoal) : ''
-                                  }}
-                                </p>
+                                <div class="pocket-row-top">
+                                  <p class="small">
+                                    Apartado este mes: <strong>{{ formatAmount(r.paidThisMonth) }}</strong> · Total ahorrado: <strong>{{ formatAmount(r.repaid) }}</strong>{{
+                                      toNumber(r.savingsGoal) > 0 ? ' de ' + formatAmount(r.savingsGoal) : ''
+                                    }}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    class="metric-link"
+                                    (click)="selectTab('metas')"
+                                  >
+                                    Ver proyección →
+                                  </button>
+                                </div>
                               }
                             </li>
                           }
                         </ul>
-                      </li>
+                      </div>
                     }
-                  </ul>
+                  </div>
                 } @else {
                   <form class="stack" (ngSubmit)="saveRules()" (input)="rulesError.set('')" novalidate>
                     <p class="muted small">
@@ -1207,7 +1562,18 @@
                       El día de pago se envía la cuota del mes en un solo giro.
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    [disabled]="payoutBusy()"
+                    (click)="simulateDueDate()"
+                  >
+                    Simular fecha de pago
+                  </button>
                 </div>
+                @if (simulateMessage(); as sim) {
+                  <p [class]="'banner banner-' + sim.tone" role="status">{{ sim.text }}</p>
+                }
                 @if (payoutMessage(); as pm) {
                   <p [class]="'banner banner-' + pm.tone" role="status">{{ pm.text }}</p>
                 }
@@ -1380,259 +1746,131 @@
           }
 
           <!-- ===============================================================
-               TAB 6: AJUSTES (Settings, Display, Voice, Cap & Demo)
+               TAB 6: AJUSTES (Unified, Accessible Settings Sheet — No Loose Cards)
                =============================================================== -->
           @if (tab() === 'ajustes') {
-            <section class="view stack" aria-label="Ajustes de tu tienda">
-              <div class="workspace-columns">
-                <!-- Left Column: Store Data, Monthly Goal & Monthly Limit -->
-                <div class="stack">
-                  <form class="workspace-panel stack" (ngSubmit)="saveShopName()" novalidate>
-                    <div class="panel-head">
-                      <div>
-                        <h2>Tu tienda</h2>
-                        <p class="muted small">Identidad del negocio y billetera conectada</p>
-                      </div>
-                    </div>
-                    <label class="field">
-                      <span>Nombre del negocio</span>
-                      <input
-                        name="shopName"
-                        maxlength="80"
-                        autocomplete="organization"
-                        [(ngModel)]="shopNameInput"
-                      />
-                    </label>
-                    <div class="field">
-                      <span>Billetera del negocio</span>
-                      <p class="mono">{{ walletName(m.wallet) }}</p>
-                    </div>
+            <section class="view" aria-label="Ajustes de tu tienda">
+              <div class="workspace-panel settings-sheet">
+                <!-- Section 1: Negocio y Billetera -->
+                <div class="settings-section">
+                  <div class="settings-meta">
+                    <h2>Negocio y billetera</h2>
+                    <p class="muted small">
+                      Nombre comercial y dirección Open Payments conectada a tu caja
+                    </p>
+                  </div>
+
+                  <div class="settings-body stack-sm">
+                    <form class="settings-inline-form" (ngSubmit)="saveShopName()" novalidate>
+                      <label class="field">
+                        <span>Nombre del negocio</span>
+                        <input
+                          name="shopName"
+                          maxlength="80"
+                          autocomplete="organization"
+                          [(ngModel)]="shopNameInput"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        class="btn btn-lima"
+                        [disabled]="settingsBusy()"
+                      >
+                        Guardar
+                      </button>
+                    </form>
                     @if (shopMessage(); as sm) {
                       <p [class]="'banner banner-' + sm.tone" role="status">{{ sm.text }}</p>
                     }
-                    <div>
-                      <button
-                        type="submit"
-                        class="btn btn-lima"
-                        [disabled]="settingsBusy()"
-                      >
-                        Guardar nombre
-                      </button>
+                    <div class="settings-kv">
+                      <span class="muted small">Billetera conectada</span>
+                      <strong class="mono">{{ walletName(m.wallet) }}</strong>
                     </div>
-                  </form>
+                  </div>
+                </div>
 
-                  <form class="workspace-panel stack" (ngSubmit)="saveSalesGoal()" novalidate>
-                    <div class="panel-head">
-                      <div>
-                        <h2>Meta de ventas del mes</h2>
-                        <p class="muted small">Opcional · Sirve para medir tu ritmo diario</p>
-                      </div>
-                    </div>
-                    <label class="field">
-                      <span>¿Cuánto quieres vender al mes?</span>
-                      <input
-                        name="salesGoal"
-                        inputmode="numeric"
-                        autocomplete="off"
-                        placeholder="Ej: 3.000.000"
-                        [ngModel]="salesGoalInput"
-                        (ngModelChange)="onSalesGoalInput($event)"
-                      />
-                    </label>
-                    @if (goalMessage(); as gm) {
-                      <p [class]="'banner banner-' + gm.tone" role="status">{{ gm.text }}</p>
-                    }
-                    <div class="row">
-                      <button
-                        type="submit"
-                        class="btn btn-lima"
-                        [disabled]="settingsBusy()"
-                      >
-                        Guardar meta
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-ghost"
-                        [disabled]="settingsBusy()"
-                        (click)="clearSalesGoal()"
-                      >
-                        Quitar meta
-                      </button>
-                    </div>
-                  </form>
+                <!-- Section 2: Límite mensual Open Payments -->
+                <div class="settings-section">
+                  <div class="settings-meta">
+                    <h2>Límite mensual</h2>
+                    <p class="muted small">
+                      Tope autorizado en tu billetera para repartos automáticos del mes
+                    </p>
+                  </div>
 
-                  <form class="workspace-panel stack" (ngSubmit)="saveNewCap()" novalidate>
-                    <div class="panel-head">
-                      <div>
-                        <h2>Límite mensual</h2>
-                        <p class="muted small">
-                          Hoy: <strong>{{ formatAmount(m.monthlyCap) }}</strong>
-                          @if (totalQuotasAmount() > 0) {
-                            <span> · tus cuotas suman {{ money(totalQuotasAmount()) }}</span>
-                          }
-                        </p>
-                      </div>
+                  <div class="settings-body stack-sm">
+                    <div class="settings-kv">
+                      <span class="muted small">Autorizado actualmente</span>
+                      <strong>
+                        {{ formatAmount(m.monthlyCap) }}
+                        @if (totalQuotasAmount() > 0) {
+                          <span class="muted small"> · cuotas: {{ money(totalQuotasAmount()) }}</span>
+                        }
+                      </strong>
                     </div>
+
                     @if (m.pendingCap) {
                       <p class="banner banner-wait" role="status">
-                        Pediste cambiarlo a {{ formatAmount(m.pendingCap) }}: falta que lo
-                        apruebes en tu billetera. Mientras tanto sigue el límite actual.
+                        Cambio pendiente a {{ formatAmount(m.pendingCap) }}: falta aprobarlo en tu billetera.
                       </p>
                     }
-                    <label class="field">
-                      <span>Nuevo límite mensual</span>
-                      <input
-                        name="capNew"
-                        inputmode="numeric"
-                        autocomplete="off"
-                        [ngModel]="capNewInput"
-                        (ngModelChange)="onCapNewInput($event)"
-                      />
-                    </label>
-                    <p class="hint">
-                      Cambiarlo pide una autorización nueva en tu billetera. Tu
-                      límite actual sigue funcionando hasta que la apruebes.
-                    </p>
+
+                    <form class="settings-inline-form" (ngSubmit)="saveNewCap()" novalidate>
+                      <label class="field">
+                        <span>Nuevo límite mensual</span>
+                        <input
+                          name="capNew"
+                          inputmode="numeric"
+                          autocomplete="off"
+                          [ngModel]="capNewInput"
+                          (ngModelChange)="onCapNewInput($event)"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        class="btn btn-secondary"
+                        [disabled]="settingsBusy()"
+                      >
+                        Cambiar en billetera →
+                      </button>
+                    </form>
                     @if (capMessage(); as cm) {
                       <p [class]="'banner banner-' + cm.tone" role="status">{{ cm.text }}</p>
                     }
-                    <div>
-                      <button
-                        type="submit"
-                        class="btn btn-lima"
-                        [disabled]="settingsBusy()"
-                      >
-                        Cambiar en mi billetera →
-                      </button>
-                    </div>
-                  </form>
+                  </div>
                 </div>
 
-                <!-- Right Column: Counter Display, Voice, Emergency Fund, Demo & Account -->
-                <div class="stack">
-                  <section class="workspace-panel stack" aria-labelledby="display-title">
-                    <div class="panel-head">
-                      <div>
-                        <h2 id="display-title">Pantalla de cobro en tu celular</h2>
-                        <p class="muted small">
-                          Muestra automáticamente el código QR de cada cobro nuevo en mostrador
-                        </p>
-                      </div>
-                    </div>
-                    @if (m.displayUrl) {
-                      <div class="qr-box">
-                        <app-qr-code [value]="m.displayUrl" [size]="200" />
-                      </div>
-                      <div class="row">
-                        <a class="btn btn-secondary" [href]="m.displayUrl" target="_blank" rel="noopener">
-                          Abrir la pantalla aquí →
-                        </a>
-                        <button
-                          type="button"
-                          class="btn btn-ghost"
-                          [disabled]="displayBusy()"
-                          (click)="linkDisplay(true)"
-                        >
-                          Cambiar el enlace
-                        </button>
-                      </div>
-                    } @else {
-                      <div>
-                        <button
-                          type="button"
-                          class="btn btn-lima"
-                          [disabled]="displayBusy()"
-                          (click)="linkDisplay()"
-                        >
-                          Enlazar mi celular
-                        </button>
-                      </div>
-                    }
-                    @if (displayMessage(); as dm) {
-                      <p [class]="'banner banner-' + dm.tone" role="status">{{ dm.text }}</p>
-                    }
-                  </section>
+                <!-- Section 3: Fondo de emergencia -->
+                <div class="settings-section">
+                  <div class="settings-meta">
+                    <h2>Fondo de emergencia</h2>
+                    <p class="muted small">
+                      Respaldo opcional desde tu bolsillo de ahorro si falta saldo para una cuota
+                    </p>
+                  </div>
 
-                  <section class="workspace-panel stack" aria-labelledby="voice-title">
-                    <div class="panel-head">
-                      <div>
-                        <h2 id="voice-title">Voz y sonido</h2>
-                        <p class="muted small">
-                          Avisos hablados de pagos y manos libres con GlorIA
-                        </p>
-                      </div>
-                    </div>
-                    @if (voice.canSpeak) {
-                      <label class="switch-row">
-                        <input
-                          type="checkbox"
-                          role="switch"
-                          [checked]="voice.announcements()"
-                          (change)="toggleAnnouncements()"
-                        />
-                        <span>Avisarme los pagos con voz</span>
-                      </label>
-                      @if (voice.canListen) {
-                        <label class="switch-row">
-                          <input
-                            type="checkbox"
-                            role="switch"
-                            [checked]="voice.handsFree()"
-                            (change)="voice.setHandsFree(!voice.handsFree())"
-                          />
-                          <span>Manos libres: di «Gloria» y háblale</span>
-                        </label>
-                        <p class="small muted">
-                          Mientras esté encendido, la caja escucha para reconocer «Gloria».
-                        </p>
-                        @if (voice.handsFreeError()) {
-                          <p class="banner banner-bad" role="alert">{{ voice.handsFreeError() }}</p>
-                        }
-                      }
-                      <div>
-                        <button type="button" class="btn btn-secondary" (click)="tryVoice()">
-                          Probar la voz
-                        </button>
-                      </div>
-                    } @else {
-                      <p class="banner banner-wait" role="status">
-                        Este navegador no puede hablar. Prueba con Chrome, Edge o Safari actualizados.
-                      </p>
-                    }
-                  </section>
-
-                  <section class="workspace-panel stack" aria-labelledby="emergency-title">
-                    <div class="panel-head">
-                      <div>
-                        <h2 id="emergency-title">Fondo de emergencia</h2>
-                        <p class="muted small">
-                          Último recurso si en tu tienda no alcanza para cubrir una cuota
-                        </p>
-                      </div>
-                    </div>
+                  <div class="settings-body stack-sm">
                     <p
                       [class]="'banner banner-' + emergencyBanner().tone"
                       role="status"
                     >
                       {{ emergencyBanner().text }}
                     </p>
-                    @if (savingsRules().length >= 2 && m.emergency?.status !== 'active') {
-                      <label class="field">
-                        <span>¿Cuál de tus ahorros?</span>
-                        <select name="emergencyPick" [(ngModel)]="emergencyPickId">
-                          @for (sr of savingsRules(); track sr.id) {
-                            <option [value]="sr.id">
-                              {{ sr.label }} · {{ walletName(sr.destination) }}
-                            </option>
-                          }
-                        </select>
-                      </label>
-                    }
-                    @if (emergencyMessage(); as em) {
-                      <p [class]="'banner banner-' + em.tone" role="status">{{ em.text }}</p>
-                    }
+
                     @if (savingsRules().length > 0 && m.emergency?.status !== 'active') {
-                      <div>
+                      <div class="settings-inline-form">
+                        @if (savingsRules().length >= 2) {
+                          <label class="field">
+                            <span>Bolsillo de respaldo</span>
+                            <select name="emergencyPick" [(ngModel)]="emergencyPickId">
+                              @for (sr of savingsRules(); track sr.id) {
+                                <option [value]="sr.id">
+                                  {{ sr.label }} · {{ walletName(sr.destination) }}
+                                </option>
+                              }
+                            </select>
+                          </label>
+                        }
                         <button
                           type="button"
                           class="btn btn-secondary"
@@ -1641,52 +1879,146 @@
                         >
                           {{
                             m.emergency?.status === 'awaiting-consent'
-                              ? 'Abrir de nuevo mi billetera →'
-                              : 'Autorizar mi fondo de emergencia →'
+                              ? 'Abrir mi billetera →'
+                              : 'Autorizar fondo de emergencia →'
                           }}
                         </button>
                       </div>
                     }
-                  </section>
-
-                  <section class="workspace-panel stack" aria-labelledby="simulate-title">
-                    <div class="panel-head">
-                      <div>
-                        <h2 id="simulate-title">Simular fecha de pago (Demo)</h2>
-                        <p class="muted small">
-                          Envía ya a cada proveedor y crédito su cuota del mes
-                        </p>
-                      </div>
-                    </div>
-                    @if (simulateMessage(); as sim) {
-                      <p [class]="'banner banner-' + sim.tone" role="status">{{ sim.text }}</p>
+                    @if (emergencyMessage(); as em) {
+                      <p [class]="'banner banner-' + em.tone" role="status">{{ em.text }}</p>
                     }
-                    <div>
-                      <button
-                        type="button"
-                        class="btn btn-secondary"
-                        [disabled]="payoutBusy()"
-                        (click)="simulateDueDate()"
-                      >
-                        Simular que llegó la fecha de pago
-                      </button>
-                    </div>
-                  </section>
+                  </div>
+                </div>
 
-                  <section class="workspace-panel stack">
+                <!-- Section 4: Pantalla de cobro en mostrador -->
+                <div class="settings-section">
+                  <div class="settings-meta">
+                    <h2>Pantalla de cobro</h2>
+                    <p class="muted small">
+                      Enlaza un celular o tablet en mostrador para mostrar cada QR automáticamente
+                    </p>
+                  </div>
+
+                  <div class="settings-body stack-sm">
+                    @if (m.displayUrl) {
+                      <div class="row">
+                        <a
+                          class="btn btn-lima btn-sm"
+                          [href]="m.displayUrl"
+                          target="_blank"
+                          rel="noopener"
+                        >
+                          Abrir pantalla →
+                        </a>
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm"
+                          (click)="showDisplayQr.set(!showDisplayQr())"
+                        >
+                          {{ showDisplayQr() ? 'Ocultar código QR' : 'Ver código QR para celular' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-sm"
+                          [disabled]="displayBusy()"
+                          (click)="linkDisplay(true)"
+                        >
+                          Rotar enlace
+                        </button>
+                      </div>
+                      @if (showDisplayQr()) {
+                        <div class="qr-box">
+                          <app-qr-code [value]="m.displayUrl" [size]="180" />
+                        </div>
+                      }
+                    } @else {
+                      <div>
+                        <button
+                          type="button"
+                          class="btn btn-lima btn-sm"
+                          [disabled]="displayBusy()"
+                          (click)="linkDisplay(); showDisplayQr.set(true)"
+                        >
+                          Enlazar pantalla de mostrador
+                        </button>
+                      </div>
+                    }
+                    @if (displayMessage(); as dm) {
+                      <p [class]="'banner banner-' + dm.tone" role="status">{{ dm.text }}</p>
+                    }
+                  </div>
+                </div>
+
+                <!-- Section 5: Voz y asistente GlorIA -->
+                <div class="settings-section">
+                  <div class="settings-meta">
+                    <h2>Voz y sonido</h2>
+                    <p class="muted small">
+                      Confirmaciones habladas al recibir pagos y activación por voz con «Gloria»
+                    </p>
+                  </div>
+
+                  <div class="settings-body stack-sm">
+                    @if (voice.canSpeak) {
+                      <div class="settings-switches">
+                        <label class="switch-row">
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            [checked]="voice.announcements()"
+                            (change)="toggleAnnouncements()"
+                          />
+                          <span>Anunciar pagos recibidos en voz alta</span>
+                        </label>
+                        @if (voice.canListen) {
+                          <label class="switch-row">
+                            <input
+                              type="checkbox"
+                              role="switch"
+                              [checked]="voice.handsFree()"
+                              (change)="voice.setHandsFree(!voice.handsFree())"
+                            />
+                            <span>Manos libres: escuchar la palabra «Gloria»</span>
+                          </label>
+                          @if (voice.handsFreeError()) {
+                            <p class="banner banner-bad" role="alert">{{ voice.handsFreeError() }}</p>
+                          }
+                        }
+                      </div>
+                      <div>
+                        <button type="button" class="btn btn-secondary btn-sm" (click)="tryVoice()">
+                          Probar sonido de voz
+                        </button>
+                      </div>
+                    } @else {
+                      <p class="banner banner-wait" role="status">
+                        Este navegador no soporta síntesis de voz. Usa Chrome, Edge o Safari actualizados.
+                      </p>
+                    }
+                  </div>
+                </div>
+
+                <!-- Section 6: Cuenta y Sesión -->
+                <div class="settings-section">
+                  <div class="settings-meta">
+                    <h2>Cuenta y sesión</h2>
+                    <p class="muted small">
+                      Usuario autenticado en este dispositivo
+                    </p>
+                  </div>
+
+                  <div class="settings-body">
                     <div class="row between">
                       <div>
-                        <h2>Tu cuenta</h2>
-                        <p class="small">
-                          <strong>{{ account()?.name }}</strong><br />
-                          <span class="muted">{{ account()?.email }}</span>
-                        </p>
+                        <strong>{{ account()?.name }}</strong>
+                        <p class="muted small">{{ account()?.email }}</p>
                       </div>
-                      <button type="button" class="btn btn-danger" (click)="logout()">
+                      <button type="button" class="btn btn-danger btn-sm" (click)="logout()">
                         Cerrar sesión
                       </button>
                     </div>
-                  </section>
+                  </div>
                 </div>
               </div>
             </section>

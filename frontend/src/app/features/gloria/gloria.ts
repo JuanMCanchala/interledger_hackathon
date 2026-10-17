@@ -33,7 +33,7 @@ export type GloriaAction =
   | { type: 'cash-deposit'; amount: string }
   | { type: 'open'; section: GloriaSection };
 
-export type GloriaSection = 'inicio' | 'vender' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
+export type GloriaSection = 'inicio' | 'vender' | 'efectivo' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
 
 type SaleAction = Extract<GloriaAction, { type: 'sale' }>;
 

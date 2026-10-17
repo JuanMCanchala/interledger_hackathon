@@ -1148,68 +1148,53 @@
  * Steps & Wizard (Landing Story / Onboarding)
  * ========================================================================== */
 
-.steps {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.badge-live {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  padding: 6px 12px 6px 10px;
 
-  @media (min-width: 640px) {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  &::before {
+    display: none;
   }
 }
 
-.step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 700;
-}
-
-.step > span {
-  min-width: 0;
-}
-
-.step-icon {
+.live-status-pulse {
+  position: relative;
   display: grid;
   place-items: center;
   flex: none;
-  width: 24px;
-  height: 24px;
-  border: 2px solid currentColor;
+  width: 14px;
+  height: 14px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.35;
+    animation: liveRadar 1.5s ease-out infinite;
+  }
+}
+
+.live-status-core {
+  position: relative;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  font-size: 0.75rem;
+  background: currentColor;
 }
 
-.step.is-done {
-  border-color: var(--monte);
-  background: rgb(204 241 55 / 45%);
-  color: var(--monte);
-}
-
-.step.is-done .step-icon {
-  border-color: var(--monte);
-  background: var(--monte);
-  color: var(--lima);
-}
-
-.step.is-current {
-  border-color: var(--gold);
-  background: var(--gold-soft);
-  color: var(--gold);
-}
-
-.step.is-current .step-icon {
-  animation: pulse 1.2s ease-in-out infinite;
+@keyframes liveRadar {
+  0% {
+    transform: scale(0.75);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
 }
 
 /* Onboarding Wizard Stepper */
@@ -2382,6 +2367,39 @@
   background: none;
 }
 
+.segmented.segmented-sm {
+  flex: none;
+  padding: 3px;
+
+  button {
+    min-height: 34px;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+  }
+}
+
+.aspiration-hero {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.inline-goal-form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+
+  @media (min-width: 640px) {
+    grid-template-columns: minmax(220px, 1fr) auto;
+    align-items: end;
+  }
+}
+
 .goals {
   display: grid;
   gap: 16px;
@@ -2389,10 +2407,6 @@
 
   @media (min-width: 700px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  @media (min-width: 1020px) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -2403,10 +2417,82 @@
   align-items: center;
 }
 
-.goal-card h2 {
+.goal-card h2,
+.goal-card h3 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: var(--monte);
   overflow-wrap: anywhere;
+}
+
+/* Unified Settings Sheet (Ajustes without loose floating cards) */
+.settings-sheet {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-section {
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--border);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  @media (min-width: 820px) {
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+}
+
+.settings-meta {
+  h2 {
+    margin: 0;
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: var(--monte);
+  }
+
+  p {
+    margin: 4px 0 0;
+    line-height: 1.4;
+  }
+}
+
+.settings-body {
+  min-width: 0;
+}
+
+.settings-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+
+  .field {
+    flex: 1 1 220px;
+  }
+}
+
+.settings-kv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.settings-switches {
+  display: grid;
+  gap: 4px;
 }
 
 .goal-ring {

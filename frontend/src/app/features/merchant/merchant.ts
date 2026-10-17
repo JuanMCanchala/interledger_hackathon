@@ -56,23 +56,9 @@ import { BarChart, BarEntry } from '../../shared/ui/bar-chart';
 import { ProgressRing } from '../../shared/ui/progress-ring';
 import { QrCode } from '../../shared/ui/qr-code';
 import { SplitList } from '../../shared/ui/split-list';
-import { StepsIndicator } from '../../shared/ui/steps-indicator';
 
-type TabName = 'inicio' | 'vender' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
-const TABS: readonly TabName[] = ['inicio', 'vender', 'metas', 'repartos', 'ajustes', 'avisos'];
-
-const SALE_STAGES: readonly string[] = [
-  'Esperando al cliente',
-  'Cliente autorizando',
-  'Pago en camino',
-  '¡Pagado!',
-];
-const STAGE_INDEX: Record<string, number> = {
-  open: 0,
-  'awaiting-consent': 1,
-  processing: 2,
-  paid: SALE_STAGES.length,
-};
+type TabName = 'inicio' | 'vender' | 'efectivo' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
+const TABS: readonly TabName[] = ['inicio', 'vender', 'efectivo', 'metas', 'repartos', 'ajustes', 'avisos'];
 
 const RESUME_WINDOW_MS = 10 * 60 * 1000;
 const BUSY_REFRESH_MS = 5_000;
@@ -112,7 +98,6 @@ let nextRuleDraftKey = 1;
     ProgressRing,
     QrCode,
     SplitList,
-    StepsIndicator,
     Logo,
     Gloria,
   ],
@@ -140,7 +125,6 @@ export default class MerchantPage implements OnInit {
   protected readonly walletName = walletName;
   protected readonly maxRules = MAX_RULES;
   protected readonly quickAmounts = QUICK_AMOUNTS;
-  protected readonly saleStages = SALE_STAGES;
 
   protected readonly todayDateText = new Date().toLocaleDateString('es-CO', {
     weekday: 'long',
@@ -195,6 +179,11 @@ export default class MerchantPage implements OnInit {
   protected readonly noticeMessage = signal<BannerMessage | null>(null);
   protected readonly noticeBusy = signal(false);
   protected readonly confirmingNotice = signal<Record<string, 'mark-paid' | 'use-emergency' | null>>({});
+
+  // Inicio & Metas UI state
+  protected readonly chartMode = signal<'sales' | 'profit'>('sales');
+  protected readonly editingSalesGoal = signal(false);
+  protected readonly showDisplayQr = signal(false);
 
   // Ajustes state
   protected shopNameInput = '';
@@ -432,33 +421,23 @@ export default class MerchantPage implements OnInit {
     return cap > 0 ? Math.min(100, (spent / cap) * 100) : 0;
   });
 
-  // Metas computed values
-  protected readonly goalCards = computed(() => {
+  // Metas computed values (Futuro + Aspiración: solo meta de ventas y ahorro con meta/proyección)
+  protected readonly salesGoalCard = computed(() => {
     const m = this.merchant();
-    if (!m) return [];
+    if (!m) return null;
     const { dayOfMonth, daysInMonth } = m.month;
-    const cards: {
-      eyebrow: string;
-      title: string;
-      ratio: number;
-      tone: 'brand' | 'gold' | 'info';
-      ringLabel: string;
-      detail: string;
-      note: string;
-      action?: 'define-sales-goal' | 'define-savings-goal';
-    }[] = [];
-
     const salesGoal = toNumber(m.monthlySalesGoal);
     const sold = toNumber(m.month.gross);
     if (salesGoal > 0) {
       const ratio = sold / salesGoal;
-      cards.push({
-        eyebrow: 'Ventas del mes',
-        title: 'Meta de ventas',
+      const dailyTarget = salesGoal / daysInMonth;
+      return {
+        hasGoal: true,
         ratio,
-        tone: 'brand',
         ringLabel: `Meta de ventas: ${Math.round(ratio * 100)}%`,
-        detail: `${formatAmount(m.month.gross)} de ${formatAmount(m.monthlySalesGoal)}`,
+        soldFormatted: formatAmount(m.month.gross),
+        goalFormatted: formatAmount(m.monthlySalesGoal),
+        dailyPaceFormatted: this.money(dailyTarget),
         note: this.projection({
           done: sold,
           target: salesGoal,
@@ -466,88 +445,103 @@ export default class MerchantPage implements OnInit {
           daysInMonth,
           monthly: true,
         }),
-      });
-    } else {
-      cards.push({
-        eyebrow: 'Ventas del mes',
-        title: 'Meta de ventas',
-        ratio: 0,
-        tone: 'brand',
-        ringLabel: 'Meta de ventas: 0%',
-        detail: `Este mes llevas ${formatAmount(m.month.gross)}.`,
-        note: 'Ponte una meta y te decimos si vas a buen ritmo.',
-        action: 'define-sales-goal',
-      });
+      };
     }
-
-    for (const rule of m.rules.filter((r) => r.kind === 'debt')) {
-      const paid = toNumber(rule.paidThisMonth);
-      const quota = toNumber(rule.monthlyQuota);
-      const ratio = quota > 0 ? paid / quota : 0;
-      cards.push({
-        eyebrow: rule.category || 'Obligación',
-        title: rule.label,
-        ratio,
-        tone: 'gold',
-        ringLabel: `${rule.label}: ${Math.round(ratio * 100)}%`,
-        detail: `Apartado este mes: ${formatAmount(rule.paidThisMonth)} de ${formatAmount(rule.monthlyQuota)}`,
-        note: [
-          paid >= quota && quota > 0
-            ? 'Cuota completa: el resto del mes es ganancia.'
-            : this.projection({
-                done: paid,
-                target: quota,
-                dayOfMonth,
-                daysInMonth,
-                monthly: true,
-              }),
-          this.dueText(rule),
-        ].join(' '),
-      });
-    }
-
-    for (const rule of m.rules.filter((r) => r.kind === 'savings')) {
-      const saved = toNumber(rule.repaid);
-      const goal = toNumber(rule.savingsGoal);
-      const thisMonth = toNumber(rule.paidThisMonth);
-      if (goal > 0) {
-        const ratio = saved / goal;
-        cards.push({
-          eyebrow: rule.category || 'Ahorro',
-          title: rule.label,
-          ratio,
-          tone: 'info',
-          ringLabel: `${rule.label}: ${Math.round(ratio * 100)}%`,
-          detail: `Ahorrado ${formatAmount(rule.repaid)} de ${formatAmount(rule.savingsGoal)}`,
-          note:
-            saved >= goal
-              ? '¡Meta de ahorro cumplida!'
-              : this.projection({
-                  done: thisMonth,
-                  target: thisMonth + (goal - saved),
-                  dayOfMonth,
-                  daysInMonth,
-                  monthly: false,
-                }),
-        });
-      } else {
-        cards.push({
-          eyebrow: rule.category || 'Ahorro',
-          title: rule.label,
-          ratio: 0,
-          tone: 'info',
-          ringLabel: `${rule.label}: 0%`,
-          detail: `Ahorrado: ${formatAmount(rule.repaid)}`,
-          note: 'Ponle una meta a este ahorro para ver cuándo la alcanzas.',
-          action: 'define-savings-goal',
-        });
-      }
-    }
-
-    return cards;
+    return {
+      hasGoal: false,
+      ratio: 0,
+      ringLabel: 'Meta de ventas: 0%',
+      soldFormatted: formatAmount(m.month.gross),
+      goalFormatted: '',
+      dailyPaceFormatted: '',
+      note: 'Fija cuánto te propones vender este mes para medir tu ritmo diario y proyectar cuándo lo logras.',
+    };
   });
 
-  // Repartos computed values
+  protected readonly savingsGoalCards = computed(() => {
+    const m = this.merchant();
+    if (!m) return [];
+    const { dayOfMonth, daysInMonth } = m.month;
+    return m.rules
+      .filter((r) => r.kind === 'savings')
+      .map((rule) => {
+        const saved = toNumber(rule.repaid);
+        const goal = toNumber(rule.savingsGoal);
+        const thisMonth = toNumber(rule.paidThisMonth);
+        const sharePct = (rule.shareBps / 100).toLocaleString('es-CO', {
+          maximumFractionDigits: 2,
+        });
+        if (goal > 0) {
+          const ratio = saved / goal;
+          return {
+            id: rule.id,
+            eyebrow: `${rule.category || 'Ahorro'} · ${sharePct}% por venta`,
+            title: rule.label,
+            hasGoal: true,
+            ratio,
+            tone: 'info' as const,
+            ringLabel: `${rule.label}: ${Math.round(ratio * 100)}%`,
+            detail: `${formatAmount(rule.repaid)} de ${formatAmount(rule.savingsGoal)}`,
+            thisMonthFormatted: formatAmount(rule.paidThisMonth),
+            note:
+              saved >= goal
+                ? '¡Meta de ahorro cumplida!'
+                : this.projection({
+                    done: thisMonth,
+                    target: thisMonth + (goal - saved),
+                    dayOfMonth,
+                    daysInMonth,
+                    monthly: false,
+                  }),
+          };
+        }
+        return {
+          id: rule.id,
+          eyebrow: `${rule.category || 'Ahorro'} · ${sharePct}% por venta`,
+          title: rule.label,
+          hasGoal: false,
+          ratio: 0,
+          tone: 'info' as const,
+          ringLabel: `${rule.label}: 0%`,
+          detail: `Acumulado: ${formatAmount(rule.repaid)}`,
+          thisMonthFormatted: formatAmount(rule.paidThisMonth),
+          note: 'Ponle una meta en Repartos para proyectar la fecha exacta en que la alcanzas.',
+        };
+      });
+  });
+
+  protected readonly cashSales = computed(() =>
+    (this.merchant()?.sales ?? []).filter((s) => s.method === 'cash'),
+  );
+
+  // Repartos computed values (Presente + Operación)
+  protected readonly repartosStats = computed(() => {
+    const m = this.merchant();
+    if (!m) return null;
+    const allocatedBps = m.rules.reduce((sum, r) => sum + r.shareBps, 0);
+    const allocatedPct = allocatedBps / 100;
+    const keptPct = Math.max(0, 100 - allocatedPct);
+    const reservedTotal = m.rules
+      .filter((r) => r.kind === 'debt')
+      .reduce((sum, r) => sum + toNumber(r.reserved), 0);
+    const paidMonthTotal = m.rules.reduce(
+      (sum, r) => sum + toNumber(r.paidThisMonth),
+      0,
+    );
+    return {
+      allocatedPctText: allocatedPct.toLocaleString('es-CO', {
+        maximumFractionDigits: 2,
+      }),
+      keptPctText: keptPct.toLocaleString('es-CO', {
+        maximumFractionDigits: 2,
+      }),
+      reservedTotalFormatted: this.money(reservedTotal),
+      paidMonthTotalFormatted: this.money(paidMonthTotal),
+      debtCount: m.rules.filter((r) => r.kind === 'debt').length,
+      savingsCount: m.rules.filter((r) => r.kind === 'savings').length,
+    };
+  });
+
   protected readonly groupedRules = computed(() => {
     const m = this.merchant();
     if (!m) return [];
@@ -705,6 +699,12 @@ export default class MerchantPage implements OnInit {
     const raw = window.location.hash.replace(/^#/, '') as TabName;
     const nextTab: TabName = TABS.includes(raw) ? raw : 'inicio';
     this.tab.set(nextTab);
+    const mode = new URLSearchParams(window.location.search).get('modo');
+    if (mode === 'efectivo') {
+      this.sellMode.set('cash');
+    } else if (mode === 'qr') {
+      this.sellMode.set('qr');
+    }
     if (nextTab === 'avisos') {
       const notices = this.merchant()?.notifications ?? [];
       this.markNoticesSeen(notices.map((n) => n.id));
@@ -715,6 +715,18 @@ export default class MerchantPage implements OnInit {
       this.stopSalePolling();
     }
     window.scrollTo({ top: 0 });
+  }
+
+  protected setSellMode(mode: 'qr' | 'cash'): void {
+    this.sellMode.set(mode);
+    this.saleFormError.set('');
+    const url = new URL(window.location.href);
+    if (mode === 'cash') {
+      url.searchParams.set('modo', 'efectivo');
+    } else {
+      url.searchParams.delete('modo');
+    }
+    history.replaceState(null, '', url.toString());
   }
 
   protected selectTab(next: TabName): void {
@@ -751,6 +763,10 @@ export default class MerchantPage implements OnInit {
       this.merchant.set(m);
       this.title.setTitle(`${m.name} · MiPlante`);
       this.announceNewNotices(m);
+
+      if (!this.depositInput && m.cash?.toDeposit && toNumber(m.cash.toDeposit) > 0) {
+        this.depositInput = groupThousands(toDecimal(m.cash.toDeposit));
+      }
 
       if (this.tab() === 'avisos') {
         this.markNoticesSeen((m.notifications ?? []).map((n) => n.id));
@@ -1198,11 +1214,6 @@ export default class MerchantPage implements OnInit {
     );
   }
 
-  protected saleStageFlags(sale: SaleView): boolean[] {
-    const stage = STAGE_INDEX[sale.status] ?? 0;
-    return SALE_STAGES.map((_, index) => index < stage);
-  }
-
   protected waitingForCustomer(sale: SaleView): boolean {
     return (
       ['open', 'awaiting-consent'].includes(sale.status) || Boolean(sale.pending)
@@ -1614,6 +1625,9 @@ export default class MerchantPage implements OnInit {
       this.goalMessage,
       'Meta guardada.',
     );
+    if (this.goalMessage()?.tone === 'ok') {
+      this.editingSalesGoal.set(false);
+    }
   }
 
   protected async clearSalesGoal(): Promise<void> {
@@ -1622,6 +1636,9 @@ export default class MerchantPage implements OnInit {
       this.goalMessage,
       'Meta quitada.',
     );
+    if (this.goalMessage()?.tone === 'ok') {
+      this.editingSalesGoal.set(false);
+    }
   }
 
   protected async saveNewCap(): Promise<void> {

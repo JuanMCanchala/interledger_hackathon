@@ -3,11 +3,12 @@
  * "avisos"), read on the device so moving around the till never depends on the model.
  */
 
-export type TillSection = 'inicio' | 'vender' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
+export type TillSection = 'inicio' | 'vender' | 'efectivo' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
 
 export const SECTION_LABEL: Record<TillSection, string> = {
   inicio: 'Inicio',
   vender: 'Vender',
+  efectivo: 'Efectivo',
   metas: 'Metas',
   repartos: 'Repartos',
   ajustes: 'Ajustes',
@@ -16,6 +17,7 @@ export const SECTION_LABEL: Record<TillSection, string> = {
 
 const SECTION_WORDS: [RegExp, TillSection][] = [
   [/\b(inicio|principal|home|resumen|comienzo)\b/, 'inicio'],
+  [/\b(efectivo|consignar|consignacion|consignaciones)\b/, 'efectivo'],
   [/\b(vender|venta|ventas|caja|cobrar|cobros|qr)\b/, 'vender'],
   [/\b(metas?|ahorros?)\b/, 'metas'],
   [/\b(repartos?|bolsillos?)\b/, 'repartos'],
