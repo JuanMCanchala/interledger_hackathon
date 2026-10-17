@@ -106,7 +106,10 @@ export const session = {
 
 /** Sends the shopkeeper to sign in, and back to this page afterwards. */
 export function goToLogin() {
-  const here = `${window.location.pathname}${window.location.search}`;
+  // On the sign-in page already (it tried an old session): its form is the way on, and reloading
+  // it would lose the page it should return to.
+  if (window.location.pathname.startsWith("/login")) return;
+  const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   window.location.href = `/login?next=${encodeURIComponent(here)}`;
 }
 
