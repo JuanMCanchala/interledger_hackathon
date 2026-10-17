@@ -45,13 +45,23 @@ export class AuthService {
     if (await this.store.getUserByEmail(email)) {
       throw new AppError("Ya existe una cuenta con ese correo", 409);
     }
-    const user = await this.store.saveUser({
-      id: randomUUID(),
-      name: input.name.trim(),
-      email,
-      passwordHash: await hashPassword(input.password),
-      createdAt: this.now().toISOString(),
-    });
+    const passwordHash = await hashPassword(input.password);
+    let user: UserRecord;
+    try {
+      user = await this.store.saveUser({
+        id: randomUUID(),
+        name: input.name.trim(),
+        email,
+        passwordHash,
+        createdAt: this.now().toISOString(),
+      });
+    } catch (error) {
+      // Two sign-ups with one email at once (a double tap): the unique email lets only one in.
+      if (await this.store.getUserByEmail(email)) {
+        throw new AppError("Ya existe una cuenta con ese correo", 409);
+      }
+      throw error;
+    }
     return this.startSession(user);
   }
 

@@ -340,6 +340,18 @@ describe("shopkeeper accounts", () => {
     expect(twice.status).toBe(409);
   });
 
+  it("lets one of two simultaneous sign-ups with the same email in and refuses the other", async () => {
+    const body = {
+      name: "Marta",
+      email: "marta@example.com",
+      password: "una-clave-larga",
+    };
+    const statuses = (
+      await Promise.all([1, 2, 3].map(() => postJson("/api/auth/register", body)))
+    ).map((response) => response.status);
+    expect(statuses.sort()).toEqual([201, 409, 409]);
+  });
+
   it("asks for a session to set up a shop, and hides a shop from other accounts", async () => {
     const rosa = {
       name: "Tienda Doña Rosa",

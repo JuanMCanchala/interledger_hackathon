@@ -255,6 +255,12 @@ export class MemoryStore implements Store {
   }
 
   async saveUser(record: UserRecord) {
+    // Like the unique email in PostgreSQL.
+    for (const user of this.users.values()) {
+      if (user.email === record.email && user.id !== record.id) {
+        throw new Error(`Unique constraint failed on the email ${record.email}`);
+      }
+    }
     this.users.set(record.id, copy(record));
     return record;
   }
