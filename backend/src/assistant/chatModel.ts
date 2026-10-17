@@ -42,6 +42,7 @@ export class ModelUnavailableError extends AppError {
 }
 
 const TIMEOUT_MS = 20_000;
+const RETRY_DELAY_MS = 600;
 
 /**
  * DeepSeek through its OpenAI-compatible chat API (ADR 0017). Thinking is off: GlorIA answers short
@@ -54,27 +55,22 @@ export class DeepSeekChatModel implements ChatModel {
   ) {}
 
   async complete(messages: ChatMessage[], tools: ToolSpec[]): Promise<ChatReply> {
+    // A dropped connection or a busy model often clears up in a moment: one retry, then give up.
     let res: Response;
     try {
-      res = await fetch(`${this.options.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${this.options.apiKey}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: this.options.model,
-          messages,
-          tools,
-          tool_choice: "auto",
-          thinking: { type: "disabled" },
-          temperature: 0.4,
-          max_tokens: 600,
-        }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+      res = await this.send(messages, tools);
+      if (res.status === 429 || res.status >= 500) {
+        await sleep(RETRY_DELAY_MS);
+        res = await this.send(messages, tools);
+      }
     } catch (error) {
-      throw new ModelUnavailableError(error instanceof Error ? error.message : String(error));
+      if (isTimeout(error)) throw new ModelUnavailableError(describe(error));
+      await sleep(RETRY_DELAY_MS);
+      try {
+        res = await this.send(messages, tools);
+      } catch (retryError) {
+        throw new ModelUnavailableError(describe(retryError));
+      }
     }
     const body = (await res.json().catch(() => ({}))) as {
       choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[];
@@ -86,4 +82,37 @@ export class DeepSeekChatModel implements ChatModel {
     const message = body.choices?.[0]?.message;
     return { content: message?.content ?? "", toolCalls: message?.tool_calls ?? [] };
   }
+
+  private send(messages: ChatMessage[], tools: ToolSpec[]): Promise<Response> {
+    return fetch(`${this.options.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${this.options.apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: this.options.model,
+        messages,
+        tools,
+        tool_choice: "auto",
+        thinking: { type: "disabled" },
+        temperature: 0.4,
+        max_tokens: 600,
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  }
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
+/** "fetch failed" says little: the cause (ENOTFOUND, ECONNRESET…) is what to look at. */
+function describe(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = (error as Error & { cause?: { code?: string; message?: string } }).cause;
+  return cause ? `${error.message} (${cause.code ?? cause.message})` : error.message;
 }
