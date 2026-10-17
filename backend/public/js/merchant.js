@@ -758,6 +758,31 @@ function noticeActions(notice) {
   const box = el("div", { class: "row notice-actions" });
   const retry = el("button", { type: "button", class: "btn btn-primary", text: "Reintentar el pago" });
   const markPaid = el("button", { type: "button", class: "btn btn-secondary", text: "Ya llegó, marcar como pagado" });
+  const fund = notice.actions.includes("use-emergency")
+    ? el("button", { type: "button", class: "btn btn-ghost", text: "Usar mi fondo de emergencia" })
+    : null;
+  const initial = [retry, markPaid, fund].filter(Boolean);
+  fund?.addEventListener("click", () => {
+    const confirm = el("button", { type: "button", class: "btn btn-primary", text: "Sí, usar mi fondo" });
+    const cancel = el("button", { type: "button", class: "btn btn-ghost", text: "Cancelar" });
+    confirm.addEventListener("click", () =>
+      resolvePayout(
+        confirm,
+        notice.payoutId,
+        "use-emergency",
+        "Listo: estamos pasando la plata de tu fondo de emergencia a tu tienda. Cuando llegue, enviamos el pago completo.",
+      ),
+    );
+    cancel.addEventListener("click", () => box.replaceChildren(...initial));
+    box.replaceChildren(
+      el("p", {
+        class: "small",
+        text: "Es tu último recurso: pasaremos el monto de este pago de tu fondo de emergencia a tu tienda, y de ahí se le paga completo.",
+      }),
+      confirm,
+      cancel,
+    );
+  });
   retry.addEventListener("click", () =>
     resolvePayout(retry, notice.payoutId, "retry", "Listo: enviamos el pago otra vez."),
   );
@@ -771,16 +796,60 @@ function noticeActions(notice) {
     confirm.addEventListener("click", () =>
       resolvePayout(confirm, notice.payoutId, "mark-paid", "Listo: lo marcamos como pagado y no se envía nada más."),
     );
-    cancel.addEventListener("click", () => box.replaceChildren(retry, markPaid));
+    cancel.addEventListener("click", () => box.replaceChildren(...initial));
     box.replaceChildren(
       el("p", { class: "small", text: "¿Viste el dinero en la billetera de quien recibe? No se enviará de nuevo." }),
       confirm,
       cancel,
     );
   });
-  box.append(retry, markPaid);
+  box.append(...initial);
   return box;
 }
+
+const EMERGENCY_STATE = {
+  active: ["ok", (label) => `Autorizado: ${label} es tu último recurso.`],
+  "awaiting-consent": ["wait", (label) => `Falta que apruebes ${label} en tu billetera.`],
+  rejected: ["bad", () => "La autorización no se completó. Puedes intentarlo de nuevo."],
+  revoked: ["bad", () => "Cancelaste la autorización de tu fondo de emergencia."],
+  failed: ["bad", () => "No pudimos activar la autorización. Puedes intentarlo de nuevo."],
+};
+
+/** The emergency fund card: which savings wallet it is, and whether its grant is approved. */
+function renderEmergency(m) {
+  const savings = m.rules.filter((rule) => rule.kind === "savings");
+  const current = m.emergency;
+  const state = current ? EMERGENCY_STATE[current.status] : null;
+  if (!savings.length) {
+    showMessage($("emergency-state"), "Agrega primero una billetera de ahorro en tus repartos.", "info");
+  } else if (state) {
+    showMessage($("emergency-state"), state[1](current.label ?? "tu ahorro"), state[0]);
+  } else {
+    showMessage($("emergency-state"), "Sin autorizar: si un pago falla, solo podrás reintentarlo o marcarlo como pagado.", "info");
+  }
+  $("authorize-emergency").hidden = !savings.length || current?.status === "active";
+  $("authorize-emergency").textContent =
+    current?.status === "awaiting-consent" ? "Abrir de nuevo mi billetera →" : "Autorizar mi fondo de emergencia →";
+  $("emergency-pick-field").hidden = savings.length < 2 || current?.status === "active";
+  if (changed($("emergency-pick"), savings.map((r) => r.id))) {
+    $("emergency-pick").replaceChildren(
+      ...savings.map((rule) => el("option", { value: rule.id, text: `${rule.label} · ${walletName(rule.destination)}` })),
+    );
+  }
+}
+
+$("authorize-emergency").addEventListener("click", async () => {
+  showMessage($("emergency-message"), "");
+  const ruleId = $("emergency-pick-field").hidden ? undefined : $("emergency-pick").value;
+  try {
+    await withBusy($("authorize-emergency"), "Abriendo tu billetera…", async () => {
+      const { redirectUrl } = await postJson(`${merchantPath}/emergency`, ruleId ? { ruleId } : {});
+      window.location.href = redirectUrl;
+    });
+  } catch (error) {
+    showMessage($("emergency-message"), error.message);
+  }
+});
 
 async function resolvePayout(button, payoutId, action, okText) {
   showMessage($("notice-message"), "");
@@ -926,6 +995,7 @@ moneyInput($("cap-new"));
 
 function renderSettings(m) {
   $("shop-wallet").textContent = walletName(m.wallet);
+  renderEmergency(m);
   const quotas = m.rules
     .filter((rule) => rule.kind === "debt")
     .reduce((sum, rule) => sum + amountOf(rule.monthlyQuota), 0);

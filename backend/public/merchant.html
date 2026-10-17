@@ -455,6 +455,26 @@
                 </button>
               </form>
 
+              <section class="card stack" aria-labelledby="emergency-title">
+                <h2 id="emergency-title">Fondo de emergencia como último recurso</h2>
+                <p class="muted small">
+                  Si lo apartado no alcanza la cuota de un acreedor, lo que falta
+                  sale de tus ganancias. Si aun así el pago falla porque en tu
+                  tienda no hay plata, puedes elegir sacarlo de tu fondo de
+                  emergencia: pasa primero a tu tienda y de ahí se le paga
+                  completo. Nunca se toca sin que tú lo elijas en el aviso.
+                </p>
+                <p id="emergency-state" class="banner" role="status"></p>
+                <label class="field" id="emergency-pick-field" hidden>
+                  <span>¿Cuál de tus ahorros?</span>
+                  <select id="emergency-pick"></select>
+                </label>
+                <p id="emergency-message" class="banner" role="status" hidden></p>
+                <button type="button" class="btn btn-secondary" id="authorize-emergency">
+                  Autorizar mi fondo de emergencia →
+                </button>
+              </section>
+
               <section class="card stack" aria-labelledby="simulate-title">
                 <h2 id="simulate-title">Simular fecha de pago</h2>
                 <p class="muted small">
