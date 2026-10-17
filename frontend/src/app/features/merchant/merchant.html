@@ -1,36 +1,33 @@
 <div class="container">
   <header class="site-header panel-header">
-    <a
-      class="brand"
-      href="#inicio"
-      (click)="$event.preventDefault(); selectTab('inicio')"
-      aria-label="MiPlante: inicio del panel"
-    >
-      <span class="brand-mark" aria-hidden="true">
-        <svg
-          viewBox="0 0 24 24"
-          width="22"
-          height="22"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 21v-9" />
-          <path d="M12 12c0-4 3-7 8-7 0 4-3 7-8 7z" />
-          <path d="M12 14c0-3-2.5-5.5-7-5.5 0 3 2.5 5.5 7 5.5z" />
-        </svg>
-      </span>
-      <span class="panel-shop">
-        <span>{{ merchant()?.name || 'MiPlante' }}</span>
+    <div class="row">
+      <a
+        class="brand"
+        href="#inicio"
+        (click)="$event.preventDefault(); selectTab('inicio')"
+        aria-label="MiPlante: inicio del panel"
+      >
+        <app-logo class="brand-logo" />
+      </a>
+      <div class="panel-shop">
+        <strong>{{ merchant()?.name || 'Mi tienda' }}</strong>
         @if (merchant(); as m) {
-          <small class="muted">{{ walletName(m.wallet) }}</small>
+          <small>{{ walletName(m.wallet) }}</small>
         }
-      </span>
-    </a>
+      </div>
+    </div>
 
     <div class="row panel-header-actions">
+      <a class="header-pill" routerLink="/">Landing</a>
+      @if (tab() !== 'vender') {
+        <button
+          type="button"
+          class="header-pill is-cta"
+          (click)="selectTab('vender')"
+        >
+          + Cobrar venta
+        </button>
+      }
       <button
         type="button"
         class="bell"
@@ -105,6 +102,21 @@
     </button>
     <button
       type="button"
+      [class.is-active]="tab() === 'avisos'"
+      [attr.aria-current]="tab() === 'avisos' ? 'page' : null"
+      (click)="selectTab('avisos')"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z" />
+        <path d="M10 20a2 2 0 0 0 4 0" />
+      </svg>
+      <span>Avisos</span>
+      @if (unseenCount() > 0) {
+        <span class="panel-nav-badge">{{ unseenCount() > 9 ? '9+' : unseenCount() }}</span>
+      }
+    </button>
+    <button
+      type="button"
       [class.is-active]="tab() === 'ajustes'"
       [attr.aria-current]="tab() === 'ajustes' ? 'page' : null"
       (click)="selectTab('ajustes')"
@@ -122,10 +134,18 @@
   <main class="panel-main stack">
     @if (missingText()) {
       <section class="card stack">
-        <h1 class="h1-sm">No encontramos tu caja</h1>
-        <p class="muted">{{ missingText() }}</p>
+        <div class="row between">
+          <div class="stack-sm">
+            <p class="eyebrow">Configuración pendiente</p>
+            <h1 class="h1-sm">Todavía no encontramos tu caja</h1>
+            <p class="muted">{{ missingText() }}</p>
+          </div>
+          <span class="doodle-badge doodle-badge-lg" aria-hidden="true">
+            <app-doodle name="billetera" />
+          </span>
+        </div>
         <div class="row">
-          <a class="btn btn-primary" routerLink="/onboard">Configurar mi tienda</a>
+          <a class="btn btn-lima btn-lg" routerLink="/onboard">Configurar mi tienda →</a>
           <a class="btn btn-secondary" routerLink="/login">Entrar con otra cuenta</a>
         </div>
       </section>
@@ -137,18 +157,18 @@
 
     @if (statusBanner(); as sb) {
       <div [class]="'banner banner-' + sb.tone + ' stack-sm'" role="status">
-        <p>{{ sb.text }}</p>
+        <p><strong>{{ sb.text }}</strong></p>
         <p class="small">
           En tu billetera entra con la cuenta dueña de
           <strong>{{ sb.wallet }}</strong> y toca <strong>Aceptar</strong>.
         </p>
         <button
           type="button"
-          class="btn btn-primary"
+          class="btn btn-lima"
           [disabled]="consentBusy()"
           (click)="requestConsent()"
         >
-          {{ consentBusy() ? 'Abriendo tu billetera…' : 'Autorizar en mi billetera' }}
+          {{ consentBusy() ? 'Abriendo tu billetera…' : 'Autorizar en mi billetera →' }}
         </button>
       </div>
     }
@@ -164,32 +184,40 @@
                 class="banner banner-bad review-banner"
                 (click)="selectTab('avisos')"
               >
-                {{ reviewBannerText() }}
+                <span>{{ reviewBannerText() }}</span>
+                <span class="badge badge-bad">Revisar</span>
               </button>
             }
 
-            <div class="card stack hero-card">
+            <div class="card hero-card stack">
               <div class="row between">
-                <h1 class="h1-sm" id="inicio-title">Hoy</h1>
-                <span class="muted small">{{ todayDateText }}</span>
+                <div>
+                  <p class="eyebrow">Resumen del día · {{ todayDateText }}</p>
+                  <h1 class="h1-sm" id="inicio-title">Ventas de hoy</h1>
+                </div>
+                <span class="doodle-badge doodle-badge-lg" aria-hidden="true">
+                  <app-doodle name="monedas" />
+                </span>
               </div>
+
               <p>
                 <span class="amount-xl">{{ formatAmount(m.today.gross) }}</span>
                 <span class="muted small">
                   {{
                     m.today.salesCount === 1
-                      ? ' en 1 venta'
-                      : ' en ' + m.today.salesCount + ' ventas'
+                      ? ' en 1 venta cobrada'
+                      : ' en ' + m.today.salesCount + ' ventas cobradas'
                   }}
                 </span>
               </p>
+
               <div class="stats">
                 <div class="stat">
-                  <p class="stat-label">Ganancia de hoy</p>
+                  <p class="stat-label">Ganancia libre hoy</p>
                   <p class="stat-value">{{ formatAmount(m.today.kept) }}</p>
                 </div>
                 <div class="stat">
-                  <p class="stat-label">Repartido hoy</p>
+                  <p class="stat-label">Apartado en bolsillos hoy</p>
                   <p class="stat-value">{{ formatAmount(m.today.allocated) }}</p>
                 </div>
                 <div class="stat">
@@ -206,20 +234,42 @@
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                class="btn btn-primary btn-lg btn-block"
-                (click)="selectTab('vender')"
-              >
-                Nueva venta
-              </button>
+
+              <div class="row">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-lg"
+                  (click)="selectTab('vender')"
+                >
+                  + Cobrar nueva venta
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  (click)="selectTab('metas')"
+                >
+                  Ver mis metas
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  (click)="selectTab('repartos')"
+                >
+                  Ver bolsillos ({{ m.rules.length }})
+                </button>
+              </div>
             </div>
 
             <div class="panel-grid">
               <section class="card stack" aria-labelledby="chart-title">
-                <div class="stack-sm">
-                  <h2 id="chart-title">Ventas del mes</h2>
-                  <p class="muted small">{{ monthChartCaption() }}</p>
+                <div class="row between">
+                  <div class="stack-sm">
+                    <h2 id="chart-title">Ventas del mes</h2>
+                    <p class="muted small">{{ monthChartCaption() }}</p>
+                  </div>
+                  <span class="doodle-badge" aria-hidden="true">
+                    <app-doodle name="crecimiento" />
+                  </span>
                 </div>
                 <app-bar-chart
                   [bars]="monthSalesBars()"
@@ -235,13 +285,19 @@
                 </p>
               </section>
 
-              <section class="card stack" aria-labelledby="money-title">
-                <div class="stack-sm">
-                  <h2 id="money-title">A dónde fue tu dinero este mes</h2>
-                  <p class="muted small">
-                    Tu ganancia real ya descuenta lo que salió de ella para
-                    completar las cuotas de tus acreedores.
-                  </p>
+              <section class="card card-notebook stack" aria-labelledby="money-title">
+                <div class="row between">
+                  <div class="stack-sm">
+                    <p class="eyebrow">Cuaderno del mes</p>
+                    <h2 id="money-title">A dónde fue tu dinero este mes</h2>
+                    <p class="muted small">
+                      Tu ganancia real ya descuenta lo que salió de ella para
+                      completar las cuotas de tus acreedores.
+                    </p>
+                  </div>
+                  <span class="doodle-badge" aria-hidden="true">
+                    <app-doodle name="alcancia" />
+                  </span>
                 </div>
                 <div class="stacked-bar" aria-hidden="true">
                   @for (row of monthSplitRows(); track row.label) {
@@ -284,8 +340,8 @@
 
               <section class="card stack" aria-labelledby="cap-title">
                 <div class="row between">
-                  <h2 id="cap-title">Límite mensual</h2>
-                  <span class="muted small">Límite: {{ formatAmount(m.monthlyCap) }}</span>
+                  <h2 id="cap-title">Límite mensual autorizado</h2>
+                  <span class="badge badge-info">Tope: {{ formatAmount(m.monthlyCap) }}</span>
                 </div>
                 <p>
                   <span class="amount-lg">
@@ -305,10 +361,22 @@
                 </p>
               </section>
 
-              <section class="card stack" aria-labelledby="sales-title">
-                <h2 id="sales-title">Últimas ventas</h2>
+              <section class="card stack" aria-labelledby="sales-title" style="grid-column: 1 / -1">
+                <div class="row between">
+                  <h2 id="sales-title">Últimas ventas</h2>
+                  <button
+                    type="button"
+                    class="btn btn-lima"
+                    (click)="selectTab('vender')"
+                  >
+                    + Cobrar otra venta
+                  </button>
+                </div>
                 @if (m.sales.length === 0) {
-                  <p class="muted small">Todavía no hay ventas.</p>
+                  <p class="muted small">
+                    Todavía no hay ventas registradas. Toca «+ Cobrar otra venta»
+                    para generar tu primer QR.
+                  </p>
                 } @else {
                   <ul class="list">
                     @for (s of m.sales.slice(0, 8); track s.id) {
@@ -340,219 +408,292 @@
         <!-- Vender ============================================================ -->
         @if (tab() === 'vender') {
           <section class="view stack" aria-labelledby="register-title">
-            <section class="card stack sell-card">
-              <h1 class="h1-sm" id="register-title">Nueva venta</h1>
-
-              @if (!currentSale()) {
-                <form class="stack" (ngSubmit)="submitSale()">
-                  <label class="field">
-                    <span>Monto</span>
-                    <input
-                      #saleAmountInput
-                      name="saleAmount"
-                      class="input-xl"
-                      required
-                      inputmode="numeric"
-                      autocomplete="off"
-                      placeholder="10.000"
-                      [ngModel]="saleAmountInputVal()"
-                      (ngModelChange)="onSaleAmountInput($event)"
-                    />
-                  </label>
-                  <div class="chips" aria-label="Montos rápidos">
-                    @for (q of quickAmounts; track q) {
-                      <button
-                        type="button"
-                        class="chip-button"
-                        (click)="pickQuickAmount(q)"
-                      >
-                        {{ formatMoney(q, 'COP') }}
-                      </button>
-                    }
-                  </div>
-                  <label class="field">
-                    <span>Descripción (opcional)</span>
-                    <input
-                      name="saleDescription"
-                      maxlength="120"
-                      autocomplete="off"
-                      placeholder="Arroz, huevos y gaseosa"
-                      [(ngModel)]="saleDescription"
-                    />
-                  </label>
-                  @if (saleFormError()) {
-                    <p class="banner banner-bad" role="alert">{{ saleFormError() }}</p>
-                  }
-                  <button
-                    class="btn btn-primary btn-lg btn-block"
-                    type="submit"
-                    [disabled]="!canSell() || saleBusy()"
-                    [attr.aria-busy]="saleBusy() ? 'true' : null"
-                  >
-                    {{ saleBusy() ? 'Creando el cobro…' : 'Cobrar' }}
-                  </button>
-                  @if (!canSell()) {
-                    <p class="hint">
-                      Para cobrar, primero autoriza tu límite mensual en tu
-                      billetera.
-                    </p>
-                  }
-                </form>
-              } @else if (currentSale(); as cur) {
-                <div class="stack" aria-live="polite">
+            @if (!currentSale()) {
+              <div class="sell-layout">
+                <section class="card stack sell-card">
                   <div class="row between">
-                    <div style="min-width: 0">
-                      <p class="muted small">Venta · {{ formatTime(cur.sale.createdAt) }}</p>
-                      <p class="amount-xl">{{ formatAmount(cur.sale.amount) }}</p>
+                    <div>
+                      <p class="eyebrow">Caja registradora QR</p>
+                      <h1 class="h1-sm" id="register-title">Nueva venta</h1>
                     </div>
-                    <span [class]="saleStatusBadgeClass(cur.sale.status)">
-                      {{ saleStatusText(cur.sale.status) }}
+                    <span class="doodle-badge" aria-hidden="true">
+                      <app-doodle name="pago" />
                     </span>
                   </div>
 
-                  @if (cur.sale.description) {
-                    <p class="muted small">{{ cur.sale.description }}</p>
-                  }
-
-                  <app-steps-indicator
-                    [labels]="saleStages"
-                    [doneFlags]="saleStageFlags(cur.sale)"
-                    [active]="cur.sale.status !== 'failed'"
-                    ariaLabel="Progreso de la venta"
-                  />
-
-                  @if (waitingForCustomer(cur.sale)) {
-                    <div class="stack">
-                      <div class="segmented" role="tablist" aria-label="Dónde mostrar el cobro">
-                        <button
-                          type="button"
-                          role="tab"
-                          [attr.aria-selected]="showOn() === 'phone'"
-                          (click)="showOn.set('phone')"
-                        >
-                          En mi celular
-                        </button>
-                        <button
-                          type="button"
-                          role="tab"
-                          [attr.aria-selected]="showOn() === 'here'"
-                          (click)="showOn.set('here')"
-                        >
-                          En esta pantalla
-                        </button>
+                  <form class="stack" (ngSubmit)="submitSale()">
+                    <label class="field">
+                      <span>Monto a cobrar</span>
+                      <input
+                        #saleAmountInput
+                        name="saleAmount"
+                        class="input-xl"
+                        required
+                        inputmode="numeric"
+                        autocomplete="off"
+                        placeholder="10.000"
+                        [ngModel]="saleAmountInputVal()"
+                        (ngModelChange)="onSaleAmountInput($event)"
+                      />
+                    </label>
+                    <div class="stack-sm">
+                      <span class="small muted">Montos rápidos:</span>
+                      <div class="chips" aria-label="Montos rápidos">
+                        @for (q of quickAmounts; track q) {
+                          <button
+                            type="button"
+                            class="chip-button"
+                            [class.is-active]="isQuickAmountSelected(q)"
+                            (click)="pickQuickAmount(q)"
+                          >
+                            {{ formatMoney(q, 'COP') }}
+                          </button>
+                        }
                       </div>
+                    </div>
+                    <label class="field">
+                      <span>Descripción o nota (opcional)</span>
+                      <input
+                        name="saleDescription"
+                        maxlength="120"
+                        autocomplete="off"
+                        placeholder="Ej: Arroz, huevos y gaseosa"
+                        [(ngModel)]="saleDescription"
+                      />
+                    </label>
+                    @if (saleFormError()) {
+                      <p class="banner banner-bad" role="alert">{{ saleFormError() }}</p>
+                    }
+                    <button
+                      class="btn btn-lima btn-lg btn-block"
+                      type="submit"
+                      [disabled]="!canSell() || saleBusy()"
+                      [attr.aria-busy]="saleBusy() ? 'true' : null"
+                    >
+                      {{ saleBusy() ? 'Generando código QR…' : 'Generar QR de cobro →' }}
+                    </button>
+                    @if (!canSell()) {
+                      <p class="hint">
+                        Para cobrar, primero autoriza tu límite mensual en tu
+                        billetera.
+                      </p>
+                    }
+                  </form>
+                </section>
 
-                      @if (showOn() === 'phone') {
-                        <div class="stack">
-                          <div class="qr-box">
-                            <app-qr-code [value]="cobroUrl(cur.sale)" [size]="220" />
-                            <p class="small center">
-                              Escanéalo con <strong>tu</strong> celular: abre la
-                              pantalla de cobro para mostrársela a tu cliente.
-                            </p>
-                          </div>
+                @if (liveSalePreview(); as lp) {
+                  <aside class="card card-forest stack" aria-label="Simulación de reparto de esta venta">
+                    <div class="row between">
+                      <div>
+                        <p class="eyebrow">Reparto automático en vivo</p>
+                        <h2>Así se divide {{ lp.totalFormatted }}</h2>
+                      </div>
+                      <span class="doodle-badge" aria-hidden="true">
+                        <app-doodle name="alcancia" />
+                      </span>
+                    </div>
+
+                    <ul class="pocket-jars">
+                      <li class="pocket-jar-item">
+                        <div class="pocket-jar-vessel">
+                          <div
+                            class="pocket-jar-fill"
+                            [style.height.%]="lp.keptPercent"
+                          ></div>
+                          <span class="pocket-jar-pct">{{ lp.keptPercent }}%</span>
                         </div>
-                      } @else {
-                        <div class="stack">
-                          <div class="qr-box">
-                            <app-qr-code [value]="cur.payUrl" [size]="256" />
-                            <p class="small center">
-                              {{
-                                cur.sale.pending
-                                  ? 'Que tu cliente escanee de nuevo y confirme los ' + formatAmount(cur.sale.pending) + ' que faltan'
-                                  : 'Que tu cliente lo escanee y confirme ' + formatAmount(cur.sale.amount) + ' en su billetera'
-                              }}
-                            </p>
+                        <strong>Tu ganancia</strong>
+                        <span class="small num">{{ lp.keptFormatted }}</span>
+                      </li>
+                      @for (item of lp.items; track $index) {
+                        <li class="pocket-jar-item">
+                          <div class="pocket-jar-vessel">
+                            <div
+                              class="pocket-jar-fill"
+                              [class.is-debt]="item.kind === 'debt'"
+                              [class.is-savings]="item.kind === 'savings'"
+                              [style.height.%]="item.percent"
+                            ></div>
+                            <span class="pocket-jar-pct">{{ item.percent }}%</span>
                           </div>
-                          <div class="copy-row">
-                            <input
-                              readonly
-                              aria-label="Enlace de pago"
-                              [value]="cur.payUrl"
-                            />
-                            <button
-                              class="btn btn-secondary"
-                              type="button"
-                              (click)="copyPayUrl(cur.payUrl)"
-                            >
-                              {{ copyLabel() }}
-                            </button>
-                          </div>
-                          <p class="hint">
-                            ¿Paga con otra billetera Open Payments?
-                            <a
-                              [href]="checkoutUrl(cur.sale)"
-                              target="_blank"
-                              rel="noopener"
-                            >
-                              Ábrele el pago en MiPlante
-                            </a>.
+                          <strong>{{ item.label }}</strong>
+                          <span class="small num">{{ item.formatted }}</span>
+                        </li>
+                      }
+                    </ul>
+
+                    <p class="small muted">
+                      Cuando tu cliente pague el QR, cada bolsillo apartará su
+                      parte automáticamente sobre la red Interledger.
+                    </p>
+                  </aside>
+                }
+              </div>
+            } @else if (currentSale(); as cur) {
+              <section class="card stack narrow" aria-live="polite">
+                <div class="row between">
+                  <div style="min-width: 0">
+                    <p class="eyebrow">Recibo de cobro · {{ formatTime(cur.sale.createdAt) }}</p>
+                    <p class="amount-xl">{{ formatAmount(cur.sale.amount) }}</p>
+                  </div>
+                  <span [class]="saleStatusBadgeClass(cur.sale.status)">
+                    {{ saleStatusText(cur.sale.status) }}
+                  </span>
+                </div>
+
+                @if (cur.sale.description) {
+                  <p class="muted">{{ cur.sale.description }}</p>
+                }
+
+                <app-steps-indicator
+                  [labels]="saleStages"
+                  [doneFlags]="saleStageFlags(cur.sale)"
+                  [active]="cur.sale.status !== 'failed'"
+                  ariaLabel="Progreso de la venta"
+                />
+
+                @if (waitingForCustomer(cur.sale)) {
+                  <div class="stack">
+                    <div class="segmented" role="tablist" aria-label="Dónde mostrar el cobro">
+                      <button
+                        type="button"
+                        role="tab"
+                        [attr.aria-selected]="showOn() === 'phone'"
+                        (click)="showOn.set('phone')"
+                      >
+                        En mi celular
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        [attr.aria-selected]="showOn() === 'here'"
+                        (click)="showOn.set('here')"
+                      >
+                        En esta pantalla
+                      </button>
+                    </div>
+
+                    @if (showOn() === 'phone') {
+                      <div class="stack">
+                        <div class="qr-box">
+                          <app-qr-code [value]="cobroUrl(cur.sale)" [size]="230" />
+                          <p class="small center">
+                            Escanéalo con <strong>tu</strong> celular: abre la
+                            pantalla de cobro limpio para mostrársela a tu cliente.
                           </p>
                         </div>
-                      }
+                      </div>
+                    } @else {
+                      <div class="stack">
+                        <div class="qr-box">
+                          <app-qr-code [value]="cur.payUrl" [size]="256" />
+                          <p class="small center">
+                            {{
+                              cur.sale.pending
+                                ? 'Que tu cliente escanee de nuevo y confirme los ' + formatAmount(cur.sale.pending) + ' que faltan'
+                                : 'Que tu cliente lo escanee y confirme ' + formatAmount(cur.sale.amount) + ' en su billetera'
+                            }}
+                          </p>
+                        </div>
+                        <div class="copy-row">
+                          <input
+                            readonly
+                            aria-label="Enlace de pago"
+                            [value]="cur.payUrl"
+                          />
+                          <button
+                            class="btn btn-secondary"
+                            type="button"
+                            (click)="copyPayUrl(cur.payUrl)"
+                          >
+                            {{ copyLabel() }}
+                          </button>
+                        </div>
+                        <p class="hint">
+                          ¿Paga desde el navegador o con otra billetera Open Payments?
+                          <a
+                            [href]="checkoutUrl(cur.sale)"
+                            target="_blank"
+                            rel="noopener"
+                          >
+                            Ábrele la página de pago en MiPlante →
+                          </a>
+                        </p>
+                      </div>
+                    }
 
-                      <a
-                        class="btn btn-primary btn-block"
-                        [href]="cobroUrl(cur.sale)"
-                        target="_blank"
-                        rel="noopener"
-                      >
-                        Abrir pantalla de cobro
-                      </a>
-                    </div>
-                  }
+                    <a
+                      class="btn btn-lima btn-block"
+                      [href]="cobroUrl(cur.sale)"
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      Abrir pantalla de cobro para mostrador →
+                    </a>
+                  </div>
+                }
 
-                  @if (cur.sale.pending) {
-                    <p class="banner banner-wait" role="status">
-                      Llegaron {{ formatAmount(cur.sale.payment?.receivedAmount) }} de
-                      {{ formatAmount(cur.sale.amount) }}. Faltan
-                      {{ formatAmount(cur.sale.pending) }}: el cliente puede volver a
-                      escanear el mismo QR.
-                    </p>
-                  }
+                @if (cur.sale.pending) {
+                  <p class="banner banner-wait" role="status">
+                    Llegaron {{ formatAmount(cur.sale.payment?.receivedAmount) }} de
+                    {{ formatAmount(cur.sale.amount) }}. Faltan
+                    {{ formatAmount(cur.sale.pending) }}: el cliente puede volver a
+                    escanear el mismo QR.
+                  </p>
+                }
 
-                  @if (cur.sale.status === 'failed') {
-                    <p class="banner banner-bad" role="alert">
-                      El pago no se completó{{ cur.sale.error ? ': ' + cur.sale.error : '' }}.
-                      Toca "Nueva venta" para cobrar de nuevo.
-                    </p>
-                  }
+                @if (cur.sale.status === 'failed') {
+                  <p class="banner banner-bad" role="alert">
+                    El pago no se completó{{ cur.sale.error ? ': ' + cur.sale.error : '' }}.
+                    Toca «Nueva venta» para cobrar de nuevo.
+                  </p>
+                }
 
-                  @if (cur.sale.status === 'paid') {
-                    <div class="stack-sm">
-                      <h3>Así se repartió esta venta</h3>
-                      <app-split-list
-                        [settlement]="cur.sale.settlement"
-                        [rules]="m.rules"
-                      />
-                      @if (settlementNote(cur.sale)) {
-                        <p class="hint">{{ settlementNote(cur.sale) }}</p>
-                      }
-                    </div>
-                  }
+                @if (cur.sale.status === 'paid') {
+                  <div class="success">
+                    <span class="success-icon" aria-hidden="true">✓</span>
+                    <p class="success-title">¡Venta cobrada y repartida!</p>
+                  </div>
+                  <div class="stack-sm">
+                    <h3>Así se repartió esta venta</h3>
+                    <app-split-list
+                      [settlement]="cur.sale.settlement"
+                      [rules]="m.rules"
+                    />
+                    @if (settlementNote(cur.sale)) {
+                      <p class="hint">{{ settlementNote(cur.sale) }}</p>
+                    }
+                  </div>
+                }
 
-                  <button
-                    class="btn btn-secondary btn-block"
-                    type="button"
-                    (click)="resetSaleForm()"
-                  >
-                    Nueva venta
-                  </button>
-                </div>
-              }
-            </section>
+                <button
+                  class="btn btn-secondary btn-block"
+                  type="button"
+                  (click)="resetSaleForm()"
+                >
+                  + Registrar otra venta
+                </button>
+              </section>
+            }
           </section>
         }
 
         <!-- Metas ============================================================= -->
         @if (tab() === 'metas') {
           <section class="view stack" aria-labelledby="metas-title">
-            <div class="stack-sm">
-              <h1 class="h1-sm" id="metas-title">Tus metas</h1>
-              <p class="muted">
-                Día {{ m.month.dayOfMonth }} de {{ m.month.daysInMonth }} de {{ currentMonthName }}.
-              </p>
+            <div class="row between">
+              <div class="stack-sm">
+                <p class="eyebrow">Crecimiento paso a paso</p>
+                <h1 class="h1-sm" id="metas-title">Tus metas del mes</h1>
+                <p class="muted">
+                  Día {{ m.month.dayOfMonth }} de {{ m.month.daysInMonth }} de {{ currentMonthName }}.
+                </p>
+              </div>
+              <span class="doodle-badge doodle-badge-lg" aria-hidden="true">
+                <app-doodle name="planta" />
+              </span>
             </div>
+
             <div class="goals">
               @for (card of goalCards(); track $index) {
                 <article class="card goal-card">
@@ -564,14 +705,14 @@
                   <div class="stack-sm goal-card-body">
                     <p class="eyebrow">{{ card.eyebrow }}</p>
                     <h2>{{ card.title }}</h2>
-                    <p class="num">{{ card.detail }}</p>
+                    <p class="num"><strong>{{ card.detail }}</strong></p>
                     @if (card.note) {
                       <p class="small muted">{{ card.note }}</p>
                     }
                     @if (card.action === 'define-sales-goal') {
                       <button
                         type="button"
-                        class="btn btn-secondary"
+                        class="btn btn-lima"
                         (click)="selectTab('ajustes')"
                       >
                         Definir meta
@@ -579,7 +720,7 @@
                     } @else if (card.action === 'define-savings-goal') {
                       <button
                         type="button"
-                        class="btn btn-secondary"
+                        class="btn btn-lima"
                         (click)="selectTab('repartos'); openRulesEditor()"
                       >
                         Ponerle meta
@@ -602,11 +743,14 @@
           <section class="view stack" aria-labelledby="rules-title">
             <section class="card stack">
               <div class="row between">
-                <h1 class="h1-sm" id="rules-title">Repartos</h1>
+                <div class="stack-sm">
+                  <p class="eyebrow">Tus bolsillos automáticos</p>
+                  <h1 class="h1-sm" id="rules-title">Repartos de cada venta</h1>
+                </div>
                 @if (!editingRules()) {
                   <button
                     type="button"
-                    class="btn btn-secondary"
+                    class="btn btn-lima"
                     (click)="openRulesEditor()"
                   >
                     Editar repartos
@@ -629,9 +773,9 @@
                               </span>
                             </div>
                             <p class="muted small">
-                              {{ (r.shareBps / 100).toLocaleString('es-CO', { maximumFractionDigits: 2 }) }}% de cada venta
+                              {{ (r.shareBps / 100).toLocaleString('es-CO', { maximumFractionDigits: 2 }) }}% de cada venta ·
+                              <span class="mono">{{ walletName(r.destination) }}</span>
                             </p>
-                            <p class="mono muted">{{ walletName(r.destination) }}</p>
 
                             @if (r.kind === 'debt') {
                               <div class="progress is-gold">
@@ -639,7 +783,7 @@
                               </div>
                               @if (toNumber(r.monthlyQuota) > 0 && toNumber(r.paidThisMonth) >= toNumber(r.monthlyQuota)) {
                                 <span class="badge badge-ok">
-                                  Cuota del mes completa: el resto es ganancia
+                                  Cuota del mes completa: el resto es ganancia tuya
                                 </span>
                               } @else {
                                 <p class="small">
@@ -873,7 +1017,7 @@
                   <div class="row">
                     <button
                       type="submit"
-                      class="btn btn-primary"
+                      class="btn btn-lima"
                       [disabled]="rulesSaving()"
                     >
                       {{ rulesSaving() ? 'Guardando…' : 'Guardar repartos' }}
@@ -896,11 +1040,11 @@
 
             <section class="card stack" aria-labelledby="payouts-title">
               <div class="stack-sm">
-                <h2 id="payouts-title">Pagos a proveedores y créditos</h2>
+                <h2 id="payouts-title">Pagos enviados a proveedores y créditos</h2>
                 <p class="muted small">
                   De cada venta se aparta su parte en tu billetera. El día de pago
                   se le envía la cuota del mes en un solo pago: lo apartado y, si
-                  no alcanza, lo que falte de tus ganancias. "Pagar ahora" envía
+                  no alcanza, lo que falte de tus ganancias. «Pagar ahora» envía
                   solo lo apartado.
                 </p>
               </div>
@@ -908,7 +1052,7 @@
                 <p [class]="'banner banner-' + pm.tone" role="status">{{ pm.text }}</p>
               }
               @if (!m.payouts?.length) {
-                <p class="muted small">Todavía no hay pagos.</p>
+                <p class="muted small">Todavía no se han enviado pagos este mes.</p>
               } @else {
                 <ul class="list">
                   @for (p of m.payouts; track p.id) {
@@ -955,123 +1099,135 @@
         <!-- Avisos ============================================================ -->
         @if (tab() === 'avisos') {
           <section class="view stack" aria-labelledby="avisos-title">
-            <div class="stack-sm">
-              <h1 class="h1-sm" id="avisos-title">Avisos</h1>
-              <p class="muted">
-                Lo que tienes que revisar, los pagos que vienen y los que ya
-                salieron. Un pago que falla no se vuelve a intentar solo: tú
-                decides, para no pagar dos veces.
-              </p>
-            </div>
-            @if (noticeMessage(); as nm) {
-              <p [class]="'banner banner-' + nm.tone" role="status">{{ nm.text }}</p>
-            }
-            @if (!m.notifications?.length) {
-              <p class="muted small">No tienes avisos por ahora.</p>
-            } @else {
-              <ul class="list notices">
-                @for (n of m.notifications; track n.id) {
-                  <li [class]="'list-item notice is-' + n.tone">
-                    <div class="row between">
-                      <strong>{{ n.title }}</strong>
-                      <span [class]="'badge ' + noticeBadgeClass(n.tone)">
-                        {{ noticeKindLabel(n.kind) }}
-                      </span>
-                    </div>
-                    <p class="small">{{ n.text }}</p>
-                    <p class="muted small">{{ formatDateTime(n.createdAt) }}</p>
+            <div class="card stack">
+              <div class="row between">
+                <div class="stack-sm">
+                  <p class="eyebrow">Centro de control</p>
+                  <h1 class="h1-sm" id="avisos-title">Avisos y confirmaciones</h1>
+                  <p class="muted small">
+                    Lo que tienes que revisar, los pagos que vienen y los que ya
+                    salieron. Un pago que falla no se vuelve a intentar solo: tú
+                    decides, para no pagar dos veces.
+                  </p>
+                </div>
+                <span class="doodle-badge" aria-hidden="true">
+                  <app-doodle name="duda" />
+                </span>
+              </div>
 
-                    @if (n.actions?.length && n.payoutId) {
-                      <div class="row notice-actions">
-                        @if (confirmingNotice()[n.id] === 'mark-paid') {
-                          <p class="small">
-                            ¿Viste el dinero en la billetera de quien recibe? No se enviará de nuevo.
-                          </p>
-                          <button
-                            type="button"
-                            class="btn btn-primary"
-                            [disabled]="noticeBusy()"
-                            (click)="resolveNoticePayout(n.id, n.payoutId!, 'mark-paid', 'Listo: lo marcamos como pagado y no se envía nada más.')"
-                          >
-                            Sí, el dinero llegó
-                          </button>
-                          <button
-                            type="button"
-                            class="btn btn-ghost"
-                            (click)="setNoticeConfirm(n.id, null)"
-                          >
-                            Cancelar
-                          </button>
-                        } @else if (confirmingNotice()[n.id] === 'use-emergency') {
-                          <p class="small">
-                            Es tu último recurso: pasaremos el monto de este pago de tu fondo de emergencia a tu tienda, y de ahí se le paga completo.
-                          </p>
-                          <button
-                            type="button"
-                            class="btn btn-primary"
-                            [disabled]="noticeBusy()"
-                            (click)="resolveNoticePayout(n.id, n.payoutId!, 'use-emergency', 'Listo: estamos pasando la plata de tu fondo de emergencia a tu tienda. Cuando llegue, enviamos el pago completo.')"
-                          >
-                            Sí, usar mi fondo
-                          </button>
-                          <button
-                            type="button"
-                            class="btn btn-ghost"
-                            (click)="setNoticeConfirm(n.id, null)"
-                          >
-                            Cancelar
-                          </button>
-                        } @else {
-                          <button
-                            type="button"
-                            class="btn btn-primary"
-                            [disabled]="noticeBusy()"
-                            (click)="resolveNoticePayout(n.id, n.payoutId!, 'retry', 'Listo: enviamos el pago otra vez.')"
-                          >
-                            Reintentar el pago
-                          </button>
-                          <button
-                            type="button"
-                            class="btn btn-secondary"
-                            [disabled]="noticeBusy()"
-                            (click)="setNoticeConfirm(n.id, 'mark-paid')"
-                          >
-                            Ya llegó, marcar como pagado
-                          </button>
-                          @if (n.actions?.includes('use-emergency')) {
+              @if (noticeMessage(); as nm) {
+                <p [class]="'banner banner-' + nm.tone" role="status">{{ nm.text }}</p>
+              }
+              @if (!m.notifications?.length) {
+                <p class="muted small">Todo al día: no tienes avisos pendientes por ahora.</p>
+              } @else {
+                <ul class="list notices">
+                  @for (n of m.notifications; track n.id) {
+                    <li [class]="'list-item notice is-' + n.tone">
+                      <div class="row between">
+                        <strong>{{ n.title }}</strong>
+                        <span [class]="'badge ' + noticeBadgeClass(n.tone)">
+                          {{ noticeKindLabel(n.kind) }}
+                        </span>
+                      </div>
+                      <p class="small">{{ n.text }}</p>
+                      <p class="muted small">{{ formatDateTime(n.createdAt) }}</p>
+
+                      @if (n.actions?.length && n.payoutId) {
+                        <div class="row notice-actions">
+                          @if (confirmingNotice()[n.id] === 'mark-paid') {
+                            <p class="small">
+                              ¿Viste el dinero en la billetera de quien recibe? No se enviará de nuevo.
+                            </p>
+                            <button
+                              type="button"
+                              class="btn btn-lima"
+                              [disabled]="noticeBusy()"
+                              (click)="resolveNoticePayout(n.id, n.payoutId!, 'mark-paid', 'Listo: lo marcamos como pagado y no se envía nada más.')"
+                            >
+                              Sí, el dinero llegó
+                            </button>
                             <button
                               type="button"
                               class="btn btn-ghost"
-                              [disabled]="noticeBusy()"
-                              (click)="setNoticeConfirm(n.id, 'use-emergency')"
+                              (click)="setNoticeConfirm(n.id, null)"
                             >
-                              Usar mi fondo de emergencia
+                              Cancelar
                             </button>
+                          } @else if (confirmingNotice()[n.id] === 'use-emergency') {
+                            <p class="small">
+                              Es tu último recurso: pasaremos el monto de este pago de tu fondo de emergencia a tu tienda, y de ahí se le paga completo.
+                            </p>
+                            <button
+                              type="button"
+                              class="btn btn-lima"
+                              [disabled]="noticeBusy()"
+                              (click)="resolveNoticePayout(n.id, n.payoutId!, 'use-emergency', 'Listo: estamos pasando la plata de tu fondo de emergencia a tu tienda. Cuando llegue, enviamos el pago completo.')"
+                            >
+                              Sí, usar mi fondo
+                            </button>
+                            <button
+                              type="button"
+                              class="btn btn-ghost"
+                              (click)="setNoticeConfirm(n.id, null)"
+                            >
+                              Cancelar
+                            </button>
+                          } @else {
+                            <button
+                              type="button"
+                              class="btn btn-lima"
+                              [disabled]="noticeBusy()"
+                              (click)="resolveNoticePayout(n.id, n.payoutId!, 'retry', 'Listo: enviamos el pago otra vez.')"
+                            >
+                              Reintentar el pago
+                            </button>
+                            <button
+                              type="button"
+                              class="btn btn-secondary"
+                              [disabled]="noticeBusy()"
+                              (click)="setNoticeConfirm(n.id, 'mark-paid')"
+                            >
+                              Ya llegó, marcar como pagado
+                            </button>
+                            @if (n.actions?.includes('use-emergency')) {
+                              <button
+                                type="button"
+                                class="btn btn-ghost"
+                                [disabled]="noticeBusy()"
+                                (click)="setNoticeConfirm(n.id, 'use-emergency')"
+                              >
+                                Usar mi fondo de emergencia
+                              </button>
+                            }
                           }
-                        }
-                      </div>
-                    }
+                        </div>
+                      }
 
-                    @if (n.kind === 'consent' || n.kind === 'cap-pending') {
-                      <button
-                        type="button"
-                        class="btn btn-secondary"
-                        (click)="selectTab('ajustes')"
-                      >
-                        Ir a Ajustes
-                      </button>
-                    }
-                  </li>
-                }
-              </ul>
-            }
+                      @if (n.kind === 'consent' || n.kind === 'cap-pending') {
+                        <button
+                          type="button"
+                          class="btn btn-secondary"
+                          (click)="selectTab('ajustes')"
+                        >
+                          Ir a Ajustes
+                        </button>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
           </section>
         }
 
         <!-- Ajustes =========================================================== -->
         @if (tab() === 'ajustes') {
           <section class="view stack" aria-labelledby="ajustes-title">
-            <h1 class="h1-sm" id="ajustes-title">Ajustes</h1>
+            <div class="stack-sm">
+              <p class="eyebrow">Configuración del negocio</p>
+              <h1 class="h1-sm" id="ajustes-title">Ajustes de tu tienda</h1>
+            </div>
             <div class="panel-grid">
               <form class="card stack" (ngSubmit)="saveShopName()" novalidate>
                 <h2>Tu tienda</h2>
@@ -1093,7 +1249,7 @@
                 }
                 <button
                   type="submit"
-                  class="btn btn-primary"
+                  class="btn btn-lima"
                   [disabled]="settingsBusy()"
                 >
                   Guardar nombre
@@ -1122,7 +1278,7 @@
                 <div class="row">
                   <button
                     type="submit"
-                    class="btn btn-primary"
+                    class="btn btn-lima"
                     [disabled]="settingsBusy()"
                   >
                     Guardar meta
@@ -1173,7 +1329,7 @@
                 }
                 <button
                   type="submit"
-                  class="btn btn-primary"
+                  class="btn btn-lima"
                   [disabled]="settingsBusy()"
                 >
                   Cambiar en mi billetera →
@@ -1227,7 +1383,7 @@
               </section>
 
               <section class="card stack" aria-labelledby="simulate-title">
-                <h2 id="simulate-title">Simular fecha de pago</h2>
+                <h2 id="simulate-title">Simular fecha de pago (Demo)</h2>
                 <p class="muted small">
                   Para la demo: envía ya a cada proveedor y crédito su cuota del
                   mes, como si hoy fuera su día de pago: lo apartado y, si no
@@ -1253,7 +1409,7 @@
                   <strong>{{ account()?.name }}</strong><br />
                   <span class="muted">{{ account()?.email }}</span>
                 </p>
-                <button type="button" class="btn btn-secondary" (click)="logout()">
+                <button type="button" class="btn btn-danger" (click)="logout()">
                   Cerrar sesión
                 </button>
               </section>

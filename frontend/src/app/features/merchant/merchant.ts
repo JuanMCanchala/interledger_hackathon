@@ -47,6 +47,8 @@ import {
   toNumber,
   walletName,
 } from '../../core/miplante.utils';
+import { Doodle } from '../../shared/brand/doodle';
+import { Logo } from '../../shared/brand/logo';
 import { BarChart, BarEntry } from '../../shared/ui/bar-chart';
 import { ProgressRing } from '../../shared/ui/progress-ring';
 import { QrCode } from '../../shared/ui/qr-code';
@@ -73,7 +75,7 @@ const STAGE_INDEX: Record<string, number> = {
 const RESUME_WINDOW_MS = 10 * 60 * 1000;
 const BUSY_REFRESH_MS = 5_000;
 const IDLE_REFRESH_MS = 30_000;
-const QUICK_AMOUNTS = [5000, 10000, 20000, 50000];
+const QUICK_AMOUNTS = [5000, 10000, 20000, 50000, 100000];
 const MIN_SALE = 100;
 const MAX_SALE = 100_000_000;
 
@@ -110,6 +112,8 @@ let nextRuleDraftKey = 1;
     SiteFooter,
     SplitList,
     StepsIndicator,
+    Logo,
+    Doodle,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
@@ -198,6 +202,47 @@ export default class MerchantPage implements OnInit {
   private stopSalePoll: (() => void) | null = null;
 
   protected readonly canSell = computed(() => this.merchant()?.status === 'active');
+
+  protected readonly liveSalePreview = computed(() => {
+    const m = this.merchant();
+    if (!m) return null;
+    const raw = normalizeDecimal(this.saleAmountInputVal()) || '10000';
+    const scale = m.asset.assetScale ?? 2;
+    const saleMinor = toMinor(raw, scale);
+    const totalMinor = saleMinor > 0n ? saleMinor : toMinor('10000', scale);
+    const split = previewSplit(
+      totalMinor,
+      m.rules.map((r) => ({
+        label: r.label,
+        kind: r.kind,
+        shareBps: r.shareBps,
+        outstandingMinor: r.outstanding ? BigInt(r.outstanding.value) : undefined,
+      })),
+    );
+    const fmt = (minor: bigint) =>
+      formatAmount({
+        value: String(minor),
+        assetCode: m.asset.assetCode,
+        assetScale: scale,
+      });
+    const pct = (minor: bigint) =>
+      totalMinor > 0n ? Math.round((Number(minor) * 100) / Number(totalMinor)) : 0;
+    return {
+      totalFormatted: fmt(totalMinor),
+      keptFormatted: fmt(split.kept),
+      keptPercent: pct(split.kept),
+      items: split.items.map((item) => ({
+        label: item.label,
+        kind: item.kind,
+        formatted: fmt(item.amount),
+        percent: pct(item.amount),
+      })),
+    };
+  });
+
+  protected isQuickAmountSelected(q: number): boolean {
+    return normalizeDecimal(this.saleAmountInputVal()) === String(q);
+  }
 
   protected readonly unseenCount = computed(() => {
     const notices = this.merchant()?.notifications ?? [];
