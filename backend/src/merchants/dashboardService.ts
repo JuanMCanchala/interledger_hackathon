@@ -2,6 +2,7 @@ import {
   bogotaDay,
   lastBogotaDays,
   startOfBogotaDay,
+  startOfBogotaMonth,
 } from "../domain/calendar.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import type { Amount, Asset } from "../shared/money.js";
@@ -89,9 +90,49 @@ export class DashboardService {
           gross: money(sum(daySales.map((sale) => sale.amount))),
         };
       }),
+      month: this.month(paid, now, money),
       sales: await Promise.all(
         sales.slice(0, RECENT_SALES).map((sale) => this.sales.view(sale)),
       ),
+    };
+  }
+
+  /**
+   * This calendar month (Bogotá) so far: totals and one entry per day from the 1st to today, for the
+   * sales chart and to project when each goal is reached at the current pace.
+   */
+  private month(
+    paid: SaleRecord[],
+    now: Date,
+    money: (value: bigint) => Amount,
+  ) {
+    const start = startOfBogotaMonth(now).getTime();
+    const thisMonth = paid.filter((sale) => Date.parse(sale.paidAt!) >= start);
+    const today = bogotaDay(now);
+    const [year, month, day] = today.split("-").map(Number) as [number, number, number];
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const allocatedOf = (list: SaleRecord[]) =>
+      sum(list.flatMap(sentItems).map((item) => item.amount));
+    const gross = sum(thisMonth.map((sale) => sale.amount));
+    const allocated = allocatedOf(thisMonth);
+    return {
+      dayOfMonth: day,
+      daysInMonth,
+      salesCount: thisMonth.length,
+      gross: money(gross),
+      kept: money(gross - allocated),
+      allocated: money(allocated),
+      days: lastBogotaDays(now, day).map((date) => {
+        const daySales = thisMonth.filter(
+          (sale) => bogotaDay(new Date(sale.paidAt!)) === date,
+        );
+        return {
+          date,
+          salesCount: daySales.length,
+          gross: money(sum(daySales.map((sale) => sale.amount))),
+          allocated: money(allocatedOf(daySales)),
+        };
+      }),
     };
   }
 }

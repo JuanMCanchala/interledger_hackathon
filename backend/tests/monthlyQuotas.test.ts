@@ -38,6 +38,24 @@ describe("monthly quotas", () => {
     // The dashboard shows the quota paid for the month.
     const dashboard = await env.dashboard.get(merchantId);
     expect(dashboard.rules[0]!.paidThisMonth).toEqual(cop("200000"));
+
+    // And the month so far: three paid sales today, the 16th of a 31-day October.
+    expect(dashboard.month).toMatchObject({
+      dayOfMonth: 16,
+      daysInMonth: 31,
+      salesCount: 3,
+      gross: cop("3000000"),
+      allocated: cop("200000"),
+      kept: cop("2800000"),
+    });
+    expect(dashboard.month.days).toHaveLength(16);
+    expect(dashboard.month.days.at(-1)).toEqual({
+      date: "2026-10-16",
+      salesCount: 3,
+      gross: cop("3000000"),
+      allocated: cop("200000"),
+    });
+    expect(dashboard.month.days[0]!.date).toBe("2026-10-01");
   });
 
   it("starts each calendar month with the whole quota again", async () => {
