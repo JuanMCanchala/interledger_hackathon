@@ -135,11 +135,19 @@ export async function homeOfSignedIn() {
     : "/onboard";
 }
 
-/** A `next` page from the URL, only if it is a path on this site (never another domain). */
+/**
+ * A `next` page from the URL, only if it is on this site. It is resolved as a URL rather than
+ * matched as text: browsers read "/\evil.com" as "//evil.com", another site.
+ */
 export function safeNext(next) {
-  return next && /^\/(?!\/)/.test(next) && !next.startsWith("/login")
-    ? next
-    : "";
+  if (!next) return "";
+  try {
+    const url = new URL(next, window.location.origin);
+    if (url.origin !== window.location.origin || url.pathname.startsWith("/login")) return "";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "";
+  }
 }
 
 /**
