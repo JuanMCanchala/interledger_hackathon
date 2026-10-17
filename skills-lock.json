@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "fronted-design": {
+      "source": "xrkseek/xrk-agt",
+      "sourceType": "github",
+      "skillPath": ".cursor/skills/fronted-design/SKILL.md",
+      "computedHash": "34fb4f05203bb0d675ef114cd776fda405a3774a1705e82c0f019cbf05e3638d"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "7ac62d931e52dbc7c309ed8ee067101969db2454709339b02daa583e80e98d5f"
+    }
+  }
+}
