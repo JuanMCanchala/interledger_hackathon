@@ -12,13 +12,12 @@ import { reservedBalances, type PayoutService } from "./payoutService.js";
 import type { SalesService } from "./salesService.js";
 import type { SaleRecord, SettlementItem } from "./types.js";
 
-const HISTORY_DAYS = 7;
 const RECENT_SALES = 20;
 const RECENT_PAYOUTS = 10;
 
 /**
  * The merchant's till and dashboard: today's sales and split, debt progress, what the grant has
- * spent in its current interval, and a seven-day income history (the seed of an income passport).
+ * spent in its current interval, and this month day by day (the seed of an income passport).
  */
 export class DashboardService {
   private readonly now: () => Date;
@@ -101,28 +100,7 @@ export class DashboardService {
         gross: money(gross),
         kept: money(gross - allocated),
         allocated: money(allocated),
-        byRule: merchant.rules.map((rule) => ({
-          ruleId: rule.id,
-          label: rule.label,
-          amount: money(
-            sum(
-              sentToday
-                .filter((item) => item.ruleId === rule.id)
-                .map((item) => item.amount),
-            ),
-          ),
-        })),
       },
-      history: lastBogotaDays(now, HISTORY_DAYS).map((date) => {
-        const daySales = paid.filter(
-          (sale) => bogotaDay(new Date(sale.paidAt!)) === date,
-        );
-        return {
-          date,
-          salesCount: daySales.length,
-          gross: money(sum(daySales.map((sale) => sale.amount))),
-        };
-      }),
       month: this.month(paid, now, money),
       sales: await Promise.all(
         sales.slice(0, RECENT_SALES).map((sale) => this.sales.view(sale)),

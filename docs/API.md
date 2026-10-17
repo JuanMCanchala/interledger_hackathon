@@ -128,9 +128,7 @@ The till and dashboard.
               "reserved"?: Amount, "paidOutThisMonth"?: Amount }],
   "payouts": [{ "id", "ruleId", "label", "amount": Amount, "reason": "due-date" | "manual",
                 "status": "processing" | "completed" | "failed", "error"?, "createdAt" }],
-  "today": { "salesCount", "gross": Amount, "kept": Amount, "allocated": Amount,
-             "byRule": [{ "ruleId", "label", "amount": Amount }] },
-  "history": [{ "date": "2026-10-16", "salesCount", "gross": Amount }],   // 7 Bogotá days, oldest first
+  "today": { "salesCount", "gross": Amount, "kept": Amount, "allocated": Amount },
   "month": { "dayOfMonth": 16, "daysInMonth": 31, "salesCount", "gross": Amount, "kept": Amount,
              "allocated": Amount,
              "days": [{ "date", "salesCount", "gross": Amount, "allocated": Amount }] },  // 1st to today

@@ -206,7 +206,7 @@ describe("MiPlante API", () => {
       wallet: BOB,
       status: "awaiting-consent",
     });
-    expect(dashboard.history).toHaveLength(7);
+    expect(dashboard.month.days).toHaveLength(16);
     expect(dashboard.sales).toHaveLength(1);
   });
 
