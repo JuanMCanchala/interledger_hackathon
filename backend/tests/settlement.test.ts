@@ -144,9 +144,10 @@ describe("settlement", () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();
     const saleId = await paidSale(env, merchantId);
-    const settled = await env.sales.refresh(saleId);
+    await env.sales.refresh(saleId);
 
-    for (const item of settled.settlement.items) {
+    // The public view hides each share's payment; the stored sale has it.
+    for (const item of (await env.store.getSale(saleId))!.settlement.items) {
       if (!item.paymentId) continue;
       env.deliver(
         (await env.store.getPayment(item.paymentId!))!.incomingPaymentUrl,

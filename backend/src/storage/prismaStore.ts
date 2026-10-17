@@ -412,6 +412,15 @@ export class PrismaStore implements Store {
     await this.prisma.session.deleteMany({ where: { token } });
   }
 
+  async getMerchantByMandate(mandateId: string) {
+    if (!isUuid(mandateId)) return undefined;
+    const row = await this.prisma.merchant.findFirst({
+      where: { OR: [{ mandateId }, { pendingMandateId: mandateId }] },
+      include: merchantInclude,
+    });
+    return row ? toMerchant(row) : undefined;
+  }
+
   async getMerchantByOwner(ownerId: string) {
     const row = await this.prisma.merchant.findFirst({
       where: { ownerId },

@@ -98,6 +98,8 @@ export interface Store {
   saveSession(record: SessionRecord): Promise<SessionRecord>;
   getSession(token: string): Promise<SessionRecord | undefined>;
   deleteSession(token: string): Promise<void>;
+  /** The shop whose grant (current or pending) is this mandate, if any. */
+  getMerchantByMandate(mandateId: string): Promise<MerchantRecord | undefined>;
   /** The shop a user registered (the newest one if there are several). */
   getMerchantByOwner(ownerId: string): Promise<MerchantRecord | undefined>;
 
@@ -278,6 +280,14 @@ export class MemoryStore implements Store {
 
   async deleteSession(token: string) {
     this.sessions.delete(token);
+  }
+
+  async getMerchantByMandate(mandateId: string) {
+    return copy(
+      [...this.merchants.values()].find(
+        (m) => m.mandateId === mandateId || m.pendingCap?.mandateId === mandateId,
+      ),
+    );
   }
 
   async getMerchantByOwner(ownerId: string) {

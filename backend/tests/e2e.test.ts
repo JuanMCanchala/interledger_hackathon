@@ -257,6 +257,32 @@ describe("one account cannot see or touch another's shop (QA risk R2)", () => {
     expect((await call("GET", "/api/auth/me", undefined, stranger)).body.merchant).toBeNull();
   });
 
+  it("keeps a shop's grant out of reach of the sandbox's public mandate routes", async () => {
+    const { env, call, activeShop } = await start();
+    const { token, id } = await activeShop();
+    const mandateId = (await env.store.getMerchant(id))!.mandateId;
+
+    // Nothing public leads to the shop's mandate: not the sale, not its payments.
+    const sale = await call("POST", `/api/merchants/${id}/sales`, { amount: "10000" }, token);
+    const saleId = sale.body.sale.id;
+    const request = (await env.store.getPayment((await env.store.getSale(saleId))!.paymentId!))!;
+    env.deliver(request.incomingPaymentUrl, cop("1000000"));
+    const read = await call("GET", `/api/sales/${saleId}`);
+    expect(JSON.stringify(read.body)).not.toContain(mandateId);
+    expect(read.body.settlement.items.every((i: object) => !("paymentId" in i))).toBe(true);
+    const share = (await env.store.getSale(saleId))!.settlement.items.find((i) => i.paymentId)!;
+    expect(JSON.stringify((await call("GET", `/api/payments/${share.paymentId}`)).body)).not.toContain(mandateId);
+
+    // And even knowing it, the sandbox cannot read, charge, split or revoke it.
+    expect((await call("GET", `/api/mandates/${mandateId}`)).status).toBe(404);
+    expect((await call("POST", `/api/mandates/${mandateId}/charges`, { receiver: ALICE, amount: "1000" })).status).toBe(404);
+    expect(
+      (await call("POST", `/api/mandates/${mandateId}/split`, { receivers: [{ receiver: ALICE, amount: "1000" }] })).status,
+    ).toBe(404);
+    expect((await call("DELETE", `/api/mandates/${mandateId}`)).status).toBe(404);
+    expect((await env.flows.findMandate(mandateId)).status).toBe("active");
+  });
+
   it("a damaged sale link answers 404, so /cobro can say so", async () => {
     const { call } = await start();
     expect((await call("GET", "/api/sales/not-a-real-id")).status).toBe(404);

@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { AuthService } from "../auth/authService.js";
 import type { PayoutService } from "../merchants/payoutService.js";
 import { describeError } from "../openPayments/errors.js";
-import { AppError } from "../shared/errors.js";
+import { AppError, NotFoundError } from "../shared/errors.js";
 import type { DashboardService } from "../merchants/dashboardService.js";
 import type { MerchantService } from "../merchants/merchantService.js";
 import type { SalesService } from "../merchants/salesService.js";
@@ -92,8 +92,20 @@ export function createApp({
       .json(await flows.startMandate(schemas.createMandate.parse(req.body)));
   });
 
+  /**
+   * The sandbox's mandate routes need no session, so they must never reach a shop's grant: whoever
+   * learned its ID could charge the shop's wallet up to its monthly cap, or revoke it. For them a
+   * shop's mandate does not exist.
+   */
+  const sandboxMandate = async (req: Request<{ id: string }>) => {
+    if (await merchants.isShopMandate(req.params.id)) {
+      throw new NotFoundError(`No existe la autorización ${req.params.id}`);
+    }
+    return req.params.id;
+  };
+
   app.get("/api/mandates/:id", async (req, res) => {
-    res.json(await flows.getMandate(req.params.id));
+    res.json(await flows.getMandate(await sandboxMandate(req)));
   });
 
   app.get("/api/mandates/:id/callback", async (req, res) => {
@@ -115,7 +127,7 @@ export function createApp({
       .status(201)
       .json(
         await flows.chargeMandate(
-          req.params.id,
+          await sandboxMandate(req),
           schemas.chargeMandate.parse(req.body),
         ),
       );
@@ -126,14 +138,14 @@ export function createApp({
       .status(201)
       .json(
         await flows.splitMandate(
-          req.params.id,
+          await sandboxMandate(req),
           schemas.splitMandate.parse(req.body),
         ),
       );
   });
 
   app.delete("/api/mandates/:id", async (req, res) => {
-    res.json(await flows.revokeMandate(req.params.id));
+    res.json(await flows.revokeMandate(await sandboxMandate(req)));
   });
 
   // Accounts ---------------------------------------------------------------------------------------

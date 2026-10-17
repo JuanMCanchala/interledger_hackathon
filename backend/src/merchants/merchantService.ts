@@ -330,6 +330,11 @@ export class MerchantService {
     return merchant;
   }
 
+  /** Whether a mandate is a shop's grant: only MiPlante's own flows may use it. */
+  async isShopMandate(mandateId: string): Promise<boolean> {
+    return Boolean(await this.store.getMerchantByMandate(mandateId));
+  }
+
   /** The shop the user registered, if any. */
   async findByOwner(userId: string) {
     const merchant = await this.store.getMerchantByOwner(userId);

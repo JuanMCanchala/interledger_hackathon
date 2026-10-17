@@ -393,7 +393,11 @@ export class SalesService {
       /** What is still missing after a partial payment; absent until money arrives or once paid. */
       pending: pendingAmount(sale, payment?.receivedAmount),
       checkoutUrl: this.payUrl(sale.id),
-      settlement: sale.settlement,
+      // Public (the customer and /cobro read it): the internal payment of each share stays out.
+      settlement: {
+        ...sale.settlement,
+        items: sale.settlement.items.map(({ paymentId: _p, ...item }) => item),
+      },
       createdAt: sale.createdAt,
       updatedAt: sale.updatedAt,
       paidAt: sale.paidAt,

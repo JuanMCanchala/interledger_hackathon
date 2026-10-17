@@ -784,6 +784,8 @@ export function toPublicPayment(record: PaymentRecord) {
     interaction: _i,
     incomingToken: _it,
     outgoingToken: _ot,
+    // Public: which grant paid it would let anyone find a shop's mandate.
+    mandateId: _m,
     ...rest
   } = record;
   // A payment request is authorized and executed in the payer's own wallet: MiPlante sees the
