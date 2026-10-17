@@ -1,20 +1,26 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ApiService } from '../../core/api.service';
-import { Gloria, GloriaSection } from './gloria';
+import { VoiceService } from '../../core/voice.service';
+import { ChargeRequest, Gloria, GloriaSection, afterWakeWord } from './gloria';
 
 @Component({
   imports: [Gloria],
   template: `<app-gloria
     merchantId="shop-1"
     shopName="Tienda Rosa"
-    (prepareSale)="sales.push($event)"
+    [charge]="charge"
     (openSection)="sections.push($event)"
   />`,
 })
 class Host {
-  readonly sales: { amount: number; description: string }[] = [];
+  readonly sales: ChargeRequest[] = [];
   readonly sections: GloriaSection[] = [];
+  problem: string | null = null;
+  readonly charge = async (sale: ChargeRequest) => {
+    if (!this.problem) this.sales.push(sale);
+    return this.problem;
+  };
 }
 
 describe('GlorIA chat', () => {
@@ -34,7 +40,7 @@ describe('GlorIA chat', () => {
     const fixture = TestBed.createComponent(Host);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    root.querySelector<HTMLButtonElement>('.gloria-launcher')!.click();
+    root.querySelector<HTMLButtonElement>('.launcher')!.click();
     fixture.detectChanges();
     await fixture.whenStable();
     return { fixture, root };
@@ -46,54 +52,145 @@ describe('GlorIA chat', () => {
 
     expect(root.querySelector('[role="dialog"]')).toBeTruthy();
     expect(root.textContent).toContain('Soy GlorIA');
-    root.querySelector<HTMLButtonElement>('.gloria-suggestions .chip-button')!.click();
+    root.querySelector<HTMLButtonElement>('.suggestions .chip')!.click();
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(post).toHaveBeenCalledWith('/api/merchants/shop-1/assistant', {
       messages: [{ role: 'user', content: '¿Cómo voy este mes?' }],
     });
-    expect(root.textContent).toContain('Llevas $ 10.000 este mes.');
+    expect(root.textContent).toContain('Llevas $ 10.000 este mes.');
     // Suggestions give way once the conversation starts.
-    expect(root.querySelector('.gloria-suggestions')).toBeNull();
+    expect(root.querySelector('.suggestions')).toBeNull();
   });
 
-  it('hands a prepared sale to the till instead of charging', async () => {
-    answers.set([
-      {
-        reply: 'Listo, confírmalo en Vender.',
-        actions: [
-          { type: 'sale', amount: '20000', description: 'Arroz' },
-          { type: 'open', section: 'vender' },
-        ],
-      },
-    ]);
-    const { fixture, root } = await openChat();
+  const saleAnswer = {
+    reply: 'Listo, te preparo el cobro de $ 20.000.',
+    actions: [
+      { type: 'sale', amount: '20000', description: 'Arroz' },
+      { type: 'open', section: 'vender' },
+    ],
+  };
+
+  async function type(fixture: { detectChanges(): void; whenStable(): Promise<unknown> }, root: HTMLElement, text: string) {
     const input = root.querySelector<HTMLInputElement>('#gloria-message')!;
-    input.value = 'cobra veinte mil de arroz';
+    input.value = text;
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    root.querySelector<HTMLFormElement>('.gloria-input')!.dispatchEvent(new Event('submit'));
+    root.querySelector<HTMLFormElement>('form.field')!.dispatchEvent(new Event('submit'));
     await fixture.whenStable();
     fixture.detectChanges();
+  }
 
-    const charge = [...root.querySelectorAll<HTMLButtonElement>('.bubble-actions button')].find((b) =>
-      b.textContent!.includes('Cobrar'),
-    )!;
-    expect(charge.textContent).toContain('20.000');
-    charge.click();
-    fixture.detectChanges();
+  it('charges at once when asked, without the model', async () => {
+    const { fixture, root } = await openChat();
+    await type(fixture, root, 'Por favor haz un cobre $50,000');
+    expect(post).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.sales).toEqual([{ amount: 50000, description: '' }]);
+    expect(root.querySelector('.peek')!.textContent).toContain('Cobro de $ 50.000');
+  });
 
+  it('charges what the model understood as a charge', async () => {
+    answers.set([saleAnswer]);
+    const { fixture, root } = await openChat();
+    await type(fixture, root, 'necesito que le cobres al cliente lo del arroz, veinte mil');
+    expect(post).toHaveBeenCalledTimes(1);
     expect(fixture.componentInstance.sales).toEqual([{ amount: 20000, description: 'Arroz' }]);
+    expect(root.querySelector('.peek')!.textContent).toContain('Cobro de $ 20.000 por Arroz');
+  });
+
+  it('says why when the till cannot charge', async () => {
+    const { fixture, root } = await openChat();
+    fixture.componentInstance.problem = 'primero autoriza tu billetera en Inicio para poder cobrar.';
+    await type(fixture, root, 'cobra 10.000');
+    expect(root.textContent).toContain('No pude generar el cobro de $ 10.000: primero autoriza');
+    expect(root.textContent).not.toContain('Generé');
+  });
+
+  it('goes to a section the model opens, and steps aside', async () => {
+    answers.set([{ reply: 'Te llevo a Avisos.', actions: [{ type: 'open', section: 'avisos' }] }]);
+    const { fixture, root } = await openChat();
+    await type(fixture, root, '¿qué pasó con mis pagos?');
+    expect(fixture.componentInstance.sections).toEqual(['avisos']);
     expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(root.querySelector('.peek')!.textContent).toContain('Te llevo a Avisos');
+  });
+
+  it('goes where asked without the model, even when the model only says it did', async () => {
+    const { fixture, root } = await openChat();
+    await type(fixture, root, 'Ya ven inicio');
+    expect(post).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.sections).toEqual(['inicio']);
+    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(root.querySelector('.peek')!.textContent).toContain('te llevé a Inicio');
+
+    // The model claims it opened a section but asks the till for nothing: the till goes anyway.
+    answers.set([{ reply: 'Ahí tienes Ajustes abierto para que cambies tu meta.', actions: [] }]);
+    root.querySelector<HTMLButtonElement>('.launcher')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await type(fixture, root, 'quiero cambiar mi meta de ventas del mes');
+    expect(fixture.componentInstance.sections).toEqual(['inicio', 'ajustes']);
+  });
+
+  it('steps aside after charging, and says what it did by the launcher', async () => {
+    const { fixture, root } = await openChat();
+    await type(fixture, root, 'cobra 50.000');
+    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(root.querySelector('.peek')!.textContent).toContain('50.000');
+    root.querySelector<HTMLButtonElement>('.peek-body')!.click();
+    fixture.detectChanges();
+    expect(root.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(root.textContent).toContain('Generé el cobro');
+  });
+
+  it('in hands-free mode, answers only when called', async () => {
+    const fixture = TestBed.createComponent(Host);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    // What the till's continuous recognition would hand over, phrase by phrase.
+    const hear = async (text: string) => {
+      (TestBed.inject(VoiceService) as unknown as { wakeHandler(t: string): void }).wakeHandler(text);
+      await fixture.whenStable();
+      fixture.detectChanges();
+    };
+
+    await hear('son cinco mil, vecino');
+    expect(fixture.componentInstance.sales).toEqual([]);
+    expect(root.querySelector('[role="dialog"]')).toBeNull();
+
+    await hear('Oye Gloria, cobra veinte mil de arroz');
+    expect(fixture.componentInstance.sales).toEqual([{ amount: 20000, description: 'arroz' }]);
+
+    // "Gloria" alone wakes her: the next phrase is for her, without her name.
+    await hear('Gloria');
+    await hear('cobra cinco mil');
+    expect(fixture.componentInstance.sales).toHaveLength(2);
+    await hear('cobra mil');
+    expect(fixture.componentInstance.sales).toHaveLength(2);
   });
 
   it('says kindly when it cannot answer', async () => {
     post.mockRejectedValueOnce(new Error('network'));
     const { fixture, root } = await openChat();
-    root.querySelector<HTMLButtonElement>('.gloria-suggestions .chip-button')!.click();
+    root.querySelector<HTMLButtonElement>('.suggestions .chip')!.click();
     await fixture.whenStable();
     fixture.detectChanges();
     expect(root.textContent).toContain('No pude responderte');
+  });
+});
+
+describe('afterWakeWord', () => {
+  it('finds what follows her name', () => {
+    expect(afterWakeWord('Gloria, cobra veinte mil')).toBe('cobra veinte mil');
+    expect(afterWakeWord('oye gloria ¿cómo voy?')).toBe('¿cómo voy?');
+    expect(afterWakeWord('Gloria')).toBe('');
+    expect(afterWakeWord('son cinco mil')).toBeNull();
+    // How recognition often writes her name.
+    expect(afterWakeWord('Glorias cuánto vendí')).toBe('cuánto vendí');
+    expect(afterWakeWord('loria, cobra diez mil')).toBe('cobra diez mil');
+    expect(afterWakeWord('Gloría')).toBe('');
+    expect(afterWakeWord('una historia')).toBeNull();
+    expect(afterWakeWord('la gloria de dios')).toBe('de dios');
   });
 });

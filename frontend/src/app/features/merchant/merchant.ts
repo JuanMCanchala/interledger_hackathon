@@ -174,6 +174,8 @@ export default class MerchantPage implements OnInit {
   protected readonly copyLabel = signal('Copiar');
   /** What GlorIA or the dictation filled in, for the shopkeeper to check before charging. */
   protected readonly saleHint = signal('');
+  protected readonly displayBusy = signal(false);
+  protected readonly displayMessage = signal<BannerMessage | null>(null);
 
   // Repartos & Payouts state
   protected readonly editingRules = signal(false);
@@ -921,12 +923,24 @@ export default class MerchantPage implements OnInit {
     }
   }
 
-  /** A sale GlorIA prepared: it lands in the form, never charged until the shopkeeper taps. */
-  protected takeGloriaSale(sale: { amount: number; description: string }): void {
+  /**
+   * A sale asked of GlorIA: its QR is generated as if the shopkeeper had tapped "Generar QR", and
+   * it shows on the counter display too. Resolves with what went wrong, or null.
+   */
+  protected readonly chargeFromGloria = async (sale: {
+    amount: number;
+    description: string;
+  }): Promise<string | null> => {
+    if (!this.canSell()) {
+      return 'primero autoriza tu billetera en Inicio para poder cobrar.';
+    }
+    if (this.saleBusy()) return 'estoy generando otro cobro, intenta en un segundo.';
     if (this.currentSale()) this.resetSaleForm();
     this.selectTab('vender');
-    this.fillSale(sale.amount, sale.description, 'GlorIA te dejó listo este cobro. Revísalo y genera el QR.');
-  }
+    this.fillSale(sale.amount, sale.description, '');
+    await this.submitSale();
+    return this.currentSale() ? null : this.saleFormError() || 'no se pudo crear el cobro.';
+  };
 
   protected takeGloriaSection(section: GloriaSection): void {
     this.selectTab(section);
@@ -939,13 +953,40 @@ export default class MerchantPage implements OnInit {
     this.saleHint.set(hint);
   }
 
+  /**
+   * Links a phone as the counter display (ADR 0018), or with `rotate` unlinks the one that had the
+   * old link. The phone then shows every new sale's QR without scanning again.
+   */
+  protected async linkDisplay(rotate = false): Promise<void> {
+    if (this.displayBusy()) return;
+    this.displayBusy.set(true);
+    this.displayMessage.set(null);
+    try {
+      await this.api.post(`${this.merchantPath}/display`, {});
+      await this.loadMerchant();
+      this.displayMessage.set({
+        tone: 'ok',
+        text: rotate
+          ? 'Listo: el celular anterior quedó desconectado. Escanea el código nuevo con el que vas a usar.'
+          : 'Escanea este código con tu celular y déjalo en el mostrador: mostrará cada cobro nuevo solo.',
+      });
+    } catch (err: unknown) {
+      this.displayMessage.set({
+        tone: 'bad',
+        text: (err as Error)?.message || 'No pudimos enlazar la pantalla. Intenta de nuevo.',
+      });
+    } finally {
+      this.displayBusy.set(false);
+    }
+  }
+
   protected toggleAnnouncements(): void {
     this.voice.setAnnouncements(!this.voice.announcements());
   }
 
   protected tryVoice(): void {
     this.voice.chime();
-    this.voice.speak('¡Pago recibido! Veinte mil pesos. Así te aviso cada venta.');
+    void this.voice.speak('¡Hola! Soy GlorIA. ¡Pago recibido! Veinte mil pesos. Así te aviso cada venta.');
   }
 
   private announceNewNotices(m: MerchantDashboard): void {

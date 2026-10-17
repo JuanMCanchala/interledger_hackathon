@@ -597,13 +597,34 @@
 
                     @if (showOn() === 'phone') {
                       <div class="stack">
-                        <div class="qr-box">
-                          <app-qr-code [value]="cobroUrl(cur.sale)" [size]="230" />
-                          <p class="small center">
-                            Escanéalo con <strong>tu</strong> celular: abre la
-                            pantalla de cobro limpio para mostrársela a tu cliente.
+                        @if (m.displayUrl) {
+                          <p class="banner banner-ok" role="status">
+                            Este cobro ya aparece en tu pantalla de cobro. ¿Otro celular? Escanea este
+                            código una vez y quedará mostrando cada cobro nuevo.
                           </p>
-                        </div>
+                          <div class="qr-box">
+                            <app-qr-code [value]="m.displayUrl" [size]="230" />
+                          </div>
+                        } @else {
+                          <div class="qr-box">
+                            <app-qr-code [value]="cobroUrl(cur.sale)" [size]="230" />
+                            <p class="small center">
+                              Escanéalo con <strong>tu</strong> celular: abre la
+                              pantalla de cobro limpio para mostrársela a tu cliente.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            class="btn btn-secondary btn-block"
+                            [disabled]="displayBusy()"
+                            (click)="linkDisplay()"
+                          >
+                            Dejar mi celular como pantalla fija de cobro
+                          </button>
+                          @if (displayMessage(); as dm) {
+                            <p [class]="'banner banner-' + dm.tone" role="status">{{ dm.text }}</p>
+                          }
+                        }
                       </div>
                     } @else {
                       <div class="stack">
@@ -646,7 +667,7 @@
 
                     <a
                       class="btn btn-lima btn-block"
-                      [href]="cobroUrl(cur.sale)"
+                      [href]="m.displayUrl || cobroUrl(cur.sale)"
                       target="_blank"
                       rel="noopener"
                     >
@@ -1278,6 +1299,42 @@
                 </button>
               </form>
 
+              <section class="card stack" aria-labelledby="display-title">
+                <h2 id="display-title">Pantalla de cobro en tu celular</h2>
+                <p class="muted">
+                  Deja un celular en el mostrador: escanéalo una vez y mostrará el código QR de cada
+                  cobro nuevo, lo hagas tú o GlorIA, y avisará cuando llegue el pago.
+                </p>
+                @if (m.displayUrl) {
+                  <div class="qr-box">
+                    <app-qr-code [value]="m.displayUrl" [size]="200" />
+                  </div>
+                  <a class="btn btn-secondary" [href]="m.displayUrl" target="_blank" rel="noopener">
+                    Abrir la pantalla aquí →
+                  </a>
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    [disabled]="displayBusy()"
+                    (click)="linkDisplay(true)"
+                  >
+                    Cambiar el enlace (desconecta el celular anterior)
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn btn-lima"
+                    [disabled]="displayBusy()"
+                    (click)="linkDisplay()"
+                  >
+                    Enlazar mi celular
+                  </button>
+                }
+                @if (displayMessage(); as dm) {
+                  <p [class]="'banner banner-' + dm.tone" role="status">{{ dm.text }}</p>
+                }
+              </section>
+
               <section class="card stack" aria-labelledby="voice-title">
                 <h2 id="voice-title">Voz y sonido</h2>
                 <p class="muted">
@@ -1294,6 +1351,24 @@
                     />
                     <span>Avisarme los pagos con voz</span>
                   </label>
+                  @if (voice.canListen) {
+                    <label class="switch-row">
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        [checked]="voice.handsFree()"
+                        (change)="voice.setHandsFree(!voice.handsFree())"
+                      />
+                      <span>Manos libres: di «Gloria» y háblale</span>
+                    </label>
+                    <p class="small muted">
+                      Mientras esté encendido, la caja escucha para reconocer «Gloria» y el navegador
+                      transcribe lo que oye con su servicio de voz. Apágalo cuando no lo uses.
+                    </p>
+                    @if (voice.handsFreeError()) {
+                      <p class="banner banner-bad" role="alert">{{ voice.handsFreeError() }}</p>
+                    }
+                  }
                   <button type="button" class="btn btn-secondary" (click)="tryVoice()">
                     Probar la voz
                   </button>
@@ -1472,7 +1547,8 @@
     <app-gloria
       [merchantId]="merchantId"
       [shopName]="m.name"
-      (prepareSale)="takeGloriaSale($event)"
+      [section]="tab()"
+      [charge]="chargeFromGloria"
       (openSection)="takeGloriaSection($event)"
     />
   }
