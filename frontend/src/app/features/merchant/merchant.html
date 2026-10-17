@@ -97,6 +97,7 @@
 
       <button
         type="button"
+        class="nav-desktop-only"
         [class.is-active]="tab() === 'avisos'"
         [attr.aria-current]="tab() === 'avisos' ? 'page' : null"
         (click)="selectTab('avisos')"

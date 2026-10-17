@@ -102,7 +102,7 @@ export class MerchantInicio {
     const daily = this.monthDailyGoal();
     if (!daily) return '';
     const asset = this.merchant().asset ?? { assetCode: 'COP', assetScale: 2 };
-    return `Para tu meta: ${formatMoney(daily, asset.assetCode, asset.assetScale)} por día`;
+    return `Para tu meta: ${formatMoney(Math.ceil(daily), asset.assetCode, asset.assetScale)} por día`;
   });
 
   protected readonly monthSalesSummary = computed(() => {

@@ -3224,3 +3224,24 @@
   background: #fff8f8;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent);
 }
+
+/* Phone: the bell in the top bar opens Avisos, so the bottom bar keeps one row. */
+@media (max-width: 959px) {
+  .panel-nav .nav-desktop-only {
+    display: none;
+  }
+
+  .workspace-topbar {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .topbar-heading {
+    flex: 1 1 100%;
+  }
+
+  .topbar-actions {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+}

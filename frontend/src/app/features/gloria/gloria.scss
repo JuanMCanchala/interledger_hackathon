@@ -61,6 +61,17 @@ button {
   @media (min-width: 900px) {
     bottom: max(24px, env(safe-area-inset-bottom));
   }
+
+  // Phones: just the avatar at rest, so it covers less of the screen.
+  @media (max-width: 699px) {
+    &:not(.is-ear):not(.is-awake) {
+      padding-right: 8px;
+
+      .launcher-copy {
+        display: none;
+      }
+    }
+  }
 }
 
 .launcher-avatar {
