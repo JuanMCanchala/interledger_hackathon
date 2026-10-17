@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SalesService } from "../src/merchants/salesService.js";
 import { ALICE, BOB, NOW } from "./fakeOperations.js";
 import { BASE_URL, cop, setupMiPlante } from "./miplanteHarness.js";
 
@@ -20,6 +21,26 @@ describe("QR payments from the wallet provider's page", () => {
     expect(ops.requestOutgoingPaymentGrant).toHaveBeenCalledWith(
       expect.objectContaining({ id: BOB }),
       expect.objectContaining({ watchIncoming: true }),
+    );
+  });
+
+  it("opens the wallet app's send screen with the shop as the receiver", async () => {
+    const env = setupMiPlante();
+    const merchantId = await env.onboardRosa();
+    const sales = new SalesService(env.flows, env.merchants, env.store, {
+      frontendUrl: BASE_URL,
+      walletSendUrl: "https://wallet.interledger-test.dev/send",
+      now: env.now,
+    });
+
+    const { payUrl } = await sales.createSale(merchantId, { amount: "10000" });
+
+    // The signed-in customer only picks their wallet; the screen reads these two parameters.
+    const url = new URL(payUrl);
+    expect(url.origin + url.pathname).toBe("https://wallet.interledger-test.dev/send");
+    expect(url.searchParams.get("merchantWA")).toBe(BOB);
+    expect(url.searchParams.get("merchantDescription")).toBe(
+      "Tienda Doña Rosa · 10000.00 COP",
     );
   });
 

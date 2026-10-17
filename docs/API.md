@@ -114,14 +114,17 @@ consent is already active and includes it.
 ### `POST /api/merchants/:id/sales`
 
 `{ "amount": "10000", "description": "Mercado" }` →
-`201 { "sale": Sale, "payUrl": "https://ilp.interledger-test.dev/<shop>", "checkoutUrl": "…/pay?sale=<id>" }`.
+`201 { "sale": Sale, "payUrl": "https://wallet.interledger-test.dev/send?merchantWA=…", "checkoutUrl": "…/pay?sale=<id>" }`.
 
 Show `payUrl` as a QR code:
 
 - **When the shop's consent lets MiPlante watch its wallet** (`qrPayments: true` on the merchant),
-  `payUrl` is the shop's **wallet address**. A phone camera opens it, the wallet provider redirects to
-  its own payment page (`pay.interledger-test.dev` on the test network), and the customer types the
-  amount and pays from any wallet. The payment carries no reference to the sale, so MiPlante matches
+  `payUrl` opens the **wallet app's send screen** with the shop as the receiver
+  (`https://wallet.interledger-test.dev/send?merchantWA=<shop>&merchantDescription=<shop · amount>`,
+  set by `OP_WALLET_SEND_URL`). A customer without a session logs in and comes back to it. With a
+  session, they pick their own account and wallet from the wallet's selects, type the amount (the
+  screen does not take one) and send. With `OP_WALLET_SEND_URL` empty, `payUrl` is the bare wallet
+  address, which the provider redirects to its payment page (`pay.interledger-test.dev`). The payment carries no reference to the sale, so MiPlante matches
   it by amount. Each payment, oldest first, pays the most recent open sale created before it whose
   amount it covers, within 2% for a payer in another currency. It never matches a payment that
   already paid a sale or that MiPlante's checkout created. The claim is atomic, so each incoming
@@ -138,7 +141,7 @@ Polls the customer's payment and settles the sale once it is paid. It is safe to
 {
   "id", "merchantId", "merchantName", "amount": Amount, "description"?,
   "status": "open" | "awaiting-consent" | "processing" | "paid" | "failed",
-  "payUrl": "https://ilp.interledger-test.dev/<shop>" | "…/pay?sale=<id>",
+  "payUrl": "https://wallet.interledger-test.dev/send?merchantWA=…" | "…/pay?sale=<id>",
   "checkoutUrl": "…/pay?sale=<id>", "paidByQr": boolean,
   "customer"?: "https://…", "error"?: "…", "paidAt"?: "…",
   "payment"?: { "status", "steps": { "request", "authorization", "execution", "completion" },

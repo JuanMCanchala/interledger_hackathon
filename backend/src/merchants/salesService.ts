@@ -18,6 +18,12 @@ type PublicPayment = Awaited<ReturnType<PaymentFlows["getPayment"]>>;
 export interface SalesOptions {
   /** Base URL of the web client, used for the customer's pay link. */
   frontendUrl: string;
+  /**
+   * The wallet app's send screen (the Interledger test wallet's /send). It reads `merchantWA` as the
+   * receiver and `merchantDescription` as the note, and lets the signed-in customer pick their own
+   * account and wallet address. Without it, the QR is the bare wallet address.
+   */
+  walletSendUrl?: string;
   now?: () => Date;
 }
 
@@ -337,6 +343,22 @@ export class SalesService {
     }
   }
 
+  /**
+   * The QR for a shop whose consent lets MiPlante watch its wallet. The wallet app's send screen
+   * opens with the shop as the receiver; the signed-in customer picks their wallet and types the
+   * amount (the screen does not take one), and MiPlante matches the payment by amount.
+   */
+  private qrUrl(merchant: MerchantRecord, sale: SaleRecord): string {
+    if (!this.options.walletSendUrl) return merchant.wallet;
+    const url = new URL(this.options.walletSendUrl);
+    url.searchParams.set("merchantWA", merchant.wallet);
+    url.searchParams.set(
+      "merchantDescription",
+      `${merchant.name} · ${fromMinorUnits(sale.amount.value, sale.amount.assetScale)} ${sale.amount.assetCode}`,
+    );
+    return url.toString();
+  }
+
   /** MiPlante's own checkout, where the customer types their wallet name. */
   payUrl(saleId: string): string {
     return `${this.options.frontendUrl}/pay?sale=${saleId}`;
@@ -373,8 +395,9 @@ export class SalesService {
         debitAmount: payment.debitAmount,
         receivedAmount: payment.receivedAmount,
       },
-      // What the QR encodes: the wallet address when MiPlante can see QR payments, else the checkout.
-      payUrl: qr ? merchant.wallet : this.payUrl(sale.id),
+      // What the QR encodes: the wallet app's send screen (or the bare wallet address) when MiPlante
+      // can see QR payments, else the checkout.
+      payUrl: qr ? this.qrUrl(merchant, sale) : this.payUrl(sale.id),
       checkoutUrl: this.payUrl(sale.id),
       paidByQr: Boolean(sale.incomingPaymentUrl),
       settlement: sale.settlement,

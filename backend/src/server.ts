@@ -26,6 +26,7 @@ try {
   const merchants = new MerchantService(flows, store);
   const sales = new SalesService(flows, merchants, store, {
     frontendUrl: config.frontendUrl,
+    walletSendUrl: config.walletSendUrl,
   });
   const frontendOrigin = new URL(config.frontendUrl).origin;
   const app = createApp({

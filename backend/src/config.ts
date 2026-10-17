@@ -24,6 +24,11 @@ const envSchema = z.object({
   OP_PRIVATE_KEY_PATH: z.string().default("private.key"),
   OP_ALLOWED_WALLET_HOSTS: z.string().default("ilp.interledger-test.dev"),
   OP_LOG_LEVEL: z.enum(LOG_LEVELS).default("warn"),
+  // The wallet app's send screen: the sale's QR opens it with the shop as the receiver, so a
+  // signed-in customer only picks their wallet. Empty to put the bare wallet address in the QR.
+  OP_WALLET_SEND_URL: z
+    .union([z.url(), z.literal("")])
+    .default("https://wallet.interledger-test.dev/send"),
   DATABASE_URL: z
     .string()
     .regex(/^postgres(ql)?:\/\//, "debe ser una URL postgresql://")
@@ -42,6 +47,8 @@ export interface Config {
   privateKey: string;
   allowedWalletHosts: string[] | "*";
   logLevel: (typeof LOG_LEVELS)[number];
+  /** Wallet app send screen that takes `merchantWA`; undefined to use the bare wallet address. */
+  walletSendUrl?: string;
   /** PostgreSQL connection string (ADR 0010). */
   databaseUrl: string;
 }
@@ -64,6 +71,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     privateKey: resolvePrivateKey(e.OP_PRIVATE_KEY, e.OP_PRIVATE_KEY_PATH),
     allowedWalletHosts: parseHosts(e.OP_ALLOWED_WALLET_HOSTS),
     logLevel: e.OP_LOG_LEVEL,
+    walletSendUrl: e.OP_WALLET_SEND_URL || undefined,
     databaseUrl: e.DATABASE_URL,
   };
 }
