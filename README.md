@@ -233,4 +233,4 @@ problem → ideation → product brief → decisions → system design → integ
 
 ## License
 
-To be decided by the team before the final submission.
+[MIT](LICENSE).
