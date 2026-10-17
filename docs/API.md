@@ -215,7 +215,18 @@ that makes a savings wallet (the first savings rule's unless another is named) t
 pay a creditor, capped per month like the shop's grant. The merchant view shows it as
 `emergency: { "ruleId", "label", "status" } | null`. It is only used through `use-emergency`.
 
-### `POST /api/merchants/:id/consent`
+### `POST /api/merchants/:id/assistant`
+
+GlorIA, the shopkeeper's assistant (ADR 0017). Owner of the shop only.
+`{ "messages": [{ "role": "user" | "assistant", "content": "…" }] }` (1 to 40 turns, up to 1000
+characters each, the last one from the user) → `200 { "reply": "…", "actions": Action[] }`, where an
+action is a draft for the till to show, never something already done:
+
+- `{ "type": "sale", "amount": "20000", "description"?: "Arroz" }`: a sale to fill into Vender;
+- `{ "type": "open", "section": "inicio" | "vender" | "metas" | "repartos" | "ajustes" | "avisos" }`.
+
+`503` when no model is configured or it did not answer, `429` after 20 questions in a minute.
+
 
 Asks for the monthly-capped consent again, with the same cap and rules, when the first attempt was
 never approved, was rejected (for example, the merchant logged in with another account) or was

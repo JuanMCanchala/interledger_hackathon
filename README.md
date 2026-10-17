@@ -152,6 +152,10 @@ Or run everything in containers with `npm run docker:up`: Compose reads `.env` a
 from the repository root, and the backend applies the migrations when it starts. After changing
 `backend/prisma/schema.prisma`, create a migration with `npm run db:migrate -- --name <change>`.
 
+GlorIA, the assistant in the till, turns on with `DEEPSEEK_API_KEY` in `.env` (see
+[`env.example`](env.example); after changing it, `docker compose up -d backend`). Without it the
+till works the same and the chat says she is off.
+
 Then open:
 
 - `/register` to create an account and set up a shop, or `/login` to open its till (or

@@ -22,5 +22,6 @@ earlier one instead of editing it.
 | [0014](0014-pay-creditors-once-on-their-due-day.md) | Pay creditors once, on their due day | Accepted, amended by 0015 |
 | [0015](0015-due-day-completes-the-quota-and-failed-payouts-wait-for-review.md) | The due day completes the quota, and a failed payout waits for review | Accepted |
 | [0016](0016-the-emergency-fund-is-the-last-resort.md) | The emergency fund is the last resort, and only when the shopkeeper chooses it | Accepted |
+| [0017](0017-gloria-an-assistant-that-reads-and-prepares-but-never-moves-money.md) | GlorIA, an assistant that reads and prepares but never moves money | Accepted |
 
 To add one, copy the structure of an existing ADR, take the next number and add it to this table.
