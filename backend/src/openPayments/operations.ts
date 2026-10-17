@@ -100,6 +100,15 @@ export interface PaymentOperations {
 }
 
 const DEFAULT_INCOMING_EXPIRY_MS = 60 * 60 * 1000;
+/** Wallet addresses barely change, and every payment step needs them: keep them for a while. */
+const WALLET_CACHE_MS = 10 * 60_000;
+/** Non-interactive grants are reused until shortly before they expire (or ten minutes at most). */
+const MAX_TOKEN_CACHE_MS = 10 * 60_000;
+const TOKEN_MARGIN_MS = 30_000;
+
+type NonInteractiveAccess =
+  | { type: "incoming-payment"; actions: ("create" | "read")[] }
+  | { type: "quote"; actions: ("create" | "read")[] };
 
 export function toStoredToken(
   token: { value: string; manage: string; expires_in?: number },
@@ -115,12 +124,33 @@ export function toStoredToken(
   };
 }
 
+/**
+ * One method per Open Payments step. It caches what does not need a round trip every time: wallet
+ * address lookups and non-interactive grant tokens (incoming payments, quotes). A split used to
+ * spend about half of its calls on them. A cached token the server refuses (401) is dropped and
+ * requested again once.
+ */
 export class OpenPaymentsOperations implements PaymentOperations {
-  constructor(private readonly client: AuthenticatedClient) {}
+  private readonly wallets = new Map<
+    string,
+    { wallet: Promise<WalletAddress>; until: number }
+  >();
+  private readonly tokens = new Map<string, { value: string; until: number }>();
+
+  constructor(
+    private readonly client: AuthenticatedClient,
+    private readonly now: () => number = Date.now,
+  ) {}
 
   /** Step 1: discover the wallet (asset, auth server, resource server). */
   getWalletAddress(url: string): Promise<WalletAddress> {
-    return this.client.walletAddress.get({ url });
+    const hit = this.wallets.get(url);
+    if (hit && hit.until > this.now()) return hit.wallet;
+    // Caching the promise also merges concurrent lookups of the same wallet into one request.
+    const wallet = this.client.walletAddress.get({ url });
+    this.wallets.set(url, { wallet, until: this.now() + WALLET_CACHE_MS });
+    wallet.catch(() => this.wallets.delete(url));
+    return wallet;
   }
 
   /** Steps 2–3: non-interactive grant on the receiver + incoming payment (the payment request). */
@@ -128,23 +158,25 @@ export class OpenPaymentsOperations implements PaymentOperations {
     receiver: WalletAddress,
     options: IncomingPaymentOptions = {},
   ): Promise<{ incomingPayment: IncomingPayment; accessToken: string }> {
-    const accessToken = await this.requestIncomingPaymentToken(receiver, [
-      "create",
-      "read",
-    ]);
     const expiresInMs = options.expiresInMs ?? DEFAULT_INCOMING_EXPIRY_MS;
-    const incomingPayment = await this.client.incomingPayment.create(
-      { url: receiver.resourceServer, accessToken },
-      {
-        walletAddress: receiver.id,
-        incomingAmount: options.incomingAmount,
-        expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
-        metadata: options.description
-          ? { description: options.description }
-          : undefined,
-      },
+    return this.withGrantToken(
+      receiver,
+      { type: "incoming-payment", actions: ["create", "read"] },
+      async (accessToken) => ({
+        incomingPayment: await this.client.incomingPayment.create(
+          { url: receiver.resourceServer, accessToken },
+          {
+            walletAddress: receiver.id,
+            incomingAmount: options.incomingAmount,
+            expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
+            metadata: options.description
+              ? { description: options.description }
+              : undefined,
+          },
+        ),
+        accessToken,
+      }),
     );
-    return { incomingPayment, accessToken };
   }
 
   async listIncomingPayments(
@@ -182,16 +214,17 @@ export class OpenPaymentsOperations implements PaymentOperations {
         if (!isAuthError(error)) throw error;
       }
     }
-    const freshToken = await this.requestIncomingPaymentToken(receiver, [
-      "read",
-    ]);
-    return {
-      incomingPayment: await this.client.incomingPayment.get({
-        url,
+    return this.withGrantToken(
+      receiver,
+      { type: "incoming-payment", actions: ["read"] },
+      async (freshToken) => ({
+        incomingPayment: await this.client.incomingPayment.get({
+          url,
+          accessToken: freshToken,
+        }),
         accessToken: freshToken,
       }),
-      accessToken: freshToken,
-    };
+    );
   }
 
   /** Steps 4–5: non-interactive quote grant on the sender + quote (exact cost before paying). */
@@ -199,30 +232,21 @@ export class OpenPaymentsOperations implements PaymentOperations {
     sender: WalletAddress,
     options: QuoteOptions,
   ): Promise<Quote> {
-    const grant = await this.client.grant.request(
-      { url: sender.authServer },
-      {
-        access_token: {
-          access: [{ type: "quote", actions: ["create", "read"] }],
-        },
-      },
-    );
-    if (!isFinalizedGrantWithAccessToken(grant)) {
-      throw new AppError(
-        "El servidor de autorización pidió interacción para la cotización",
-        502,
-      );
-    }
     const base = {
       walletAddress: sender.id,
       receiver: options.receiver,
       method: "ilp" as const,
     };
-    return this.client.quote.create(
-      { url: sender.resourceServer, accessToken: grant.access_token.value },
-      options.debitAmount
-        ? { ...base, debitAmount: options.debitAmount }
-        : base,
+    return this.withGrantToken(
+      sender,
+      { type: "quote", actions: ["create", "read"] },
+      (accessToken) =>
+        this.client.quote.create(
+          { url: sender.resourceServer, accessToken },
+          options.debitAmount
+            ? { ...base, debitAmount: options.debitAmount }
+            : base,
+        ),
     );
   }
 
@@ -359,20 +383,50 @@ export class OpenPaymentsOperations implements PaymentOperations {
     });
   }
 
-  private async requestIncomingPaymentToken(
-    receiver: WalletAddress,
-    actions: ("create" | "read")[],
+  /** Runs `fn` with a cached non-interactive grant token, requesting a new one once on a 401. */
+  private async withGrantToken<T>(
+    wallet: WalletAddress,
+    access: NonInteractiveAccess,
+    fn: (accessToken: string) => Promise<T>,
+  ): Promise<T> {
+    const key = `${wallet.authServer} ${access.type} ${access.actions.join(",")}`;
+    const cached = this.tokens.get(key);
+    if (cached && cached.until > this.now()) {
+      try {
+        return await fn(cached.value);
+      } catch (error) {
+        if (!isAuthError(error)) throw error;
+        this.tokens.delete(key);
+      }
+    }
+    return fn(await this.requestGrantToken(wallet, access, key));
+  }
+
+  private async requestGrantToken(
+    wallet: WalletAddress,
+    access: NonInteractiveAccess,
+    key: string,
   ): Promise<string> {
     const grant = await this.client.grant.request(
-      { url: receiver.authServer },
-      { access_token: { access: [{ type: "incoming-payment", actions }] } },
+      { url: wallet.authServer },
+      { access_token: { access: [access] } },
     );
     if (!isFinalizedGrantWithAccessToken(grant)) {
       throw new AppError(
-        "El servidor de autorización pidió interacción para el pago entrante",
+        access.type === "quote"
+          ? "El servidor de autorización pidió interacción para la cotización"
+          : "El servidor de autorización pidió interacción para el pago entrante",
         502,
       );
     }
+    const lifetimeMs = Math.min(
+      (grant.access_token.expires_in ?? Infinity) * 1000,
+      MAX_TOKEN_CACHE_MS,
+    );
+    this.tokens.set(key, {
+      value: grant.access_token.value,
+      until: this.now() + lifetimeMs - TOKEN_MARGIN_MS,
+    });
     return grant.access_token.value;
   }
 }
