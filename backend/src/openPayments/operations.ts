@@ -54,6 +54,11 @@ export interface PaymentOperations {
     receiver: WalletAddress,
     accessToken?: string,
   ): Promise<{ incomingPayment: IncomingPayment; accessToken: string }>;
+  completeIncomingPayment(
+    url: string,
+    receiver: WalletAddress,
+    accessToken?: string,
+  ): Promise<IncomingPayment>;
   createQuote(sender: WalletAddress, options: QuoteOptions): Promise<Quote>;
   requestOutgoingPaymentGrant(
     sender: WalletAddress,
@@ -92,7 +97,7 @@ const MAX_TOKEN_CACHE_MS = 10 * 60_000;
 const TOKEN_MARGIN_MS = 30_000;
 
 type NonInteractiveAccess =
-  | { type: "incoming-payment"; actions: ("create" | "read")[] }
+  | { type: "incoming-payment"; actions: ("create" | "read" | "complete")[] }
   | { type: "quote"; actions: ("create" | "read")[] };
 
 export function toStoredToken(
@@ -146,7 +151,7 @@ export class OpenPaymentsOperations implements PaymentOperations {
     const expiresInMs = options.expiresInMs ?? DEFAULT_INCOMING_EXPIRY_MS;
     return this.withGrantToken(
       receiver,
-      { type: "incoming-payment", actions: ["create", "read"] },
+      { type: "incoming-payment", actions: ["create", "read", "complete"] },
       async (accessToken) => ({
         incomingPayment: await this.client.incomingPayment.create(
           { url: receiver.resourceServer, accessToken },
@@ -193,6 +198,30 @@ export class OpenPaymentsOperations implements PaymentOperations {
         }),
         accessToken: freshToken,
       }),
+    );
+  }
+
+  /**
+   * Closes an incoming payment that has no `incomingAmount` (the split's shares fix what the sender
+   * pays, not what arrives): without this it stays open, shown as pending, until it expires.
+   */
+  async completeIncomingPayment(
+    url: string,
+    receiver: WalletAddress,
+    accessToken?: string,
+  ): Promise<IncomingPayment> {
+    if (accessToken) {
+      try {
+        return await this.client.incomingPayment.complete({ url, accessToken });
+      } catch (error) {
+        if (!isTokenRejected(error)) throw error;
+      }
+    }
+    return this.withGrantToken(
+      receiver,
+      { type: "incoming-payment", actions: ["complete"] },
+      (freshToken) =>
+        this.client.incomingPayment.complete({ url, accessToken: freshToken }),
     );
   }
 

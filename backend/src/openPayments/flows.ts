@@ -298,6 +298,9 @@ export class PaymentFlows {
         receivedAmount: received,
         incomingToken: accessToken,
       });
+      if (record.status === "completed" && !incomingPayment.completed) {
+        await this.closeIncomingPayment(record, receiver);
+      }
     } catch (error) {
       // Polling must not break the UI; the next poll retries.
       console.warn(
@@ -558,6 +561,28 @@ export class PaymentFlows {
       authServer: sender.authServer,
     };
     return { interaction, redirectUrl: pending.interact.redirect };
+  }
+
+  /**
+   * Everything quoted arrived at an incoming payment without a fixed amount (a split share): close
+   * it, so the receiver's wallet shows it completed instead of pending until it expires. The money
+   * has already arrived, so a failure here is only logged.
+   */
+  private async closeIncomingPayment(
+    record: PaymentRecord,
+    receiver: WalletAddress,
+  ) {
+    try {
+      await this.ops.completeIncomingPayment(
+        record.incomingPaymentUrl,
+        receiver,
+        record.incomingToken,
+      );
+    } catch (error) {
+      console.warn(
+        `[payments] no se pudo cerrar la incoming payment de ${record.id}: ${describeError(error)}`,
+      );
+    }
   }
 
   /** Quotes expire within minutes; if the user took long to consent, quote again within the approved limit. */

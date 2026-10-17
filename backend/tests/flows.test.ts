@@ -366,6 +366,54 @@ describe("mandates", () => {
     );
   });
 
+  it("closes a share's open incoming payment once everything quoted arrived", async () => {
+    const { flows, ops, deliver, activeMandate } = setup();
+    const id = await activeMandate();
+    const payment = await flows.chargeMandate(id, {
+      receiver: BOB,
+      amount: "10",
+      amountType: "send",
+    });
+
+    // Without an incomingAmount the wallet never completes it on its own.
+    deliver(payment.incomingPaymentUrl, cop("5000000"), { completed: false });
+    const done = await flows.refreshPayment(payment.id);
+
+    expect(done.status).toBe("completed");
+    expect(ops.completeIncomingPayment).toHaveBeenCalledTimes(1);
+    expect(ops.completeIncomingPayment).toHaveBeenCalledWith(
+      payment.incomingPaymentUrl,
+      expect.objectContaining({ id: BOB }),
+      "incoming-token",
+    );
+    await flows.refreshPayment(payment.id);
+    expect(ops.completeIncomingPayment).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the payment completed when closing its incoming payment fails", async () => {
+    const { flows, ops, deliver, activeMandate } = setup();
+    const id = await activeMandate();
+    const payment = await flows.chargeMandate(id, {
+      receiver: BOB,
+      amount: "10",
+      amountType: "send",
+    });
+    ops.completeIncomingPayment.mockRejectedValueOnce(new Error("boom"));
+    deliver(payment.incomingPaymentUrl, cop("5000000"), { completed: false });
+
+    expect((await flows.refreshPayment(payment.id)).status).toBe("completed");
+  });
+
+  it("does not close an incoming payment the wallet already completed", async () => {
+    const { flows, ops, deliver, activeMandate } = setup();
+    const id = await activeMandate();
+    const payment = await flows.chargeMandate(id, { receiver: BOB, amount: "1000" });
+    deliver(payment.incomingPaymentUrl, cop("5000000"));
+
+    expect((await flows.refreshPayment(payment.id)).status).toBe("completed");
+    expect(ops.completeIncomingPayment).not.toHaveBeenCalled();
+  });
+
   it("splits between receivers and reports failures per receiver", async () => {
     const { flows, activeMandate } = setup();
     const id = await activeMandate();

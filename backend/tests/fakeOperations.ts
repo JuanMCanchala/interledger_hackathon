@@ -125,6 +125,18 @@ export function createFakeOperations() {
         accessToken: "incoming-token",
       };
     }),
+    completeIncomingPayment: vi.fn(
+      async (url: string, receiver: WalletAddress) => {
+        const state = incoming.get(url) ?? { completed: false, received: cop("0") };
+        incoming.set(url, { ...state, completed: true });
+        return mockIncomingPaymentWithPaymentMethods({
+          id: url,
+          walletAddress: receiver.id,
+          completed: true,
+          receivedAmount: state.received,
+        });
+      },
+    ),
     createQuote: vi.fn(
       async (
         sender: WalletAddress,
