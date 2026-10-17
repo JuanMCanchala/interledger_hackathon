@@ -9,8 +9,8 @@ and tested everything that reached `main`.
 
 | Tool                    | Model           | Used by                                                | Used for                                                                            |
 | ----------------------- | --------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| Claude Code (Anthropic) | Claude Opus 5.5 | Juan Manuel Canchala, Brayan Zuluaga, Isabella Pacheco | Code, tests, documentation and deployment, plus research and code-review sub-agents |
-| Google Antigravity      | Gemini 4 Argon  | Brayan Zuluaga                                         | Ideation, the first architecture and the Prisma/PostgreSQL persistence              |
+| Claude Code (Anthropic) | Claude Opus 5.5 | Juan Manuel Canchala, Brayan Zuluaga, Juan José Cuartas, Isabella Pacheco | Code, tests, documentation and deployment, plus research and code-review sub-agents |
+| Google Antigravity      | Gemini 4 Argon  | Brayan Zuluaga, Juan José Cuartas                      | Ideation, the first architecture and the Prisma/PostgreSQL persistence              |
 
 While building the design system, Claude Code also followed two community agent skills,
 `ui-ux-pro-max` and `fronted-design` (see `design-system/miplante/MASTER.md`). They are not part of
@@ -73,7 +73,7 @@ in their refined version; the original wording is at the end of his log):
 - **Each sale is a payment request.** _"Determina si una página de terceros puede aprovechar la
   sesión del test wallet para conocer las billeteras del cliente…"_: research that led to the QR
   that opens the customer's wallet on the sale's incoming payment (ADR 0012).
-  ([Brayan](prompts/brayan-zuluaga/09-solicitud-de-pago-open-payments-en-el-qr.md))
+  ([Brayan and Juan José](prompts/brayan-zuluaga-juan-jose-cuartas/09-solicitud-de-pago-open-payments-en-el-qr.md))
 - **A brand-aligned, multi-step app.** _"Asegúrate de un buen UX (ej: en lugar de formularios
   largos que requieren scroll, hazlo multistep)"_: the one-question-per-screen sign-up and
   onboarding. ([Isabella](prompts/isabella-pacheco.md))
