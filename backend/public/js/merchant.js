@@ -184,6 +184,8 @@ function render(m) {
   if (changed($("goals"), [m.rules, m.month, m.monthlySalesGoal])) renderGoals(m);
   if (changed($("rules"), m.rules)) renderRules(m.rules);
   if (changed($("payouts"), m.payouts)) renderPayouts(m.payouts);
+  // The quota line under each reserved share follows this month's totals.
+  if (current?.sale.status === "paid") renderSaleSplit(current.sale);
   renderSettings(m);
 }
 
@@ -565,6 +567,29 @@ function renderRules(rules) {
 }
 
 /** "Se le paga el 25 de octubre": the debt's next due day, this month or the next. */
+/**
+ * The sale's split, with a line under each share set aside for a debt: how far its monthly quota
+ * has got and when the creditor is paid. "Apartado" alone could read as "ready to be paid".
+ */
+function renderSaleSplit(sale) {
+  renderSplit($("sale-split"), sale.settlement, {
+    detail: (item) => {
+      if (item.status !== "reserved") return "";
+      // The public sale read (what the till polls) leaves the rule ID out: match by name then.
+      const rule = merchant?.rules.find((r) =>
+        item.ruleId ? r.id === item.ruleId : r.label === item.label && r.kind === "debt",
+      );
+      if (!rule) return "";
+      const quota = amountOf(rule.monthlyQuota);
+      const progress =
+        quota > 0 && amountOf(rule.paidThisMonth) >= quota
+          ? "Cuota del mes completa"
+          : `Cuota del mes: ${formatAmount(rule.paidThisMonth)} de ${formatAmount(rule.monthlyQuota)}`;
+      return `${progress} · ${dueText(rule)}`;
+    },
+  });
+}
+
 function dueText(rule) {
   const day = rule.dueDay ?? 28;
   const today = new Date();
@@ -1039,7 +1064,7 @@ function renderSale(sale) {
   const paid = sale.status === "paid";
   $("split-block").hidden = !paid;
   if (paid) {
-    renderSplit($("sale-split"), sale.settlement);
+    renderSaleSplit(sale);
     const note = $("settlement-note");
     const status = sale.settlement?.status;
     if (status === "pending" || status === "running") {

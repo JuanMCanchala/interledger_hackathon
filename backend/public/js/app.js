@@ -41,7 +41,8 @@ const ITEM_STATUS = {
   completed: { text: "Enviado", tone: "ok" },
   failed: { text: "Falló", tone: "bad" },
   skipped: { text: "Límite mensual alcanzado", tone: "neutral" },
-  reserved: { text: "Apartado para su día de pago", tone: "info" },
+  // Set aside in the shop's wallet: it is not paid yet, and its quota may not be complete either.
+  reserved: { text: "Apartado", tone: "info" },
 };
 
 export const RULE_KIND = {
@@ -444,15 +445,17 @@ export function renderSteps(
 
 /**
  * Renders how a sale was split. Re-renders only when something changed and animates rows
- * only the first time, so polling does not make the list flicker.
+ * only the first time, so polling does not make the list flicker. `detail(item)` can add a line
+ * under a share (the till uses it for how far a debt's monthly quota has got).
  */
 export function renderSplit(
   container,
   settlement,
-  { keptLabel = "Tú te quedas" } = {},
+  { keptLabel = "Tú te quedas", detail = () => "" } = {},
 ) {
   const items = settlement?.items || [];
-  const signature = JSON.stringify([settlement?.kept, items]);
+  const details = items.map((item) => detail(item) || "");
+  const signature = JSON.stringify([settlement?.kept, items, details]);
   if (container.dataset.signature === signature) return;
   const animate = container.childElementCount === 0;
   container.dataset.signature = signature;
@@ -472,7 +475,7 @@ export function renderSplit(
       ),
     );
   }
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     rows.push(
       el(
         "li",
@@ -491,6 +494,9 @@ export function renderSplit(
             ? el("span", { class: "error-text", text: item.error })
             : null,
         ),
+        details[index]
+          ? el("p", { class: "split-detail small muted", text: details[index] })
+          : null,
       ),
     );
   }
