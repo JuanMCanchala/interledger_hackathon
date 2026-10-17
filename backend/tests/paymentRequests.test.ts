@@ -1,3 +1,4 @@
+import { OpenPaymentsClientError } from "@interledger/open-payments";
 import { describe, expect, it } from "vitest";
 import { SalesService } from "../src/merchants/salesService.js";
 import { ALICE } from "./fakeOperations.js";
@@ -89,6 +90,33 @@ describe("sales paid through their payment request", () => {
     expect(sale.status).toBe("failed");
     expect(sale.error).toContain("venció");
     expect(sale.payUrl).toBe(sale.checkoutUrl);
+  });
+
+  it("fails a request whose hour is over although the wallet no longer lets it be read", async () => {
+    const { sales, ops, clock, saleId } = await openSale();
+    // Once a payment request expires, the test wallet answers 401 to reading it.
+    ops.readIncomingPayment.mockRejectedValue(
+      new OpenPaymentsClientError("Unauthorized", { description: "Unauthorized", status: 401 }),
+    );
+
+    clock.now = new Date(clock.now.getTime() + 61 * 60_000);
+    const sale = await sales.refresh(saleId);
+
+    expect(sale.status).toBe("failed");
+    expect(sale.error).toContain("venció sin recibir el pago");
+    // And the sweeper stops asking the wallet about it.
+    ops.readIncomingPayment.mockClear();
+    await sales.sweep();
+    expect(ops.readIncomingPayment).not.toHaveBeenCalled();
+  });
+
+  it("keeps an unreadable request open while its hour lasts, and tries again", async () => {
+    const { sales, ops, saleId } = await openSale();
+    ops.readIncomingPayment.mockRejectedValueOnce(new Error("fetch failed"));
+
+    expect((await sales.refresh(saleId)).status).toBe("open");
+    expect((await sales.refresh(saleId)).status).toBe("open");
+    expect(ops.readIncomingPayment).toHaveBeenCalledTimes(2);
   });
 
   it("shows what is missing after a partial payment and completes with the rest", async () => {
