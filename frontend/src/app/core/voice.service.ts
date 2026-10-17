@@ -151,7 +151,7 @@ export class VoiceService {
   announcePayment(pesos: number): void {
     if (!this.announcements()) return;
     this.chime();
-    navigator.vibrate?.([80, 60, 120]);
+    buzz();
     void this.speak(`¡Pago recibido! ${pesosInWords(pesos)}.`);
   }
 
@@ -342,6 +342,13 @@ export class VoiceService {
     };
     return voices.sort((a, b) => score(b) - score(a))[0];
   }
+}
+
+/** A short buzz, only once the page was touched: browsers refuse it (with a warning) before. */
+export function buzz(): void {
+  const active = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+  if (active && !active.hasBeenActive) return;
+  navigator.vibrate?.([80, 60, 120]);
 }
 
 function recognitionError(error: string): string {

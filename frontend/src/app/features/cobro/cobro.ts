@@ -19,7 +19,7 @@ import {
   salePace,
   statusInfo,
 } from '../../core/miplante.utils';
-import { VoiceService } from '../../core/voice.service';
+import { VoiceService, buzz } from '../../core/voice.service';
 import { Doodle } from '../../shared/brand/doodle';
 import { Logo } from '../../shared/brand/logo';
 import { QrCode } from '../../shared/ui/qr-code';
@@ -277,7 +277,7 @@ export default class CobroPage implements OnInit {
       if (sale?.status === 'paid' && before?.id === sale.id && before.status !== 'paid') {
         // The customer sees the payment land: a chime and a buzz where the phone allows it.
         this.voice.chime();
-        navigator.vibrate?.([80, 60, 120]);
+        buzz();
       }
       this.missing.set(false);
       this.shopName.set(shopName);
