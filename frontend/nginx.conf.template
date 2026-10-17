@@ -24,8 +24,8 @@ server {
     # Redirect old .html links (printed QR codes, legacy callbacks) to clean SPA routes, keeping query strings.
     rewrite ^/(login|register|onboard|merchant|pay|cobro|sandbox)\.html$ /$1 permanent;
 
-    # The service worker and its manifest must always be fresh, or a deploy never reaches phones.
-    location ~ ^/(ngsw-worker\.js|ngsw\.json|safety-worker\.js|worker-basic\.min\.js|index\.html)$ {
+    # Revalidate worker files, the app manifest and the entry point after each deploy.
+    location ~ ^/(ngsw-worker\.js|ngsw\.json|safety-worker\.js|worker-basic\.min\.js|manifest\.webmanifest|index\.html)$ {
         add_header Cache-Control "no-cache";
         try_files $uri =404;
     }
