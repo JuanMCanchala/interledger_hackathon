@@ -33,6 +33,22 @@
     "!/**/*__*",
     "!/**/*__*/**",
     "!/api/**",
-    "!/js/**"
+    "!/js/**",
+    "!/css/**",
+    "!/img/**",
+    "!/login",
+    "!/login/**",
+    "!/register",
+    "!/register/**",
+    "!/onboard",
+    "!/onboard/**",
+    "!/merchant",
+    "!/merchant/**",
+    "!/pay",
+    "!/pay/**",
+    "!/cobro",
+    "!/cobro/**",
+    "!/sandbox",
+    "!/sandbox/**"
   ]
 }

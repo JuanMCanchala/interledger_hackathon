@@ -1,0 +1,75 @@
+# Production stack for Coolify (Build Pack: Docker Compose, file: docker-compose.coolify.yml).
+# Only the frontend is public: its nginx serves the landing and proxies the API and the till pages
+# to the backend over the internal network, so the whole app lives under one domain.
+# Set the domain on the frontend service in Coolify; the backend and the database get none.
+# Variables marked :? are required and Coolify asks for them; see docs/COOLIFY.md.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      # Generated and kept by Coolify on the first deploy.
+      POSTGRES_USER: ${SERVICE_USER_POSTGRES}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: miplante
+    volumes:
+      - miplante_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d miplante"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@db:5432/miplante?schema=public
+      # The public URL of the frontend service (e.g. https://miplante.example.com), with no slash.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?}
+      FRONTEND_URL: ${PUBLIC_BASE_URL:?}
+      OP_CLIENT_WALLET_ADDRESS: ${OP_CLIENT_WALLET_ADDRESS:?}
+      OP_KEY_ID: ${OP_KEY_ID:?}
+      # The developer private.key in base64 (`base64 -w0 private.key`); no key file in the image.
+      OP_PRIVATE_KEY: ${OP_PRIVATE_KEY:?}
+      OP_ALLOWED_WALLET_HOSTS: ${OP_ALLOWED_WALLET_HOSTS:-ilp.interledger-test.dev}
+      OP_WALLET_SEND_URL: ${OP_WALLET_SEND_URL:-https://wallet.interledger-test.dev/send}
+      OP_LOG_LEVEL: ${OP_LOG_LEVEL:-warn}
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # nginx resolves the backend when it starts, so it waits for it.
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      BACKEND_INTERNAL_URL: http://backend:3000
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  miplante_pgdata:
