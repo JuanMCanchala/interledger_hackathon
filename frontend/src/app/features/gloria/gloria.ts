@@ -23,7 +23,7 @@ import {
 } from '../../core/spoken-amount';
 import { VoiceService } from '../../core/voice.service';
 import { afterWakeWord } from '../../core/wake-word';
-import { SECTION_LABEL, parseNavigation, wentTo } from '../../core/navigation-intent';
+import { SECTION_LABEL, isTillSection, type TillSection } from '../../core/navigation-intent';
 import { GloriaIcon } from '../../shared/brand/gloria-icon';
 
 /** What GlorIA prepared for the shopkeeper to confirm (backend/src/assistant/gloriaService.ts). */
@@ -33,7 +33,7 @@ export type GloriaAction =
   | { type: 'cash-deposit'; amount: string }
   | { type: 'open'; section: GloriaSection };
 
-export type GloriaSection = 'inicio' | 'vender' | 'efectivo' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
+export type GloriaSection = TillSection;
 
 type SaleAction = Extract<GloriaAction, { type: 'sale' }>;
 
@@ -269,14 +269,6 @@ export class Gloria {
       await this.chargeNow(request, speakIt);
       return;
     }
-    // "Llévame a inicio", "avisos": the same, for moving around the till.
-    const place = parseNavigation(content);
-    if (place) {
-      this.turns.update((t) => [...t, { role: 'user', content }]);
-      this.goTo(place, true, speakIt);
-      return;
-    }
-
     this.turns.update((t) => [...t, { role: 'user', content }]);
     this.thinking.set(true);
     try {
@@ -312,15 +304,15 @@ export class Gloria {
         return;
       }
       const sale = answer.actions.find((a): a is SaleAction => a.type === 'sale');
-      // A section she opened, or one she says she opened without asking the till to.
-      const section = answer.actions.find((a) => a.type === 'open')?.section ?? wentTo(answer.reply);
+      // Only an explicit action with a real destination can move the till, never reply text.
+      const section = answer.actions.find((a) => a.type === 'open')?.section;
       if (sale) {
         // The model understood a charge: it is generated now, and she says how it went.
         await this.chargeNow({ amount: Number(sale.amount), description: sale.description ?? '' }, speakIt);
         return;
       }
       this.turns.update((t) => [...t, { role: 'assistant', content: money(answer.reply) }]);
-      if (section) {
+      if (isTillSection(section)) {
         this.goTo(section, false, false);
         this.showPeek(answer.reply);
       }

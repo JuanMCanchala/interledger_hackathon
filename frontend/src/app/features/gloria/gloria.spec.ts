@@ -12,12 +12,14 @@ import { ChargeRequest, Gloria, GloriaSection, afterWakeWord } from './gloria';
     [charge]="charge"
     [cashSale]="cashSale"
     [cashDeposit]="cashDeposit"
+    [section]="section"
     (openSection)="sections.push($event)"
   />`,
 })
 class Host {
   readonly sales: ChargeRequest[] = [];
   readonly sections: GloriaSection[] = [];
+  section: GloriaSection | null = null;
   problem: string | null = null;
   readonly charge = async (sale: ChargeRequest) => {
     if (!this.problem) this.sales.push(sale);
@@ -41,6 +43,8 @@ describe('GlorIA chat', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    localStorage.clear();
+    answers.set([]);
     post.mockClear();
     TestBed.configureTestingModule({
       imports: [Host],
@@ -193,21 +197,100 @@ describe('GlorIA chat', () => {
     expect(root.querySelector('.peek')!.textContent).toContain('Te llevo a Avisos');
   });
 
-  it('goes where asked without the model, even when the model only says it did', async () => {
+  // Mocked replies exercise forwarding and action handling, not semantic model quality.
+  it.each([
+    ['Inicio', 'inicio'],
+    ['abre efectivo', 'efectivo'],
+    ['llévame a mis estadísticas del negocio', 'inicio'],
+    ['quiero ver cuánto me falta por consignar', 'efectivo'],
+    ['muéstrame el progreso de mi ahorro', 'metas'],
+  ] as const)('sends navigation request "%s" to the backend and follows its valid open action', async (request, section) => {
+    answers.set([{ reply: 'Te llevo a esa pantalla.', actions: [{ type: 'open', section }] }]);
     const { fixture, root } = await openChat();
-    await type(fixture, root, 'Ya ven inicio');
-    expect(post).not.toHaveBeenCalled();
+    fixture.componentInstance.section = 'repartos';
+    fixture.detectChanges();
+    await type(fixture, root, request);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith('/api/merchants/shop-1/assistant', {
+      messages: [{ role: 'user', content: request }],
+      section: 'repartos',
+    });
+    expect(fixture.componentInstance.sections).toEqual([section]);
+    expect(root.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it.each([
+    'Ahí tienes Ajustes abierto para que cambies tu meta.',
+    'Te llevo a Inicio.',
+    '¿Quieres ver tus ventas o tus metas?',
+    'No existe una pantalla de inventario.',
+    'Tus ventas están en Inicio.',
+  ])('does not navigate from reply text without an open action: %s', async (reply) => {
+    answers.set([{ reply, actions: [] }]);
+    const { fixture, root } = await openChat();
+    await type(fixture, root, 'muéstrame cómo voy');
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.sections).toEqual([]);
+    expect(root.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(root.querySelector('.peek')).toBeNull();
+    expect(root.textContent).toContain(reply);
+  });
+
+  it.each(['admin', 'Inicio', '', null, undefined, 7, {}, ['inicio']].map((section) => ({ section })))(
+    'does not navigate to an invalid runtime section, even if the reply claims Inicio: %j',
+    async ({ section }) => {
+      answers.set([{ reply: 'Te llevo a Inicio.', actions: [{ type: 'open', section }] }]);
+      const { fixture, root } = await openChat();
+      await type(fixture, root, 'abre esa pantalla');
+      expect(fixture.componentInstance.sections).toEqual([]);
+      expect(root.querySelector('[role="dialog"]')).toBeTruthy();
+      expect(root.querySelector('.peek')).toBeNull();
+    },
+  );
+
+  it('keeps the current section on a navigation network failure', async () => {
+    post.mockRejectedValueOnce(new Error('network'));
+    const { fixture, root } = await openChat();
+    fixture.componentInstance.section = 'efectivo';
+    fixture.detectChanges();
+    await type(fixture, root, 'abre inicio');
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.sections).toEqual([]);
+    expect(fixture.componentInstance.section).toBe('efectivo');
+    expect(root.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(root.textContent).toContain('No pude responderte');
+  });
+
+  it('routes hands-free navigation through the same backend and validated action path', async () => {
+    answers.set([{ reply: 'En Inicio encuentras los gráficos de ventas.', actions: [{ type: 'open', section: 'inicio' }] }]);
+    const { fixture, root } = await openChat();
+    (TestBed.inject(VoiceService) as unknown as { wakeHandler(t: string): void }).wakeHandler('Gloria, muéstrame las estadísticas');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith('/api/merchants/shop-1/assistant', {
+      messages: [{ role: 'user', content: 'muéstrame las estadísticas' }],
+    });
     expect(fixture.componentInstance.sections).toEqual(['inicio']);
     expect(root.querySelector('[role="dialog"]')).toBeNull();
-    expect(root.querySelector('.peek')!.textContent).toContain('te llevé a Inicio');
+  });
 
-    // The model claims it opened a section but asks the till for nothing: the till goes anyway.
-    answers.set([{ reply: 'Ahí tienes Ajustes abierto para que cambies tu meta.', actions: [] }]);
-    root.querySelector<HTMLButtonElement>('.launcher')!.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    await type(fixture, root, 'quiero cambiar mi meta de ventas del mes');
-    expect(fixture.componentInstance.sections).toEqual(['inicio', 'ajustes']);
+  it('does not repeat a model cash sale or deposit without an amount in the current turn', async () => {
+    answers.set([{
+      reply: 'Listo.',
+      actions: [
+        { type: 'cash-sale', amount: '8000' },
+        { type: 'cash-deposit', amount: '1200' },
+        { type: 'open', section: 'efectivo' },
+      ],
+    }]);
+    const { fixture, root } = await openChat();
+    await type(fixture, root, '¿cómo va mi efectivo?');
+    expect(fixture.componentInstance.cashSales).toEqual([]);
+    expect(fixture.componentInstance.deposits).toEqual([]);
+    expect(fixture.componentInstance.sales).toEqual([]);
+    expect(fixture.componentInstance.sections).toEqual([]);
+    expect(root.textContent).toContain('necesito el monto');
   });
 
   it('steps aside after charging, and says what it did by the launcher', async () => {
