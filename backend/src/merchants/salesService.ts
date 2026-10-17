@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { planAllocations } from "../domain/allocation.js";
+import { startOfBogotaMonth } from "../domain/calendar.js";
 import { describeError } from "../openPayments/errors.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
@@ -178,12 +179,17 @@ export class SalesService {
       return;
     }
 
+    const [remainingCap, paidThisMonth] = await Promise.all([
+      this.remainingCap(merchant),
+      this.paidThisMonth(merchant.id, saleId),
+    ]);
     const plan = planAllocations(
       sale.amount,
       merchant.rules,
-      await this.remainingCap(merchant),
+      remainingCap,
+      paidThisMonth,
     );
-    // The rules are charged in parallel: their amounts already fit the remaining daily cap
+    // The rules are charged in parallel: their amounts already fit the remaining monthly cap
     // (and the wallet rejects any excess anyway), so the split takes one charge, not one per rule.
     const items: (SettlementItem | undefined)[] = plan.allocations.map(
       () => undefined,
@@ -378,7 +384,7 @@ export class SalesService {
   ): Promise<Amount | undefined> {
     const spent = (await this.flows.getMandate(merchant.mandateId)).spent
       ?.debitAmount;
-    const cap = merchant.dailyCap;
+    const cap = merchant.monthlyCap;
     if (
       !spent ||
       spent.assetCode !== cap.assetCode ||
@@ -388,6 +394,33 @@ export class SalesService {
     }
     const left = BigInt(cap.value) - BigInt(spent.value);
     return { ...cap, value: (left > 0n ? left : 0n).toString() };
+  }
+
+  /**
+   * What each rule already received from the sales paid this calendar month (Bogotá), so a debt
+   * stops taking its share once its monthly quota is paid. Failed or skipped shares do not count.
+   */
+  async paidThisMonth(
+    merchantId: string,
+    exceptSaleId?: string,
+  ): Promise<Record<string, Amount>> {
+    const monthStart = startOfBogotaMonth(this.now()).getTime();
+    // A sale created late last month can be paid this month: look a little further back.
+    const sales = await this.store.listSales({
+      merchantId,
+      createdSince: new Date(monthStart - SWEEP_WINDOW_MS).toISOString(),
+    });
+    const paid: Record<string, Amount> = {};
+    for (const sale of sales) {
+      if (sale.id === exceptSaleId || !sale.paidAt) continue;
+      if (Date.parse(sale.paidAt) < monthStart) continue;
+      for (const item of sale.settlement.items) {
+        if (item.status === "failed" || item.status === "skipped") continue;
+        const sum = BigInt(paid[item.ruleId]?.value ?? "0") + BigInt(item.amount.value);
+        paid[item.ruleId] = { ...item.amount, value: sum.toString() };
+      }
+    }
+    return paid;
   }
 
   private async refreshSettlement(saleId: string): Promise<void> {

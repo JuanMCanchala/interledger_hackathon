@@ -18,7 +18,7 @@ model Merchant {
   wallet     String
   assetCode  String   @map("asset_code")
   assetScale Int      @map("asset_scale")
-  dailyCap   BigInt   @map("daily_cap")
+  monthlyCap BigInt   @map("monthly_cap")
   mandateId  String   @unique @map("mandate_id") @db.Uuid
   createdAt  DateTime @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
@@ -32,16 +32,20 @@ model Merchant {
 
 /// Applied in `position` order, which is also their priority when the daily cap runs out.
 model Rule {
-  merchantId  String  @map("merchant_id") @db.Uuid
-  id          String  @db.Uuid
-  position    Int
-  label       String
-  kind        String
-  destination String
-  shareBps    Int     @map("share_bps")
+  merchantId   String  @map("merchant_id") @db.Uuid
+  id           String  @db.Uuid
+  position     Int
+  label        String
+  /// Groups the shop's wallets on screen (Proveedores, Microcréditos, Ahorro or the shop's own).
+  category     String  @default("")
+  kind         String
+  destination  String
+  shareBps     Int     @map("share_bps")
+  /// Debt rules: what is due each calendar month.
+  monthlyQuota BigInt? @map("monthly_quota")
   /// Debt rules only: what is still owed.
-  outstanding BigInt?
-  repaid      BigInt  @default(0)
+  outstanding  BigInt?
+  repaid       BigInt  @default(0)
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
@@ -51,24 +55,24 @@ model Rule {
 }
 
 model Sale {
-  id                 String    @id @db.Uuid
-  merchantId         String    @map("merchant_id") @db.Uuid
-  amount             BigInt
-  assetCode          String    @map("asset_code")
-  assetScale         Int       @map("asset_scale")
-  description        String?
-  status             String
-  customer           String?
-  paymentId          String?   @map("payment_id") @db.Uuid
-  error              String?
+  id               String    @id @db.Uuid
+  merchantId       String    @map("merchant_id") @db.Uuid
+  amount           BigInt
+  assetCode        String    @map("asset_code")
+  assetScale       Int       @map("asset_scale")
+  description      String?
+  status           String
+  customer         String?
+  paymentId        String?   @map("payment_id") @db.Uuid
+  error            String?
   /// pending → running → done | skipped; moved to running atomically before any money moves.
-  settlementStatus   String    @map("settlement_status")
-  settlementReason   String?   @map("settlement_reason")
-  keptAmount         BigInt?   @map("kept_amount")
-  settledAt          DateTime? @map("settled_at") @db.Timestamptz(3)
-  paidAt             DateTime? @map("paid_at") @db.Timestamptz(3)
-  createdAt          DateTime  @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime  @map("updated_at") @db.Timestamptz(3)
+  settlementStatus String    @map("settlement_status")
+  settlementReason String?   @map("settlement_reason")
+  keptAmount       BigInt?   @map("kept_amount")
+  settledAt        DateTime? @map("settled_at") @db.Timestamptz(3)
+  paidAt           DateTime? @map("paid_at") @db.Timestamptz(3)
+  createdAt        DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @map("updated_at") @db.Timestamptz(3)
 
   merchant Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   payment  Payment?         @relation(fields: [paymentId], references: [id])
@@ -101,20 +105,20 @@ model SettlementItem {
 }
 
 model Mandate {
-  id             String   @id @db.Uuid
-  status         String
-  description    String?
-  returnTo       String?  @map("return_to")
-  sender         String
-  maxAmount      Json     @map("max_amount")
-  interval       String?
-  error          String?
-  createdAt      DateTime @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime @map("updated_at") @db.Timestamptz(3)
+  id           String   @id @db.Uuid
+  status       String
+  description  String?
+  returnTo     String?  @map("return_to")
+  sender       String
+  maxAmount    Json     @map("max_amount")
+  interval     String?
+  error        String?
+  createdAt    DateTime @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @map("updated_at") @db.Timestamptz(3)
   /// Secrets: never returned by the API.
-  interaction    Json?
-  token          Json?
-  continuation   Json?
+  interaction  Json?
+  token        Json?
+  continuation Json?
 
   merchant Merchant?
   payments Payment[]

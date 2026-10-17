@@ -130,7 +130,7 @@ export class PrismaStore implements Store {
       wallet: record.wallet,
       assetCode: record.asset.assetCode,
       assetScale: record.asset.assetScale,
-      dailyCap: BigInt(record.dailyCap.value),
+      monthlyCap: BigInt(record.monthlyCap.value),
       mandateId: record.mandateId,
       createdAt: new Date(record.createdAt),
       updatedAt: new Date(record.updatedAt),
@@ -148,9 +148,13 @@ export class PrismaStore implements Store {
           id: rule.id,
           position,
           label: rule.label,
+          category: rule.category,
           kind: rule.kind,
           destination: rule.destination,
           shareBps: rule.shareBps,
+          monthlyQuota: rule.monthlyQuota
+            ? BigInt(rule.monthlyQuota.value)
+            : null,
           outstanding: rule.outstanding ? BigInt(rule.outstanding.value) : null,
           repaid: BigInt(rule.repaid.value),
         })),
@@ -202,9 +206,13 @@ export class PrismaStore implements Store {
         const fields = {
           position,
           label: rule.label,
+          category: rule.category,
           kind: rule.kind,
           destination: rule.destination,
           shareBps: rule.shareBps,
+          monthlyQuota: rule.monthlyQuota
+            ? BigInt(rule.monthlyQuota.value)
+            : null,
         };
         return this.prisma.rule.upsert({
           where: { merchantId_id: { merchantId, id: rule.id } },
@@ -396,13 +404,18 @@ function toMerchant(row: MerchantRow): MerchantRecord {
     name: row.name,
     wallet: row.wallet,
     asset,
-    dailyCap: amount(row.dailyCap, asset),
+    monthlyCap: amount(row.monthlyCap, asset),
     rules: row.rules.map((rule) => ({
       id: rule.id,
       label: rule.label,
+      category: rule.category,
       kind: rule.kind as MerchantRecord["rules"][number]["kind"],
       destination: rule.destination,
       shareBps: rule.shareBps,
+      monthlyQuota:
+        rule.monthlyQuota === null
+          ? undefined
+          : amount(rule.monthlyQuota, asset),
       outstanding:
         rule.outstanding === null ? undefined : amount(rule.outstanding, asset),
       repaid: amount(rule.repaid, asset),

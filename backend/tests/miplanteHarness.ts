@@ -2,6 +2,7 @@ import {
   MerchantService,
   type OnboardInput,
 } from "../src/merchants/merchantService.js";
+import { DashboardService } from "../src/merchants/dashboardService.js";
 import { SalesService } from "../src/merchants/salesService.js";
 import { PaymentFlows } from "../src/openPayments/flows.js";
 import { computeInteractHash } from "../src/openPayments/hash.js";
@@ -26,17 +27,20 @@ export const cop = (value: string) => ({
 export const ROSA: OnboardInput = {
   name: "Tienda Doña Rosa",
   wallet: "$ilp.interledger-test.dev/bob",
-  dailyCap: "30000",
+  monthlyCap: "30000",
   rules: [
     {
       label: "Microcrédito",
+      category: "Microcréditos",
       kind: "debt",
       destination: COOP,
       sharePercent: 15,
+      monthlyQuota: "20000",
       outstanding: "300000",
     },
     {
       label: "Fondo de emergencia",
+      category: "Ahorro",
       kind: "savings",
       destination: SAVINGS,
       sharePercent: 5,
@@ -57,6 +61,9 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
   const merchants = new MerchantService(flows, store, { now });
   const sales = new SalesService(flows, merchants, store, {
     frontendUrl: BASE_URL,
+    now,
+  });
+  const dashboard = new DashboardService(flows, merchants, sales, store, {
     now,
   });
 
@@ -97,6 +104,7 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     flows,
     merchants,
     sales,
+    dashboard,
     approve,
     approveMandate,
     approvePayment,

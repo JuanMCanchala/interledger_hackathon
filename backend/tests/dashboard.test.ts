@@ -93,13 +93,13 @@ describe("merchant dashboard", () => {
     const merchantId = await env.onboardRosa();
 
     // The shared fake answers in USD; a COP merchant must not show it.
-    expect((await env.dashboard.get(merchantId)).spentToday).toBeNull();
+    expect((await env.dashboard.get(merchantId)).spentThisMonth).toBeNull();
 
     env.ops.getGrantSpentAmounts.mockResolvedValue({
       spentDebitAmount: cop("200000"),
       spentReceiveAmount: null,
     });
-    expect((await env.dashboard.get(merchantId)).spentToday).toEqual(
+    expect((await env.dashboard.get(merchantId)).spentThisMonth).toEqual(
       cop("200000"),
     );
   });

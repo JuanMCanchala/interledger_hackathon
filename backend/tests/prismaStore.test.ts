@@ -119,7 +119,9 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
       rules: [
         {
           label: "Proveedor",
+          category: "Proveedores",
           kind: "debt",
+          monthlyQuota: "5000",
           destination: COOP,
           sharePercent: 10,
           outstanding: "1000",
@@ -155,13 +157,16 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
       {
         id: savings!.id,
         label: "Ahorro",
+        category: "Ahorro",
         kind: "savings",
         destination: savings!.destination,
         sharePercent: 10,
       },
       {
         label: "Proveedor",
+        category: "Proveedores",
         kind: "debt",
+        monthlyQuota: "5000",
         destination: SUPPLIER,
         sharePercent: 10,
         outstanding: "50000",
@@ -169,7 +174,9 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
       {
         id: microcredit!.id,
         label: microcredit!.label,
+        category: "Proveedores",
         kind: "debt",
+        monthlyQuota: "5000",
         destination: microcredit!.destination,
         sharePercent: 15,
       },

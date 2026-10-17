@@ -131,17 +131,20 @@ describe("MiPlante API", () => {
   const rosa = {
     name: "Tienda Doña Rosa",
     wallet: "$ilp.interledger-test.dev/bob",
-    dailyCap: "30000",
+    monthlyCap: "30000",
     rules: [
       {
         label: "Microcrédito",
+        category: "Microcréditos",
         kind: "debt",
         destination: COOP,
         sharePercent: 15,
+        monthlyQuota: "20000",
         outstanding: "300000",
       },
       {
         label: "Fondo de emergencia",
+        category: "Ahorro",
         kind: "savings",
         destination: SAVINGS,
         sharePercent: 5,

@@ -3,8 +3,8 @@
  * from the till of a shop that is already set up:
  *   npm run demo:merchant                      # against http://localhost:3000
  *   API_URL=https://mi-tunel.example npm run demo:merchant
- * It prints the consent link: open it once, log in as the shop and approve the daily cap. The splits
- * can be changed later from the till ("Editar repartos") without asking for consent again.
+ * It prints the consent link: open it once, log in as the shop and approve the monthly limit. The
+ * splits can be changed later from the till ("Editar repartos") without asking for consent again.
  */
 
 const API_URL = (process.env.API_URL ?? "http://localhost:3000").replace(
@@ -15,17 +15,29 @@ const API_URL = (process.env.API_URL ?? "http://localhost:3000").replace(
 const SHOP = {
   name: "Tienda Billeticos",
   wallet: "$ilp.interledger-test.dev/tienda-billeticos",
-  dailyCap: "50000",
+  // Room for both quotas (300,000 COP) plus savings.
+  monthlyCap: "500000",
   rules: [
     {
+      label: "Distribuidora",
+      category: "Proveedores",
+      kind: "debt",
+      destination: "$ilp.interledger-test.dev/proveedor-billeticos",
+      sharePercent: 10,
+      monthlyQuota: "200000",
+    },
+    {
       label: "Microcrédito Anti-Gota",
+      category: "Microcréditos",
       kind: "debt",
       destination: "$ilp.interledger-test.dev/microcredito",
       sharePercent: 15,
+      monthlyQuota: "100000",
       outstanding: "300000",
     },
     {
       label: "Fondo de emergencia",
+      category: "Ahorro",
       kind: "savings",
       destination: "$ilp.interledger-test.dev/ahorro-billeticos",
       sharePercent: 5,
@@ -55,9 +67,10 @@ if (!res.ok || !body.merchant || !body.redirectUrl) {
 }
 
 console.log(`
-${SHOP.name} registrada: 15% al microcrédito (saldo 300.000 COP), 5% al ahorro, tope ${SHOP.dailyCap} COP/día.
+${SHOP.name} registrada: 10% al proveedor hasta 200.000 COP/mes, 15% al microcrédito hasta 100.000 COP/mes
+(saldo 300.000 COP), 5% al ahorro. Límite mensual: ${SHOP.monthlyCap} COP.
 
-1. Abre este enlace, entra con la cuenta de la tienda y aprueba el tope diario (una sola vez):
+1. Abre este enlace, entra con la cuenta de la tienda y aprueba el límite mensual (una sola vez):
    ${body.redirectUrl}
 
 2. La caja de la demo:

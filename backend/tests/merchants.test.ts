@@ -3,7 +3,7 @@ import { BOB, COOP, SAVINGS } from "./fakeOperations.js";
 import { BASE_URL, ROSA, cop, setupMiPlante } from "./miplanteHarness.js";
 
 describe("merchant onboarding", () => {
-  it("asks the merchant for a single consent capped per day", async () => {
+  it("asks the merchant for a single consent capped per calendar month", async () => {
     const { merchants, ops, store } = setupMiPlante();
 
     const { merchant, redirectUrl } = await merchants.onboard(ROSA);
@@ -15,7 +15,8 @@ describe("merchant onboarding", () => {
       expect.objectContaining({
         limits: {
           debitAmount: cop("3000000"),
-          interval: "R/2026-10-16T15:00:00Z/P1D",
+          // Each interval is a calendar month in Bogotá, from the 1st at 00:00 COT.
+          interval: "R/2026-10-01T05:00:00Z/P1M",
         },
         finishUri: expect.stringMatching(
           new RegExp(`^${BASE_URL}/api/mandates/.+/callback$`),
@@ -26,7 +27,7 @@ describe("merchant onboarding", () => {
       name: "Tienda Doña Rosa",
       wallet: BOB,
       asset: { assetCode: "COP", assetScale: 2 },
-      dailyCap: cop("3000000"),
+      monthlyCap: cop("3000000"),
       status: "awaiting-consent",
     });
     expect(
@@ -81,17 +82,25 @@ describe("merchant onboarding", () => {
         },
       ],
     };
-    const debtWithoutBalance = {
+    const debtWithoutQuota = {
       ...ROSA,
-      rules: [{ ...ROSA.rules[0]!, outstanding: undefined }],
+      rules: [{ ...ROSA.rules[0]!, monthlyQuota: undefined }],
+    };
+    const quotasOverTheCap = {
+      ...ROSA,
+      monthlyCap: "10000",
+      rules: [{ ...ROSA.rules[0]!, monthlyQuota: "20000" }],
     };
 
     await expect(merchants.onboard(toSelf)).rejects.toThrow("misma wallet");
     await expect(merchants.onboard(unknown)).rejects.toThrow(
       "wallet desconocida",
     );
-    await expect(merchants.onboard(debtWithoutBalance)).rejects.toThrow(
-      "saldo pendiente",
+    await expect(merchants.onboard(quotasOverTheCap)).rejects.toThrow(
+      "más que el límite mensual",
+    );
+    await expect(merchants.onboard(debtWithoutQuota)).rejects.toThrow(
+      "cuota mensual",
     );
     expect(ops.requestOutgoingPaymentGrant).not.toHaveBeenCalled();
   });
@@ -122,7 +131,8 @@ describe("merchant onboarding", () => {
       expect.objectContaining({
         limits: {
           debitAmount: cop("3000000"),
-          interval: "R/2026-10-16T15:00:00Z/P1D",
+          // Each interval is a calendar month in Bogotá, from the 1st at 00:00 COT.
+          interval: "R/2026-10-01T05:00:00Z/P1M",
         },
       }),
     );

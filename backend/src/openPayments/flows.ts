@@ -59,6 +59,8 @@ export interface StartMandateInput {
   maxAmount: string;
   /** ISO 8601 duration, e.g. P1W. Omit for a one-time total cap. */
   interval?: string;
+  /** When the first interval starts (default: now), e.g. the 1st of the month for P1M. */
+  intervalStart?: Date;
   repetitions?: number;
   description?: string;
   /** Page (path starting with "/") where the browser lands after the consent screen. */
@@ -323,7 +325,7 @@ export class PaymentFlows {
     const maxAmount = toAmount(input.maxAmount, sender);
     const interval = input.interval
       ? buildRepeatingInterval(input.interval, {
-          start: this.now(),
+          start: input.intervalStart ?? this.now(),
           repetitions: input.repetitions,
         })
       : undefined;

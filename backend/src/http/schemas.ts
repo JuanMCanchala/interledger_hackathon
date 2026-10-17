@@ -63,24 +63,26 @@ export const callbackQuery = z
 
 const rule = z.object({
   label: z.string().trim().min(1).max(60),
+  category: z.string().trim().min(1).max(40),
   kind: z.enum(["debt", "savings"]),
   destination: walletAddress,
   sharePercent: z.number().gt(0).max(50),
+  monthlyQuota: decimalAmount.optional(),
   outstanding: decimalAmount.optional(),
 });
 
 export const onboardMerchant = z.object({
   name: z.string().trim().min(1).max(80),
   wallet: walletAddress,
-  dailyCap: decimalAmount,
-  rules: z.array(rule).min(1).max(5),
+  monthlyCap: decimalAmount,
+  rules: z.array(rule).min(1).max(10),
 });
 
 export const updateRules = z.object({
   rules: z
     .array(rule.extend({ id: z.uuid().optional() }))
     .min(1)
-    .max(5)
+    .max(10)
     .refine(
       (rules) => {
         const ids = rules.flatMap((r) => (r.id ? [r.id] : []));

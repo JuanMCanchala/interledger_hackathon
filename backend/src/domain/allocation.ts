@@ -16,14 +16,19 @@ export interface AllocationRule {
   destination: string;
   /** Share of each sale in basis points: 1,500 = 15%. */
   shareBps: number;
-  /** Debt rules only: what is still owed. Nothing is allocated once it reaches zero. */
+  /**
+   * Debt rules (suppliers, microcredit): what is due each calendar month. Once the month's quota
+   * is paid, the rule takes nothing more until next month, so the rest of the sales is profit.
+   */
+  monthlyQuota?: Amount;
+  /** Debt rules, optional: the whole balance still owed. Nothing is allocated once it is zero. */
   outstanding?: Amount;
 }
 
 export interface Allocation {
   ruleId: string;
   amount: Amount;
-  /** The daily cap reduced this allocation (possibly to zero). */
+  /** The monthly cap of the shop's grant reduced this allocation (possibly to zero). */
   capped: boolean;
 }
 
@@ -35,7 +40,7 @@ export interface AllocationPlan {
 }
 
 export const BPS_PER_WHOLE = 10_000;
-export const MAX_RULES = 5;
+export const MAX_RULES = 10;
 /** The merchant always keeps at least half of every sale. */
 export const MAX_TOTAL_SHARE_BPS = 5_000;
 
@@ -68,17 +73,22 @@ export function validateRules(
     }
     total += rule.shareBps;
     if (rule.kind === "debt") {
-      const paid =
-        options.paidDebts?.has(rule.id) && rule.outstanding?.value === "0";
-      if (
-        !rule.outstanding ||
-        (!paid && BigInt(rule.outstanding.value) <= 0n)
-      ) {
+      if (!rule.monthlyQuota || BigInt(rule.monthlyQuota.value) <= 0n) {
         throw new AppError(
-          `La deuda "${rule.label}" necesita un saldo pendiente mayor que cero`,
+          `"${rule.label}" necesita una cuota mensual mayor que cero`,
         );
       }
-      assertSameAsset(rule.outstanding, asset);
+      assertSameAsset(rule.monthlyQuota, asset);
+      if (rule.outstanding) {
+        const paid =
+          options.paidDebts?.has(rule.id) && rule.outstanding.value === "0";
+        if (!paid && BigInt(rule.outstanding.value) <= 0n) {
+          throw new AppError(
+            `La deuda "${rule.label}" necesita un saldo pendiente mayor que cero`,
+          );
+        }
+        assertSameAsset(rule.outstanding, asset);
+      }
     }
   }
   if (total > MAX_TOTAL_SHARE_BPS) {
@@ -90,13 +100,16 @@ export function validateRules(
 
 /**
  * Who gets what from one sale. Rules are applied in order (their priority):
- *   allocation = floor(sale × shareBps / 10,000), limited to the outstanding debt and to what is
- *   left of the daily cap. The merchant keeps the rest, so the parts always add up to the sale.
+ *   allocation = floor(sale × shareBps / 10,000), limited, for debts, to what is left of this
+ *   month's quota (`paidThisMonth` per rule ID) and to the outstanding balance, and to what is left
+ *   of the grant's monthly cap. The merchant keeps the rest, so the parts always add up to the
+ *   sale; once every quota of the month is paid, the whole sale is profit.
  */
 export function planAllocations(
   sale: Amount,
   rules: AllocationRule[],
   remainingCap?: Amount,
+  paidThisMonth: Readonly<Record<string, Amount>> = {},
 ): AllocationPlan {
   if (remainingCap) assertSameAsset(remainingCap, sale);
   const saleValue = BigInt(sale.value);
@@ -107,9 +120,19 @@ export function planAllocations(
   for (const rule of rules) {
     let value = (saleValue * BigInt(rule.shareBps)) / BigInt(BPS_PER_WHOLE);
     if (rule.kind === "debt") {
-      if (rule.outstanding) assertSameAsset(rule.outstanding, sale);
-      const outstanding = BigInt(rule.outstanding?.value ?? "0");
-      if (value > outstanding) value = outstanding;
+      if (rule.monthlyQuota) {
+        assertSameAsset(rule.monthlyQuota, sale);
+        const paid = paidThisMonth[rule.id];
+        if (paid) assertSameAsset(paid, sale);
+        const quotaLeft =
+          BigInt(rule.monthlyQuota.value) - BigInt(paid?.value ?? "0");
+        if (value > quotaLeft) value = quotaLeft;
+      }
+      if (rule.outstanding) {
+        assertSameAsset(rule.outstanding, sale);
+        const outstanding = BigInt(rule.outstanding.value);
+        if (value > outstanding) value = outstanding;
+      }
     }
     if (value <= 0n) continue;
 

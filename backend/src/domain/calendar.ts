@@ -13,6 +13,14 @@ export function startOfBogotaDay(date: Date): Date {
   return new Date(local - (local % DAY_MS) + BOGOTA_OFFSET_MS);
 }
 
+/** The instant the Bogotá calendar month containing `date` began (the 1st, 00:00 COT). */
+export function startOfBogotaMonth(date: Date): Date {
+  const local = new Date(date.getTime() - BOGOTA_OFFSET_MS);
+  return new Date(
+    Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1) + BOGOTA_OFFSET_MS,
+  );
+}
+
 /** The last `count` Bogotá dates up to and including today, oldest first. */
 export function lastBogotaDays(now: Date, count: number): string[] {
   return Array.from({ length: count }, (_, i) =>

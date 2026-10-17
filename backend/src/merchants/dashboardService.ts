@@ -32,8 +32,11 @@ export class DashboardService {
 
   async get(merchantId: string) {
     const merchant = await this.merchants.require(merchantId);
-    const mandate = await this.flows.getMandate(merchant.mandateId);
-    const sales = await this.store.listSales({ merchantId });
+    const [mandate, sales, paidThisMonth] = await Promise.all([
+      this.flows.getMandate(merchant.mandateId),
+      this.store.listSales({ merchantId }),
+      this.sales.paidThisMonth(merchantId),
+    ]);
     const paid = sales.filter((sale) => sale.status === "paid" && sale.paidAt);
     const now = this.now();
     const startOfToday = startOfBogotaDay(now).getTime();
@@ -50,8 +53,13 @@ export class DashboardService {
     return {
       ...(await this.merchants.view(merchant)),
       status: mandate.status,
-      /** Spent from the daily-capped grant in its current interval. */
-      spentToday: spent && sameAsset(spent, merchant.asset) ? spent : null,
+      /** Spent from the monthly-capped grant in its current interval (this calendar month). */
+      spentThisMonth: spent && sameAsset(spent, merchant.asset) ? spent : null,
+      /** Each rule with what it received this month, to show how much of its quota is paid. */
+      rules: merchant.rules.map((rule) => ({
+        ...rule,
+        paidThisMonth: paidThisMonth[rule.id] ?? money(0n),
+      })),
       today: {
         salesCount: today.length,
         gross: money(gross),

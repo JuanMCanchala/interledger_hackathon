@@ -4,19 +4,30 @@ import {
   validateRules,
   type RuleKind,
 } from "../domain/allocation.js";
+import { startOfBogotaMonth } from "../domain/calendar.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
-import { fromMinorUnits, toAmount, type Amount } from "../shared/money.js";
+import {
+  fromMinorUnits,
+  toAmount,
+  type Amount,
+  type Asset,
+} from "../shared/money.js";
 import type { RuleUpdate, Store } from "../storage/store.js";
 import type { MerchantRecord, MerchantRule } from "./types.js";
 
 export interface RuleInput {
+  /** Who receives it, e.g. "Distribuidora La 14". */
   label: string;
+  /** "Proveedores", "Microcréditos", "Ahorro" or a category the shop creates. */
+  category: string;
   kind: RuleKind;
   destination: string;
   /** Share of each sale, 0.01–50, at most two decimals. */
   sharePercent: number;
-  /** Debt rules: amount owed, in the merchant's currency. */
+  /** Debt rules: what is due each calendar month, in the merchant's currency. */
+  monthlyQuota?: string;
+  /** Debt rules, optional: the whole balance owed, e.g. a microcredit. */
   outstanding?: string;
 }
 
@@ -28,13 +39,13 @@ export interface RuleEditInput extends RuleInput {
 export interface OnboardInput {
   name: string;
   wallet: string;
-  /** Most the rules can debit per day, in the merchant's currency. */
-  dailyCap: string;
+  /** Most the rules can debit per calendar month, in the merchant's currency. */
+  monthlyCap: string;
   rules: RuleInput[];
 }
 
-/** The merchant's grant resets every day (ADR 0004). */
-export const DAILY_INTERVAL = "P1D";
+/** The merchant's grant resets every calendar month (ADR 0013). */
+export const MONTHLY_INTERVAL = "P1M";
 
 export class MerchantService {
   private readonly now: () => Date;
@@ -49,7 +60,8 @@ export class MerchantService {
 
   /**
    * Registers the merchant and asks for the single consent MiPlante needs: an outgoing-payment
-   * grant on the merchant's wallet, capped at `dailyCap` per day. Returns the wallet's consent URL.
+   * grant on the merchant's wallet, capped at `monthlyCap` per calendar month. Returns the wallet's
+   * consent URL.
    */
   async onboard(input: OnboardInput) {
     const wallet = await this.flows.describeWalletAddress(input.wallet);
@@ -66,16 +78,16 @@ export class MerchantService {
     const rules: MerchantRule[] = input.rules.map((rule, index) => ({
       id: randomUUID(),
       label: rule.label,
+      category: rule.category,
       kind: rule.kind,
       destination: destinations[index]!.id,
       shareBps: percentToBps(rule.sharePercent),
-      outstanding:
-        rule.kind === "debt" && rule.outstanding !== undefined
-          ? toAmount(rule.outstanding, asset)
-          : undefined,
+      monthlyQuota: debtAmount(rule, rule.monthlyQuota, asset),
+      outstanding: debtAmount(rule, rule.outstanding, asset),
       repaid: { value: "0", ...asset },
     }));
     validateRules(rules, asset);
+    assertCapCoversQuotas(toAmount(input.monthlyCap, asset), rules);
     if (rules.some((rule) => rule.destination === wallet.id)) {
       throw new AppError(
         "Una regla no puede enviar dinero a la misma wallet del negocio",
@@ -85,8 +97,9 @@ export class MerchantService {
     const id = randomUUID();
     const { mandate, redirectUrl } = await this.flows.startMandate({
       sender: wallet.id,
-      maxAmount: input.dailyCap,
-      interval: DAILY_INTERVAL,
+      maxAmount: input.monthlyCap,
+      interval: MONTHLY_INTERVAL,
+      intervalStart: startOfBogotaMonth(this.now()),
       description: `MiPlante · ${input.name}`,
       returnTo: `/merchant?id=${id}`,
     });
@@ -96,7 +109,7 @@ export class MerchantService {
       name: input.name,
       wallet: wallet.id,
       asset,
-      dailyCap: mandate.maxAmount,
+      monthlyCap: mandate.maxAmount,
       rules,
       mandateId: mandate.id,
       createdAt: timestamp,
@@ -106,9 +119,10 @@ export class MerchantService {
   }
 
   /**
-   * The merchant changes how future sales split: shares, destinations, new or removed rules. The
-   * wallet grant only caps the daily total (ADR 0004), so this needs no new consent. Repaid amounts
-   * are kept, and a debt keeps its stored balance unless a new one is given.
+   * The merchant changes how future sales split: shares, quotas, destinations, new or removed rules.
+   * The wallet grant only caps the monthly total (ADR 0004), so this needs no new consent as long as
+   * the quotas fit in it. Repaid amounts are kept, and a debt keeps its stored balance unless a new
+   * one is given.
    */
   async updateRules(id: string, input: RuleEditInput[]) {
     const merchant = await this.require(id);
@@ -135,9 +149,11 @@ export class MerchantService {
       return {
         id: rule.id ?? randomUUID(),
         label: rule.label,
+        category: rule.category,
         kind: rule.kind,
         destination: destinations[index]!.id,
         shareBps: percentToBps(rule.sharePercent),
+        monthlyQuota: debtAmount(rule, rule.monthlyQuota, merchant.asset),
         outstanding,
       };
     });
@@ -158,6 +174,7 @@ export class MerchantService {
       merchant.asset,
       { paidDebts },
     );
+    assertCapCoversQuotas(merchant.monthlyCap, updates);
     if (updates.some((rule) => rule.destination === merchant.wallet)) {
       throw new AppError(
         "Una regla no puede enviar dinero a la misma wallet del negocio",
@@ -169,7 +186,7 @@ export class MerchantService {
   }
 
   /**
-   * Asks the merchant for the daily-capped consent again, with the same cap and rules, when the
+   * Asks the merchant for the monthly-capped consent again, with the same cap and rules, when the
    * first attempt was never approved, was rejected, or was revoked. An active consent is kept.
    */
   async renewConsent(id: string) {
@@ -182,10 +199,11 @@ export class MerchantService {
     const { mandate, redirectUrl } = await this.flows.startMandate({
       sender: merchant.wallet,
       maxAmount: fromMinorUnits(
-        merchant.dailyCap.value,
-        merchant.dailyCap.assetScale,
+        merchant.monthlyCap.value,
+        merchant.monthlyCap.assetScale,
       ),
-      interval: DAILY_INTERVAL,
+      interval: MONTHLY_INTERVAL,
+      intervalStart: startOfBogotaMonth(this.now()),
       description: `MiPlante · ${merchant.name}`,
       returnTo: `/merchant?id=${merchant.id}`,
     });
@@ -225,10 +243,37 @@ export class MerchantService {
       name: merchant.name,
       wallet: merchant.wallet,
       asset: merchant.asset,
-      dailyCap: merchant.dailyCap,
+      monthlyCap: merchant.monthlyCap,
       status: mandate.status,
       rules: merchant.rules,
       createdAt: merchant.createdAt,
     };
+  }
+}
+
+/** A debt's quota or balance in the shop's asset; savings have neither. */
+function debtAmount(
+  rule: { kind: RuleKind },
+  decimal: string | undefined,
+  asset: Asset,
+): Amount | undefined {
+  return rule.kind === "debt" && decimal !== undefined
+    ? toAmount(decimal, asset)
+    : undefined;
+}
+
+/** The monthly cap must at least pay every quota of the month; what is left is room for savings. */
+function assertCapCoversQuotas(
+  cap: Amount,
+  rules: { monthlyQuota?: Amount }[],
+): void {
+  const quotas = rules.reduce(
+    (total, rule) => total + BigInt(rule.monthlyQuota?.value ?? "0"),
+    0n,
+  );
+  if (quotas > BigInt(cap.value)) {
+    throw new AppError(
+      `Las cuotas del mes suman ${fromMinorUnits(quotas.toString(), cap.assetScale)} ${cap.assetCode}, más que el límite mensual de ${fromMinorUnits(cap.value, cap.assetScale)} ${cap.assetCode}`,
+    );
   }
 }

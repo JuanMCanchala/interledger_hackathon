@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fromMinorUnits } from "../src/shared/money.js";
 import { ALICE, BOB, COOP, SAVINGS, SUPPLIER } from "./fakeOperations.js";
 import { cop, setupMiPlante } from "./miplanteHarness.js";
 
@@ -30,7 +31,9 @@ describe("editing the split rules", () => {
       { ...asInput(microcredit!), sharePercent: 10 },
       {
         label: "Proveedor",
+        category: "Proveedores",
         kind: "debt",
+        monthlyQuota: "5000",
         destination: "$ilp.interledger-test.dev/proveedor",
         sharePercent: 10,
         outstanding: "500000",
@@ -104,7 +107,9 @@ describe("editing the split rules", () => {
       rules: [
         {
           label: "Proveedor",
+          category: "Proveedores",
           kind: "debt",
+          monthlyQuota: "5000",
           destination: COOP,
           sharePercent: 15,
           outstanding: "1000",
@@ -147,7 +152,7 @@ describe("editing the split rules", () => {
       env.merchants.updateRules(merchantId, [
         { ...asInput(savings!), kind: "debt" },
       ]),
-    ).rejects.toThrow("saldo pendiente");
+    ).rejects.toThrow("cuota mensual");
     await expect(
       env.merchants.updateRules(merchantId, [
         {
@@ -167,16 +172,22 @@ describe("editing the split rules", () => {
 function asInput(rule: {
   id: string;
   label: string;
+  category: string;
   kind: "debt" | "savings";
   destination: string;
   shareBps: number;
+  monthlyQuota?: { value: string; assetScale: number };
 }) {
   return {
     id: rule.id,
     label: rule.label,
+    category: rule.category,
     kind: rule.kind,
     destination: rule.destination,
     sharePercent: rule.shareBps / 100,
+    monthlyQuota:
+      rule.monthlyQuota &&
+      fromMinorUnits(rule.monthlyQuota.value, rule.monthlyQuota.assetScale),
     outstanding: undefined as string | undefined,
   };
 }
