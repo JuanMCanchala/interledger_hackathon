@@ -1,6 +1,7 @@
 import { AppError } from "../shared/errors.js";
 import { formatAmount, type Amount } from "../shared/money.js";
 import type { DashboardService } from "../merchants/dashboardService.js";
+import { NAVIGATION_CATALOG, SECTION_IDS, type Section } from "./navigationCatalog.js";
 import {
   ModelUnavailableError,
   type ChatMessage,
@@ -31,9 +32,6 @@ export interface GloriaReply {
   actions: GloriaAction[];
 }
 
-const SECTIONS = ["inicio", "vender", "metas", "repartos", "ajustes", "avisos"] as const;
-type Section = (typeof SECTIONS)[number];
-
 /** Each question may take a few tool rounds; more than this means the model is going in circles. */
 const MAX_ROUNDS = 4;
 /** What GlorIA keeps of the conversation: enough for follow-ups, little enough to stay fast. */
@@ -51,10 +49,12 @@ Cómo hablas:
 
 Qué haces:
 - Respondes sobre la tienda con sus datos reales: ventas, ganancia real, lo apartado para cada proveedor o crédito, cuotas del mes y fechas de pago, ahorros, límite mensual y avisos. Con cada pregunta recibes el estado actual de la tienda en JSON: respóndelo con esas cifras, tal cual, sin recalcularlas. Usa las herramientas de lectura solo si necesitas algo que no esté ahí.
-- Las acciones (cobrar, registrar efectivo, registrar una consignación, abrir una sección) responden solo al ÚLTIMO mensaje del tendero. Lo que ya pasó en la conversación ya está hecho: nunca lo repitas. Si el último mensaje es una pregunta, solo respóndela.
+- Las acciones (cobrar, registrar efectivo, registrar una consignación, abrir una sección) las autoriza solo el ÚLTIMO mensaje del tendero. El contexto anterior sirve para resolver referencias, no para repetir acciones: lo que ya pasó ya está hecho. Distingue preguntar por un dato de pedir ver una pantalla, incluso si ese pedido tiene forma de pregunta: una consulta de datos se responde sin navegar.
 - Cuando te piden cobrar ("cobra veinte mil", "hazme un cobro de 15.500 de arroz"), llama SIEMPRE a preparar_cobro con el monto: la app genera el código QR de inmediato. Nunca digas que lo preparaste sin llamar a preparar_cobro, ni le pidas al tendero que confirme o toque algo. Si no entiendes el monto, pregúntalo.
 - Efectivo: si el tendero dice que le pagaron en efectivo ("vendí 15 mil en efectivo", "me pagaron 20.000 en billetes"), llama a registrar_venta_efectivo: se cuenta como venta y se reparte, pero sus repartos quedan en efectivo hasta que lo consigne. Si dice que consignó o depositó plata en su billetera ("consigné 50 mil"), llama a registrar_consignacion: eso libera los repartos que estaban en efectivo, empezando por los más antiguos. Solo hace falta consignar los repartos (lo que dice "por_consignar" en efectivo), no toda la venta: lo demás es del tendero.
-- Cuando te pidan ir, abrir o ver una sección (Inicio, Vender, Metas, Repartos, Ajustes, Avisos), llama SIEMPRE a abrir_seccion. También cuando ayuda (por ejemplo, Avisos si hay un pago por revisar). Nunca digas que abriste una sección sin llamar a abrir_seccion en esa misma respuesta.
+- Para navegar, usa el catálogo de pantallas que recibes con el estado de la tienda. Resuelve la intención según el contenido, propósito y capacidades de la pantalla, no por coincidencia literal con su nombre: el tendero no tiene que recordar cómo se llama. Si pide ir, abrir o ver una pantalla identificable, llama a abrir_seccion con su ID del catálogo.
+- Si hay ambigüedad genuina entre destinos, haz una pregunta breve para aclarar y no emitas ninguna acción. Nunca uses Inicio como destino por defecto. Si no existe una pantalla para lo que pide, explícalo sin navegar. Si eliges una pantalla con un nombre distinto al que usó, explica brevemente por qué allí encontrará lo que busca. Nunca afirmes que abriste una sección sin llamar a abrir_seccion en esa misma respuesta.
+- Las capacidades del catálogo describen lo que permite hacer la pantalla al tendero; NO te dan permiso para ejecutar ajustes, cambiar repartos, autorizar ni enviar pagos. Conserva los límites financieros y las herramientas permitidas.
 - Explicas la app en palabras simples:
   · Apartado: de cada venta se separa la parte de cada proveedor o crédito; el dinero sigue en la billetera de la tienda hasta su día de pago.
   · Día de pago: ese día se le envía al acreedor su cuota del mes en un solo pago; si lo apartado no alcanza, lo que falta sale de las ganancias.
@@ -64,7 +64,7 @@ Qué haces:
   · Límite mensual: lo máximo que puede salir de la billetera en un mes; se cambia en Ajustes y pide autorizar de nuevo.
 
 Límites:
-- No puedes mover dinero, cambiar repartos ni ajustes: indica dónde hacerlo y, si sirve, abre esa sección.
+- No puedes mover dinero, cambiar repartos ni ajustes: indica dónde hacerlo y abre esa sección solo si el último mensaje pide verla.
 - No das asesoría de inversión ni de crédito; si te preguntan, sugiere hablar con su entidad financiera.
 - Si te piden algo que no tiene que ver con el negocio, responde con amabilidad en una frase y vuelve a lo que puedes ayudar.`;
 
@@ -157,7 +157,7 @@ const TOOLS: ToolSpec[] = [
       description: "Lleva al tendero a una sección del panel.",
       parameters: {
         type: "object",
-        properties: { seccion: { type: "string", enum: [...SECTIONS] } },
+        properties: { seccion: { type: "string", enum: [...SECTION_IDS] } },
         required: ["seccion"],
         additionalProperties: false,
       },
@@ -218,6 +218,7 @@ export class GloriaService {
         content: [
           `La tienda se llama "${view.name}". Ahora es ${now()} en Colombia.`,
           context.section ? `El tendero está viendo la sección ${context.section} de la app.` : "",
+          `Catálogo de pantallas (sus capacidades no son permisos para la asistente): ${JSON.stringify(NAVIGATION_CATALOG)}`,
           `Estado actual de la tienda (json): ${JSON.stringify(state)}`,
         ]
           .filter(Boolean)
@@ -360,7 +361,7 @@ export class GloriaService {
       }
       case "abrir_seccion": {
         const section = args.seccion;
-        if (typeof section !== "string" || !SECTIONS.includes(section as Section)) {
+        if (typeof section !== "string" || !SECTION_IDS.includes(section as Section)) {
           return { error: "sección desconocida" };
         }
         actions.push({ type: "open", section: section as Section });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage, ChatModel, ChatReply, ToolSpec } from "../src/assistant/chatModel.js";
 import { GloriaService } from "../src/assistant/gloriaService.js";
+import { NAVIGATION_CATALOG, SECTION_IDS } from "../src/assistant/navigationCatalog.js";
+import { assistantChat } from "../src/http/schemas.js";
+import { SECTION_IDS as FRONTEND_SECTION_IDS } from "../../frontend/src/app/core/navigation-intent.js";
 import { COOP } from "./fakeOperations.js";
 import { cop, setupMiPlante } from "./miplanteHarness.js";
 
@@ -126,14 +129,81 @@ describe("GlorIA", () => {
     expect(blocked.actions).toEqual([]);
   });
 
-  it("opens a section when it helps, and only a real one", async () => {
+  it.each(SECTION_IDS)("turns a validated tool call into an open action for %s", async (section) => {
     const { env, id } = await shopWithSale();
     const model = new ScriptedModel([
-      { content: "", toolCalls: [call("abrir_seccion", { seccion: "avisos" }), call("abrir_seccion", { seccion: "admin" }, "x")] },
-      { content: "Te llevo a Avisos.", toolCalls: [] },
+      { content: "", toolCalls: [call("abrir_seccion", { seccion: section })] },
+      { content: "Te llevo allí.", toolCalls: [] },
     ]);
-    const answer = await new GloriaService(model, env.dashboard).chat(id, [{ role: "user", content: "¿Qué pasó?" }]);
-    expect(answer.actions).toEqual([{ type: "open", section: "avisos" }]);
+    const answer = await new GloriaService(model, env.dashboard).chat(id, [{ role: "user", content: `Abre ${section}` }]);
+    expect(answer.actions).toEqual([{ type: "open", section }]);
+  });
+
+  it.each(["admin", "estadísticas", "Inicio", "", null, 7, ["inicio"], {}].map((section) => ({ section })))(
+    "rejects an unknown tool destination without defaulting to Inicio: %j",
+    async ({ section }) => {
+      const { env, id } = await shopWithSale();
+      const model = new ScriptedModel([
+        { content: "", toolCalls: [call("abrir_seccion", { seccion: section })] },
+        { content: "No existe esa pantalla.", toolCalls: [] },
+      ]);
+      const answer = await new GloriaService(model, env.dashboard).chat(id, [{ role: "user", content: "Abre esa pantalla" }]);
+      expect(answer.actions).toEqual([]);
+      expect(JSON.parse(model.seen[1]!.messages.at(-1)!.content as string)).toEqual({ error: "sección desconocida" });
+    },
+  );
+
+  it("keeps the frontend IDs, catalog, tool enum and request schema in parity, including efectivo", async () => {
+    expect(SECTION_IDS).toEqual(FRONTEND_SECTION_IDS);
+    expect(Object.keys(NAVIGATION_CATALOG)).toEqual([...SECTION_IDS]);
+    const { env, id } = await shopWithSale();
+    const model = new ScriptedModel([{ content: "Aquí estoy.", toolCalls: [] }]);
+    await new GloriaService(model, env.dashboard).chat(id, [{ role: "user", content: "Hola" }], { section: "efectivo" });
+    const open = model.seen[0]!.tools.find((t) => t.function.name === "abrir_seccion")!;
+    expect(open.function.parameters).toMatchObject({ properties: { seccion: { enum: [...SECTION_IDS] } } });
+    expect(Object.values(assistantChat.shape.section.unwrap().enum)).toEqual([...SECTION_IDS]);
+    for (const section of SECTION_IDS) {
+      expect(assistantChat.parse({ messages: [{ role: "user", content: "Hola" }], section }).section).toBe(section);
+    }
+    expect(assistantChat.safeParse({ messages: [{ role: "user", content: "Hola" }], section: "admin" }).success).toBe(false);
+    expect(model.seen[0]!.messages[1]!.content).toContain("viendo la sección efectivo");
+  });
+
+  it("sends the full screen catalog and navigation boundaries to the model", async () => {
+    const { env, id } = await shopWithSale();
+    const model = new ScriptedModel([{ content: "¿Qué quieres revisar?", toolCalls: [] }]);
+    await new GloriaService(model, env.dashboard).chat(id, [
+      { role: "user", content: "Muéstrame las ventas" },
+      { role: "assistant", content: "Están en Inicio." },
+      { role: "user", content: "Abre esa pantalla" },
+    ]);
+    const [persona, context] = model.seen[0]!.messages;
+    expect(context!.content).toContain(JSON.stringify(NAVIGATION_CATALOG));
+    for (const entry of Object.values(NAVIGATION_CATALOG)) {
+      expect(entry.purpose).not.toBe("");
+      expect(entry.content).not.toBe("");
+      expect(entry.capabilities).not.toBe("");
+    }
+    expect(persona!.content).toContain("no por coincidencia literal");
+    expect(persona!.content).toContain("una consulta de datos se responde sin navegar");
+    expect(persona!.content).toContain("solo el ÚLTIMO mensaje");
+    expect(persona!.content).toContain("El contexto anterior sirve para resolver referencias");
+    expect(persona!.content).toContain("Nunca uses Inicio como destino por defecto");
+    expect(persona!.content).toContain("NO te dan permiso para ejecutar ajustes");
+    expect(persona!.content).toContain("Nunca afirmes que abriste una sección sin llamar a abrir_seccion");
+  });
+
+  // These scripts verify the response contract, not the real model's semantic understanding.
+  it.each([
+    ["Muéstrame cómo voy", "¿Quieres ver las ventas del negocio o el avance de tus metas?"],
+    ["¿Cuánto vendí hoy?", "Llevas $ 10.000."],
+    ["Abre el inventario", "No hay una pantalla de inventario."],
+    ["Abre Inicio", "Inicio abierto."],
+  ])("does not synthesize actions from a scripted text-only reply to %s", async (request, reply) => {
+    const { env, id } = await shopWithSale();
+    const model = new ScriptedModel([{ content: reply, toolCalls: [] }]);
+    const answer = await new GloriaService(model, env.dashboard).chat(id, [{ role: "user", content: request }]);
+    expect(answer).toEqual({ reply, actions: [] });
   });
 
   it("stops a model that keeps calling tools, and keeps only the recent conversation", async () => {

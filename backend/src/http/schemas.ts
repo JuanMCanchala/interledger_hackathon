@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SECTION_IDS } from "../assistant/navigationCatalog.js";
 import { DURATION_PATTERN } from "../openPayments/interval.js";
 
 const walletAddress = z.string().trim().min(3).max(300);
@@ -87,7 +88,7 @@ export const assistantChat = z.object({
     .min(1)
     .max(40),
   /** The section of the till the shopkeeper is looking at, so "¿qué es esto?" has an answer. */
-  section: z.enum(["inicio", "vender", "metas", "repartos", "ajustes", "avisos"]).optional(),
+  section: z.enum(SECTION_IDS).optional(),
 });
 
 /** Which savings rule's wallet to keep as the last resort; the first one if not given. */
