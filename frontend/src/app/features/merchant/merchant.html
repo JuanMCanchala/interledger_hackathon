@@ -440,6 +440,20 @@
                   </section>
                 </div>
 
+                <div class="stack">
+                @if (monthPlant(); as plant) {
+                  <section class="plant-panel" aria-labelledby="plant-title">
+                    <app-plant [stage]="plant.stage" />
+                    <div class="plant-panel-copy">
+                      <h2 id="plant-title">Tu planta de {{ currentMonthName }}</h2>
+                      <p>{{ plant.text }}</p>
+                      <div class="progress progress-sm" aria-hidden="true">
+                        <span [style.width.%]="plant.percent"></span>
+                      </div>
+                      <small>Día {{ m.month.dayOfMonth }} de {{ m.month.daysInMonth }}</small>
+                    </div>
+                  </section>
+                }
                 <!-- Right Column: Recent Sales Activity -->
                 <section class="workspace-panel stack" aria-labelledby="sales-title">
                   <div class="panel-head">
@@ -483,6 +497,7 @@
                     </ul>
                   }
                 </section>
+                </div>
               </div>
             </section>
           }
@@ -1355,133 +1370,25 @@
                       próxima venta y no necesitas volver a autorizar: el límite
                       mensual sigue igual.
                     </p>
-                    <div class="stack">
+                    <ul class="rule-cards">
                       @for (draft of ruleDrafts(); track draft.key) {
-                        <fieldset class="rule-row">
-                          <legend class="sr-only">Billetera del reparto</legend>
-                          <label class="field">
-                            <span>Nombre</span>
-                            <input
-                              [name]="'r-label-' + draft.key"
-                              required
-                              maxlength="60"
-                              placeholder="Microcrédito"
-                              [ngModel]="draft.label"
-                              (ngModelChange)="updateRuleDraft(draft.key, { label: $event })"
-                            />
-                          </label>
-                          <label class="field">
-                            <span>Categoría</span>
-                            <input
-                              [name]="'r-cat-' + draft.key"
-                              required
-                              maxlength="40"
-                              list="category-options"
-                              placeholder="Proveedores"
-                              [ngModel]="draft.category"
-                              (ngModelChange)="updateRuleDraft(draft.key, { category: $event })"
-                            />
-                          </label>
-                          <label class="field">
-                            <span>Tipo</span>
-                            <select
-                              [name]="'r-kind-' + draft.key"
-                              [ngModel]="draft.kind"
-                              (ngModelChange)="updateRuleDraft(draft.key, { kind: $event })"
-                            >
-                              <option value="debt">Obligación mensual</option>
-                              <option value="savings">Ahorro</option>
-                            </select>
-                          </label>
-                          <label class="field">
-                            <span>% de cada venta</span>
-                            <input
-                              [name]="'r-share-' + draft.key"
-                              type="number"
-                              required
-                              min="0.01"
-                              max="99"
-                              step="0.01"
-                              inputmode="decimal"
-                              [ngModel]="draft.sharePercent"
-                              (ngModelChange)="updateRuleDraft(draft.key, { sharePercent: $event })"
-                            />
-                          </label>
-                          @if (draft.kind === 'debt') {
-                            <label class="field">
-                              <span>Cuota del mes</span>
-                              <input
-                                [name]="'r-quota-' + draft.key"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                placeholder="200.000"
-                                [ngModel]="draft.monthlyQuota"
-                                (ngModelChange)="updateRuleDraft(draft.key, { monthlyQuota: $event })"
-                              />
-                            </label>
-                            <label class="field">
-                              <span>Deuda total (opcional)</span>
-                              <input
-                                [name]="'r-out-' + draft.key"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                placeholder="300.000"
-                                [ngModel]="draft.outstanding"
-                                (ngModelChange)="updateRuleDraft(draft.key, { outstanding: $event })"
-                              />
-                            </label>
-                            <label class="field">
-                              <span>Día de pago (1–28)</span>
-                              <input
-                                [name]="'r-due-' + draft.key"
-                                type="number"
-                                min="1"
-                                max="28"
-                                step="1"
-                                inputmode="numeric"
-                                placeholder="25"
-                                [ngModel]="draft.dueDay"
-                                (ngModelChange)="updateRuleDraft(draft.key, { dueDay: $event })"
-                              />
-                            </label>
-                          } @else {
-                            <label class="field savings-only">
-                              <span>Meta de ahorro (opcional)</span>
-                              <input
-                                [name]="'r-goal-' + draft.key"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                placeholder="1.000.000"
-                                [ngModel]="draft.savingsGoal"
-                                (ngModelChange)="updateRuleDraft(draft.key, { savingsGoal: $event })"
-                              />
-                            </label>
-                          }
-                          <label class="field destination-field">
-                            <span>Billetera de destino</span>
-                            <input
-                              [name]="'r-dest-' + draft.key"
-                              required
-                              maxlength="300"
-                              autocomplete="off"
-                              spellcheck="false"
-                              autocapitalize="off"
-                              placeholder="Ej: distribuidora-central"
-                              [ngModel]="draft.destination"
-                              (ngModelChange)="updateRuleDraft(draft.key, { destination: $event })"
-                            />
-                          </label>
+                        <li class="rule-card">
+                          <div>
+                            <strong>{{ draft.label || 'Bolsillo sin nombre' }}</strong>
+                            <small>{{ draftSummary(draft) }}</small>
+                          </div>
+                          <span class="rule-card-share">{{ draft.sharePercent ?? '—' }}%</span>
                           <button
                             type="button"
-                            class="btn btn-danger remove-rule"
-                            [disabled]="ruleDrafts().length <= 1"
-                            (click)="removeRuleDraft(draft.key)"
+                            class="btn btn-secondary btn-sm"
+                            [attr.aria-label]="'Editar ' + (draft.label || 'bolsillo')"
+                            (click)="openRuleDraft(draft.key)"
                           >
-                            Quitar
+                            Editar
                           </button>
-                        </fieldset>
+                        </li>
                       }
-                    </div>
+                    </ul>
 
                     <button
                       type="button"
@@ -1489,7 +1396,7 @@
                       [disabled]="ruleDrafts().length >= maxRules"
                       (click)="addRuleDraft()"
                     >
-                      + Agregar billetera
+                      + Agregar bolsillo
                     </button>
 
                     <div class="stack-sm" aria-live="polite">
@@ -1547,6 +1454,152 @@
                       </button>
                     </div>
                   </form>
+
+                  <dialog #ruleDialog class="rule-dialog" aria-labelledby="rule-dialog-title" (close)="editingRuleKey.set(null)">
+                    @if (editingRule(); as draft) {
+                      <div class="rule-dialog-body">
+                        <div class="rule-dialog-head">
+                          <h2 id="rule-dialog-title">{{ draft.label || 'Nuevo bolsillo' }}</h2>
+                          <button type="button" class="btn btn-ghost btn-sm" (click)="closeRuleDraft()">Cerrar</button>
+                        </div>
+
+                        <div class="segmented" role="group" aria-label="Tipo de bolsillo">
+                          <button
+                            type="button"
+                            [attr.aria-selected]="draft.kind === 'debt'"
+                            (click)="updateRuleDraft(draft.key, { kind: 'debt' })"
+                          >
+                            Con cuota cada mes
+                          </button>
+                          <button
+                            type="button"
+                            [attr.aria-selected]="draft.kind === 'savings'"
+                            (click)="updateRuleDraft(draft.key, { kind: 'savings' })"
+                          >
+                            Ahorro
+                          </button>
+                        </div>
+
+                        <div class="field-grid">
+                          <label class="field">
+                            <span>Nombre</span>
+                            <input
+                              maxlength="60"
+                              placeholder="Ej: Distribuidora Central"
+                              [ngModel]="draft.label"
+                              (ngModelChange)="updateRuleDraft(draft.key, { label: $event })"
+                            />
+                          </label>
+                          <label class="field">
+                            <span>Categoría</span>
+                            <input
+                              maxlength="40"
+                              list="category-options"
+                              placeholder="Ej: Proveedores"
+                              [ngModel]="draft.category"
+                              (ngModelChange)="updateRuleDraft(draft.key, { category: $event })"
+                            />
+                          </label>
+                          <div class="field field-full">
+                            <span id="rule-share-label">Parte de cada venta</span>
+                            <div class="range-row">
+                              <input
+                                type="range"
+                                min="1"
+                                max="40"
+                                step="1"
+                                aria-labelledby="rule-share-label"
+                                [ngModel]="draft.sharePercent ?? 0"
+                                (ngModelChange)="updateRuleDraft(draft.key, { sharePercent: +$event })"
+                              />
+                              <div class="input-suffix">
+                                <input
+                                  type="number"
+                                  min="0.01"
+                                  max="99"
+                                  step="0.01"
+                                  inputmode="decimal"
+                                  aria-labelledby="rule-share-label"
+                                  [ngModel]="draft.sharePercent"
+                                  (ngModelChange)="updateRuleDraft(draft.key, { sharePercent: $event })"
+                                />
+                                <span aria-hidden="true">%</span>
+                              </div>
+                            </div>
+                          </div>
+                          @if (draft.kind === 'debt') {
+                            <label class="field">
+                              <span>Cuota del mes</span>
+                              <input
+                                inputmode="numeric"
+                                autocomplete="off"
+                                placeholder="Ej: 200.000"
+                                [ngModel]="draft.monthlyQuota"
+                                (ngModelChange)="updateRuleMoney(draft.key, 'monthlyQuota', $event)"
+                              />
+                            </label>
+                            <label class="field">
+                              <span>Día de pago</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max="28"
+                                step="1"
+                                inputmode="numeric"
+                                [ngModel]="draft.dueDay"
+                                (ngModelChange)="updateRuleDraft(draft.key, { dueDay: $event })"
+                              />
+                            </label>
+                            <label class="field">
+                              <span>Cuánto debes en total <small class="muted">(opcional)</small></span>
+                              <input
+                                inputmode="decimal"
+                                autocomplete="off"
+                                placeholder="Ej: 300.000"
+                                [ngModel]="draft.outstanding"
+                                (ngModelChange)="updateRuleMoney(draft.key, 'outstanding', $event)"
+                              />
+                            </label>
+                          } @else {
+                            <label class="field">
+                              <span>Meta de ahorro <small class="muted">(opcional)</small></span>
+                              <input
+                                inputmode="decimal"
+                                autocomplete="off"
+                                placeholder="Ej: 1.000.000"
+                                [ngModel]="draft.savingsGoal"
+                                (ngModelChange)="updateRuleMoney(draft.key, 'savingsGoal', $event)"
+                              />
+                            </label>
+                          }
+                          <label class="field">
+                            <span>Su billetera</span>
+                            <input
+                              maxlength="300"
+                              autocomplete="off"
+                              spellcheck="false"
+                              autocapitalize="off"
+                              placeholder="Ej: distribuidora-central"
+                              [ngModel]="draft.destination"
+                              (ngModelChange)="updateRuleDraft(draft.key, { destination: $event })"
+                            />
+                          </label>
+                        </div>
+
+                        <div class="rule-dialog-actions">
+                          <button
+                            type="button"
+                            class="btn btn-danger"
+                            [disabled]="ruleDrafts().length <= 1"
+                            (click)="removeRuleDraft(draft.key); closeRuleDraft()"
+                          >
+                            Quitar bolsillo
+                          </button>
+                          <button type="button" class="btn btn-lima" (click)="closeRuleDraft()">Listo</button>
+                        </div>
+                      </div>
+                    }
+                  </dialog>
                 }
 
                 @if (rulesSavedMsg()) {

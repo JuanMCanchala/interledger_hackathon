@@ -1,0 +1,308 @@
+<div class="flow">
+  <aside class="flow-aside">
+    <a class="flow-logo" routerLink="/" aria-label="MiPlante, volver al inicio">
+      <app-logo aria-hidden="true" />
+    </a>
+    <div class="flow-aside-copy">
+      <h1>Arma tus bolsillos</h1>
+      <p class="lead flow-hide-mobile">Mira cómo se reparte una venta de {{ previewSaleText }} mientras eliges.</p>
+    </div>
+    <ul class="flow-preview" aria-label="Así se reparte una venta de {{ previewSaleText }}">
+      @for (part of preview(); track $index) {
+        <li class="flow-preview-item" [attr.data-kind]="part.kind">
+          <span class="flow-preview-jar" aria-hidden="true">
+            <span [style.height.%]="part.pct"></span>
+          </span>
+          <strong>{{ part.amount }}</strong>
+          <small>{{ part.label }}</small>
+        </li>
+      }
+    </ul>
+  </aside>
+
+  <main class="flow-main">
+    <div class="card flow-card flow-card-wide">
+      <app-wizard
+        [step]="step()"
+        [total]="steps().length"
+        [busy]="busy()"
+        [nextLabel]="stepId() === 'review' ? 'Autorizar en mi billetera' : 'Continuar'"
+        [busyLabel]="stepId() === 'review' ? 'Abriendo tu billetera…' : 'Revisando…'"
+        (back)="back()"
+        (next)="advance()"
+      >
+        @switch (stepId()) {
+          @case ('shop') {
+            <label class="flow-question" for="ob-name">¿Cómo se llama tu negocio?</label>
+            <p class="flow-help">Así lo verán tus clientes cuando te paguen.</p>
+            <input
+              id="ob-name"
+              class="input-xl"
+              [(ngModel)]="businessName"
+              maxlength="80"
+              autocomplete="organization"
+              placeholder="Ej: Tienda La Esquina"
+            />
+          }
+
+          @case ('wallet') {
+            <label class="flow-question" for="ob-wallet">¿Cuál es la billetera de tu negocio?</label>
+            <p class="flow-help">
+              Ahí entran los pagos de tus clientes y de ahí salen los repartos. Escribe solo su
+              nombre, por ejemplo <code>tienda-billeticos</code>.
+            </p>
+            <input
+              id="ob-wallet"
+              class="input-xl"
+              [ngModel]="businessWallet()"
+              (ngModelChange)="onWalletInput($event)"
+              maxlength="300"
+              autocomplete="off"
+              spellcheck="false"
+              autocapitalize="off"
+              placeholder="mi-tienda"
+            />
+            @if (walletCheck(); as check) {
+              <p class="check" [class.check-ok]="check.ok" aria-live="polite">{{ check.text }}</p>
+            }
+          }
+
+          @case ('pick') {
+            <h2 class="flow-question">¿A dónde quieres que vaya una parte de cada venta?</h2>
+            <p class="flow-help">Toca los que tengas. Después le ponemos el nombre y la billetera a cada uno.</p>
+            <ul class="choice-grid">
+              @for (preset of presets; track preset.name) {
+                <li>
+                  <button
+                    type="button"
+                    class="choice"
+                    [attr.aria-pressed]="isPicked(preset.name)"
+                    (click)="togglePreset(preset)"
+                  >
+                    <app-doodle [name]="preset.doodle" />
+                    <strong>{{ preset.name }}</strong>
+                    <small>{{ preset.hint }}</small>
+                  </button>
+                </li>
+              }
+              @for (pocket of customPockets(); track pocket.id) {
+                <li>
+                  <button
+                    type="button"
+                    class="choice"
+                    aria-pressed="true"
+                    [attr.aria-label]="'Quitar ' + pocket.name"
+                    (click)="removePocket(pocket.id)"
+                  >
+                    <app-doodle [name]="pocket.doodle" />
+                    <strong>{{ pocket.name }}</strong>
+                    <small>{{ pocket.hint }}</small>
+                  </button>
+                </li>
+              }
+            </ul>
+            <details class="flow-more">
+              <summary>Crear otro bolsillo</summary>
+              <div class="field-grid">
+                <label class="field">
+                  <span>Nombre</span>
+                  <input [(ngModel)]="customName" maxlength="40" placeholder="Ej: Servicios" (keydown.enter)="$event.preventDefault(); addCustomPocket()" />
+                </label>
+                <label class="field">
+                  <span>¿Cómo funciona?</span>
+                  <select [(ngModel)]="customKind">
+                    <option value="debt">Tiene cuota cada mes</option>
+                    <option value="savings">Es un ahorro</option>
+                  </select>
+                </label>
+              </div>
+              <button type="button" class="btn btn-secondary" (click)="addCustomPocket()">Agregar bolsillo</button>
+            </details>
+          }
+
+          @case ('cap') {
+            <label class="flow-question" for="ob-cap">¿Cuánto puede salir como máximo al mes?</label>
+            <p class="flow-help">
+              Es el permiso que apruebas en tu billetera, una sola vez. Se renueva cada mes y lo puedes
+              cambiar o cancelar cuando quieras.
+            </p>
+            <input
+              id="ob-cap"
+              class="input-xl"
+              inputmode="numeric"
+              autocomplete="off"
+              [ngModel]="monthlyCap()"
+              (ngModelChange)="onCapInput($event)"
+            />
+            <p class="hint">
+              @if (hasQuotas()) {
+                Tus cuotas del mes suman {{ peso(quotasMinor()) }}. Te sugerimos un poco más, para que
+                también quepa tu ahorro.
+              } @else {
+                Lo que sobre de tus cuotas deja espacio para tu ahorro.
+              }
+            </p>
+          }
+
+          @case ('review') {
+            <h2 class="flow-question">Revisa y autoriza</h2>
+            <p class="flow-help">
+              Te llevamos a tu billetera. Entra con la cuenta de
+              <strong>{{ checkedWallet()?.name || 'tu negocio' }}</strong>, toca
+              <strong>Aceptar</strong> y vuelves directo a tu caja.
+            </p>
+            <ul class="flow-summary">
+              <li><span>Negocio</span><strong>{{ businessName }}</strong></li>
+              <li><span>Billetera</span><strong class="mono">{{ checkedWallet()?.name }}</strong></li>
+              <li><span>Límite del mes</span><strong>{{ pesos(monthlyCap()) }}</strong></li>
+              @for (rule of rules(); track rule.id) {
+                <li>
+                  <span>{{ rule.label }} <small>({{ rule.category }})</small></span>
+                  <strong>
+                    {{ rule.share.toLocaleString('es-CO') }}%
+                    @if (rule.kind === 'debt') {
+                      <small>hasta {{ pesos(rule.monthlyQuota) }} al mes, día {{ rule.dueDay }}</small>
+                    } @else {
+                      <small>de cada venta</small>
+                    }
+                  </strong>
+                </li>
+              }
+            </ul>
+          }
+
+          @default {
+            @if (currentPocket(); as pocket) {
+              <div class="flow-pocket-head">
+                <app-doodle [name]="pocket.doodle" />
+                <div>
+                  @if (isQuotaStep()) {
+                    <h2 class="flow-question">¿Cuánto le pagas de {{ pocket.name }} y cuándo?</h2>
+                    <p class="flow-help">De cada venta se aparta una parte hasta completar la cuota. El día de pago se envía todo junto.</p>
+                  } @else {
+                    <h2 class="flow-question">
+                      {{ pocket.kind === 'debt' ? '¿A quién le pagas de ' + pocket.name + '?' : '¿A dónde va tu ' + pocket.name + '?' }}
+                    </h2>
+                    <p class="flow-help">
+                      {{ pocket.kind === 'debt' ? 'Su nombre, su billetera y qué parte de cada venta le toca.' : 'Cada venta guarda su parte, sin tope.' }}
+                    </p>
+                  }
+                </div>
+              </div>
+
+              @for (wallet of pocket.wallets; track wallet.id; let i = $index) {
+                <fieldset class="flow-wallet">
+                  @if (pocket.wallets.length > 1) {
+                    <legend class="flow-wallet-legend">
+                      {{ wallet.label || pocket.name + ' ' + (i + 1) }}
+                      @if (!isQuotaStep()) {
+                        <button type="button" class="btn btn-ghost btn-sm" (click)="removeWallet(pocket, wallet.id)">Quitar</button>
+                      }
+                    </legend>
+                  }
+                  @if (isQuotaStep()) {
+                    <div class="field-grid field-grid-pair">
+                      <label class="field">
+                        <span>Cuota del mes</span>
+                        <input
+                          inputmode="numeric"
+                          autocomplete="off"
+                          placeholder="Ej: 200.000"
+                          [ngModel]="wallet.monthlyQuota"
+                          (ngModelChange)="updateMoney(pocket.id, wallet.id, 'monthlyQuota', $event)"
+                        />
+                      </label>
+                      <label class="field">
+                        <span>Día de pago</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="28"
+                          step="1"
+                          inputmode="numeric"
+                          [ngModel]="wallet.dueDay"
+                          (ngModelChange)="updateWallet(pocket.id, wallet.id, { dueDay: $event })"
+                        />
+                      </label>
+                      <label class="field field-full">
+                        <span>Cuánto debes en total <small class="muted">(opcional)</small></span>
+                        <input
+                          inputmode="numeric"
+                          autocomplete="off"
+                          placeholder="Ej: 1.200.000"
+                          [ngModel]="wallet.outstanding"
+                          (ngModelChange)="updateMoney(pocket.id, wallet.id, 'outstanding', $event)"
+                        />
+                      </label>
+                    </div>
+                  } @else {
+                    <div class="field-grid">
+                      <label class="field">
+                        <span>Nombre</span>
+                        <input
+                          [ngModel]="wallet.label"
+                          (ngModelChange)="updateWallet(pocket.id, wallet.id, { label: $event })"
+                          maxlength="60"
+                          [placeholder]="pocket.kind === 'debt' ? 'Ej: Distribuidora Central' : 'Ej: Fondo de emergencia'"
+                        />
+                      </label>
+                      <label class="field">
+                        <span>Su billetera</span>
+                        <input
+                          [ngModel]="wallet.destination"
+                          (ngModelChange)="updateWallet(pocket.id, wallet.id, { destination: $event })"
+                          maxlength="300"
+                          autocomplete="off"
+                          spellcheck="false"
+                          autocapitalize="off"
+                          [placeholder]="pocket.kind === 'debt' ? 'Ej: distribuidora-central' : 'Ej: mi-ahorro'"
+                        />
+                      </label>
+                      <div class="field field-full">
+                        <span id="share-{{ wallet.id }}">Parte de cada venta</span>
+                        <div class="range-row">
+                          <input
+                            type="range"
+                            min="1"
+                            [max]="sliderMax"
+                            step="1"
+                            [attr.aria-labelledby]="'share-' + wallet.id"
+                            [ngModel]="wallet.sharePercent ?? 0"
+                            (ngModelChange)="updateWallet(pocket.id, wallet.id, { sharePercent: +$event })"
+                          />
+                          <div class="input-suffix">
+                            <input
+                              type="number"
+                              min="0.01"
+                              [max]="maxTotalPercent"
+                              step="0.01"
+                              inputmode="decimal"
+                              [attr.aria-labelledby]="'share-' + wallet.id"
+                              [ngModel]="wallet.sharePercent"
+                              (ngModelChange)="updateWallet(pocket.id, wallet.id, { sharePercent: $event })"
+                            />
+                            <span aria-hidden="true">%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </fieldset>
+              }
+
+              @if (!isQuotaStep()) {
+                <button type="button" class="btn btn-ghost flow-add" (click)="addWallet(pocket)">
+                  + Agregar otro en {{ pocket.name }}
+                </button>
+              }
+            }
+          }
+        }
+
+        @if (error()) {
+          <p class="banner banner-bad" role="alert">{{ error() }}</p>
+        }
+      </app-wizard>
+    </div>
+  </main>
+</div>

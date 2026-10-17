@@ -1078,11 +1078,11 @@
 }
 
 .seg-debt {
-  background: var(--gold);
+  background: var(--monte);
 }
 
 .seg-savings {
-  background: var(--monte-claro);
+  background: repeating-linear-gradient(135deg, var(--lima) 0 6px, var(--monte-claro) 6px 12px);
 }
 
 /* Visual Pocket Jars grid (brings Landing Hero jars into the app) */
@@ -1124,11 +1124,11 @@
   transition: height 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 
   &.is-debt {
-    background: var(--gold);
+    background: var(--papel);
   }
 
   &.is-savings {
-    background: #5eead4;
+    background: repeating-linear-gradient(135deg, var(--lima) 0 6px, var(--monte-claro) 6px 12px);
   }
 }
 
@@ -1419,7 +1419,7 @@
 }
 
 .progress.is-gold > span {
-  background: var(--gold);
+  background: var(--monte);
 }
 
 .list {
@@ -1945,10 +1945,8 @@
 }
 
 .metric-label {
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--muted);
 }
 
@@ -2328,7 +2326,7 @@
 }
 
 .chart-goal {
-  stroke: var(--gold);
+  stroke: var(--tinta);
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
 }
@@ -2363,7 +2361,7 @@
 
 .legend-goal::before {
   height: 0;
-  border-top: 2px dashed var(--gold);
+  border-top: 2px dashed var(--tinta);
   background: none;
 }
 
@@ -2522,7 +2520,7 @@
 }
 
 .ring.is-gold .ring-fill {
-  stroke: var(--gold);
+  stroke: var(--monte);
 }
 
 .ring.is-info .ring-fill {
@@ -2644,5 +2642,549 @@
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+/* ==========================================================================
+ * Guided flows (sign in, sign up, onboarding): a brand aside and one
+ * question per screen in a paper card.
+ * ========================================================================== */
+
+.flow {
+  display: grid;
+  align-content: start;
+  min-height: 100dvh;
+
+  @media (min-width: 960px) {
+    grid-template-columns: minmax(340px, 0.9fr) 1.1fr;
+  }
+}
+
+.flow-aside {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 1.25rem;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  overflow: hidden;
+
+  @media (min-width: 960px) {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    grid-template-rows: auto 1fr auto;
+    gap: 2rem;
+    background: var(--monte-hondo) url(/paper.png);
+  }
+
+  h1 {
+    font-size: clamp(1.5rem, 3.4vw, 2.9rem);
+  }
+
+  .lead {
+    max-width: 30em;
+  }
+
+  @media (max-width: 959px) {
+    .lead {
+      font-size: 0.98rem;
+    }
+  }
+}
+
+.flow-logo {
+  width: clamp(120px, 12vw, 150px);
+}
+
+.flow-aside-copy {
+  display: grid;
+  gap: 0.9rem;
+  align-content: center;
+}
+
+.flow .flow-plant {
+  display: none;
+  width: min(62%, 260px);
+  justify-self: center;
+
+  @media (min-width: 960px) {
+    display: block;
+  }
+}
+
+.flow-main {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  padding: 0 var(--gutter) clamp(1.5rem, 5vw, 3rem);
+
+  @media (min-width: 960px) {
+    padding-block: 3rem;
+  }
+}
+
+.flow-card {
+  width: min(100%, 540px);
+  display: grid;
+  gap: 1.25rem;
+}
+
+.flow-card-wide {
+  width: min(100%, 720px);
+}
+
+.flow-question {
+  display: block;
+  color: var(--monte);
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.flow-help {
+  margin-top: -0.5rem;
+  color: var(--muted);
+}
+
+.flow-meter {
+  font-size: 0.9rem;
+  color: var(--muted);
+
+  &.is-ok {
+    color: var(--monte);
+    font-weight: 700;
+  }
+}
+
+.flow-login {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.flow-switch {
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--muted);
+
+  a {
+    color: var(--monte);
+    font-weight: 700;
+  }
+}
+
+/* Selectable cards: pick one or several options with a tap. */
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+  }
+}
+
+.choice {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  width: 100%;
+  min-height: 132px;
+  padding: 1rem;
+  border: 2px solid rgb(9 70 65 / 18%);
+  border-radius: var(--radius-sm);
+  background: var(--hoja);
+  color: var(--monte);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s, transform 0.2s;
+
+  &:hover {
+    border-color: var(--monte);
+    transform: translateY(-2px);
+  }
+
+  &[aria-pressed='true'] {
+    border-color: var(--monte);
+    background: var(--lima) url(/paper.png);
+  }
+
+  &[aria-pressed='true']::after {
+    content: '✓';
+    position: absolute;
+    top: 0.6rem;
+    right: 0.75rem;
+    display: grid;
+    place-items: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    background: var(--monte);
+    color: var(--lima);
+    font-weight: 800;
+    font-size: 0.85rem;
+  }
+
+  app-doodle {
+    width: 46px;
+    color: var(--monte);
+  }
+
+  strong {
+    font-size: 1.05rem;
+  }
+
+  small {
+    color: rgb(9 70 65 / 80%);
+    line-height: 1.35;
+  }
+}
+
+/* Percentage picker: a range and its number side by side. */
+.range-row {
+  display: grid;
+  grid-template-columns: 1fr 6.5rem;
+  gap: 0.9rem;
+  align-items: center;
+
+  input[type='range'] {
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    accent-color: var(--monte);
+  }
+}
+
+.field-grid {
+  display: grid;
+  gap: 1rem;
+
+  @media (min-width: 560px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.field-full {
+  grid-column: 1 / -1;
+}
+
+/* Live split preview in the onboarding aside: one jar per pocket. */
+.flow-preview {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+
+  @media (min-width: 960px) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    overflow: visible;
+  }
+}
+
+.flow-preview-item {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  justify-items: center;
+  gap: 0.3rem;
+  min-width: 84px;
+  text-align: center;
+
+  strong {
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  small {
+    font-size: 0.78rem;
+    line-height: 1.25;
+    color: var(--muted);
+    hyphens: auto;
+  }
+}
+
+.flow-preview-jar {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 72px;
+  border-radius: 8px 8px 18px 18px;
+  background: rgb(253 251 251 / 10%);
+  box-shadow: inset 0 0 0 2px rgb(253 251 251 / 18%);
+  overflow: hidden;
+
+  @media (max-width: 959px) {
+    height: 44px;
+  }
+
+  span {
+    position: absolute;
+    inset: auto 0 0;
+    min-height: 4px;
+    background: var(--lima);
+    transition: height 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  [data-kind='debt'] & span {
+    background: var(--papel);
+  }
+
+  [data-kind='savings'] & span {
+    background: repeating-linear-gradient(135deg, var(--lima) 0 6px, var(--monte-claro) 6px 12px);
+  }
+}
+
+.flow-pocket-head {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 1rem;
+  align-items: start;
+
+  app-doodle {
+    width: 56px;
+    color: var(--monte);
+  }
+
+  .flow-help {
+    margin-top: 0.4rem;
+  }
+}
+
+.flow-wallet {
+  display: grid;
+  gap: 0.75rem;
+
+  & + & {
+    padding-top: 1rem;
+    border-top: 1px dashed var(--renglon);
+  }
+}
+
+.flow-wallet-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  font-weight: 700;
+  color: var(--monte);
+}
+
+.flow-add {
+  justify-self: start;
+}
+
+.flow-more {
+  display: grid;
+  gap: 0.9rem;
+
+  summary {
+    width: fit-content;
+    color: var(--monte);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  &[open] {
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    background: rgb(9 70 65 / 5%);
+  }
+}
+
+.flow-summary {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--renglon);
+  }
+
+  span {
+    color: var(--muted);
+  }
+
+  strong {
+    display: grid;
+    justify-items: end;
+    text-align: right;
+    color: var(--monte);
+  }
+
+  small {
+    font-weight: 400;
+    color: var(--muted);
+  }
+}
+
+.input-suffix {
+  position: relative;
+
+  input {
+    padding-right: 2rem;
+  }
+
+  span {
+    position: absolute;
+    right: 0.9rem;
+    top: 50%;
+    translate: 0 -50%;
+    font-weight: 700;
+    color: var(--muted);
+  }
+}
+
+/* The month's plant: it grows as the month's quotas get covered. */
+.plant-panel {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.45fr) 1fr;
+  gap: 1.25rem;
+  align-items: center;
+  padding: clamp(18px, 2.5vw, 26px);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(260px circle at 20% 30%, rgb(204 241 55 / 16%), transparent 70%),
+    var(--monte) url(/paper.png);
+  color: var(--papel);
+  box-shadow: var(--shadow-paper);
+
+  h2 {
+    color: var(--papel);
+  }
+
+  p {
+    color: rgb(253 251 251 / 82%);
+  }
+
+  .progress {
+    background: rgb(253 251 251 / 14%);
+    border-color: transparent;
+  }
+
+  .progress > span {
+    background: var(--lima);
+  }
+
+  small {
+    color: rgb(253 251 251 / 70%);
+  }
+}
+
+.plant-panel-copy {
+  display: grid;
+  gap: 0.6rem;
+}
+
+/* Pocket list in the rules editor: each pocket opens on its own. */
+.rule-cards {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rule-card {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--hoja);
+
+  strong {
+    display: block;
+  }
+
+  small {
+    color: var(--muted);
+  }
+}
+
+.rule-card-share {
+  font-size: 1.3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--monte);
+}
+
+.rule-dialog {
+  width: min(100% - 2rem, 640px);
+  max-height: min(100dvh - 2rem, 760px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--papel) url(/paper.png);
+  color: var(--monte);
+  box-shadow: 0 40px 80px -30px rgb(0 0 0 / 60%);
+
+  &::backdrop {
+    background: rgb(6 51 47 / 60%);
+    backdrop-filter: blur(3px);
+  }
+
+  &[open] {
+    animation: dialog-in 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+.rule-dialog-body {
+  display: grid;
+  gap: 1.1rem;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+}
+
+.rule-dialog-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rule-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rule-dialog[open] {
+    animation: none;
+  }
+}
+
+.field-grid-pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 959px) {
+  .flow-hide-mobile {
+    display: none;
   }
 }

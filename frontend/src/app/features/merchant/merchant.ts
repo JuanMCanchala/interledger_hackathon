@@ -2,10 +2,14 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
+  Injector,
   OnInit,
+  afterNextRender,
   computed,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Title } from '@angular/platform-browser';
@@ -52,6 +56,7 @@ import {
 } from '../../core/miplante.utils';
 import { Gloria, GloriaSection } from '../gloria/gloria';
 import { Logo } from '../../shared/brand/logo';
+import { Plant, PlantStage } from '../../shared/brand/plant';
 import { BarChart, BarEntry } from '../../shared/ui/bar-chart';
 import { ProgressRing } from '../../shared/ui/progress-ring';
 import { QrCode } from '../../shared/ui/qr-code';
@@ -99,6 +104,7 @@ let nextRuleDraftKey = 1;
     QrCode,
     SplitList,
     Logo,
+    Plant,
     Gloria,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -114,6 +120,7 @@ export default class MerchantPage implements OnInit {
   private readonly api = inject(ApiService);
   private readonly title = inject(Title);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   protected readonly voice = inject(VoiceService);
 
   protected readonly formatAmount = formatAmount;
@@ -171,6 +178,12 @@ export default class MerchantPage implements OnInit {
   protected readonly rulesError = signal('');
   protected readonly rulesSavedMsg = signal('');
   protected readonly rulesSaving = signal(false);
+  /** The pocket open in the editor dialog, one at a time. */
+  protected readonly editingRuleKey = signal<number | null>(null);
+  protected readonly editingRule = computed(
+    () => this.ruleDrafts().find((d) => d.key === this.editingRuleKey()) ?? null,
+  );
+  private readonly ruleDialog = viewChild<ElementRef<HTMLDialogElement>>('ruleDialog');
   protected readonly payoutBusy = signal(false);
   protected readonly payoutMessage = signal<BannerMessage | null>(null);
 
@@ -411,6 +424,35 @@ export default class MerchantPage implements OnInit {
     if (!m) return '';
     const total = m.month.realProfit ?? m.month.kept;
     return `Ganancia real por día este mes: ${formatAmount(total)} en total`;
+  });
+
+  /** Grows with the month's quotas covered so far (sales goal or days when there are none). */
+  protected readonly monthPlant = computed(() => {
+    const m = this.merchant();
+    if (!m) return null;
+    const debts = m.rules.filter((r) => r.kind === 'debt' && toNumber(r.monthlyQuota) > 0);
+    const quotas = debts.reduce((sum, r) => sum + toNumber(r.monthlyQuota), 0);
+    const covered = debts.reduce(
+      (sum, r) => sum + Math.min(toNumber(r.paidThisMonth), toNumber(r.monthlyQuota)),
+      0,
+    );
+    const goal = toNumber(m.monthlySalesGoal);
+    const ratio = quotas > 0
+      ? covered / quotas
+      : goal > 0
+        ? toNumber(m.month.gross) / goal
+        : m.month.dayOfMonth / m.month.daysInMonth;
+    const percent = Math.min(100, Math.round(ratio * 100));
+    const stage: PlantStage = ratio >= 1 ? 'bloom' : ratio >= 0.35 ? 'sprout' : 'seed';
+    const what = quotas > 0 ? 'de tus cuotas del mes' : goal > 0 ? 'de tu meta de ventas' : 'del mes';
+    const text = {
+      bloom: quotas > 0
+        ? '¡Cuotas del mes completas! Lo que vendas ahora queda libre para ti.'
+        : `¡Florecida! Llevas el ${percent} % ${what}.`,
+      sprout: `Va creciendo: llevas el ${percent} % ${what}.`,
+      seed: `Está empezando: llevas el ${percent} % ${what}. Cada venta la riega.`,
+    }[stage];
+    return { stage, percent, text };
   });
 
   protected readonly capBarWidth = computed(() => {
@@ -1285,9 +1327,9 @@ export default class MerchantPage implements OnInit {
         category: r.category || '',
         kind: r.kind,
         sharePercent: r.shareBps / 100,
-        monthlyQuota: toDecimal(r.monthlyQuota),
-        outstanding: toDecimal(r.outstanding),
-        savingsGoal: toDecimal(r.savingsGoal),
+        monthlyQuota: groupThousands(toDecimal(r.monthlyQuota)),
+        outstanding: groupThousands(toDecimal(r.outstanding)),
+        savingsGoal: groupThousands(toDecimal(r.savingsGoal)),
         dueDay: r.dueDay ?? (r.kind === 'debt' ? 28 : null),
         destination: walletName(r.destination),
       })),
@@ -1299,10 +1341,11 @@ export default class MerchantPage implements OnInit {
 
   protected addRuleDraft(): void {
     if (this.ruleDrafts().length >= MAX_RULES) return;
+    const key = nextRuleDraftKey++;
     this.ruleDrafts.update((list) => [
       ...list,
       {
-        key: nextRuleDraftKey++,
+        key,
         label: 'Proveedor',
         category: 'Proveedores',
         kind: 'debt',
@@ -1314,6 +1357,39 @@ export default class MerchantPage implements OnInit {
         destination: '',
       },
     ]);
+    this.openRuleDraft(key);
+  }
+
+  protected openRuleDraft(key: number): void {
+    this.rulesError.set('');
+    this.editingRuleKey.set(key);
+    const dialog = this.ruleDialog()?.nativeElement;
+    dialog?.showModal();
+    afterNextRender(() => dialog?.querySelector('input')?.focus(), { injector: this.injector });
+  }
+
+  protected updateRuleMoney(
+    key: number,
+    field: 'monthlyQuota' | 'outstanding' | 'savingsGoal',
+    raw: string,
+  ): void {
+    this.updateRuleDraft(key, { [field]: formatThousandsInput(raw) });
+  }
+
+  protected closeRuleDraft(): void {
+    this.ruleDialog()?.nativeElement.close();
+  }
+
+  protected draftSummary(draft: RuleDraft): string {
+    const category = draft.category.trim() || 'Sin categoría';
+    const code = this.merchant()?.asset.assetCode ?? 'COP';
+    if (draft.kind === 'savings') {
+      const goal = normalizeDecimal(draft.savingsGoal);
+      return goal ? `${category} · meta de ${formatMoney(Number(goal), code)}` : `${category} · sin tope`;
+    }
+    const quota = normalizeDecimal(draft.monthlyQuota);
+    const quotaText = quota ? formatMoney(Number(quota), code) : 'sin cuota';
+    return `${category} · ${quotaText} al mes, día ${draft.dueDay ?? '—'}`;
   }
 
   protected removeRuleDraft(key: number): void {
@@ -1348,7 +1424,7 @@ export default class MerchantPage implements OnInit {
     }
 
     return this.ruleDrafts().map((d, index) => {
-      const position = `Regla ${index + 1}`;
+      const position = d.label.trim() || `Bolsillo ${index + 1}`;
       const label = d.label.trim();
       const category = d.category.trim();
       const dest = d.destination.trim();
