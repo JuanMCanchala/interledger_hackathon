@@ -19,9 +19,10 @@ export interface SalesOptions {
   /** Base URL of the web client, used for the customer's pay link. */
   frontendUrl: string;
   /**
-   * The wallet app's send screen (the Interledger test wallet's /send). It reads `merchantWA` as the
-   * receiver and `merchantDescription` as the note, and lets the signed-in customer pick their own
-   * account and wallet address. Without it, the QR is the bare wallet address.
+   * The wallet app's send screen (the Interledger test wallet's /send). Given an incoming payment
+   * as `merchantWA`, it fills in and locks its amount and description, and lets the signed-in
+   * customer pick their own account and wallet address. Without it, the QR is the incoming payment
+   * URL itself.
    */
   walletSendUrl?: string;
   now?: () => Date;
@@ -50,23 +51,31 @@ export class SalesService {
   }
 
   /**
-   * The merchant types the amount; the till shows `payUrl` as a QR code. When the merchant's consent
-   * lets MiPlante watch the wallet, the QR is the wallet address itself: a phone opens it on the
-   * wallet provider's payment page, the customer types the amount and pays from any wallet, and
-   * MiPlante matches that payment to the sale. Otherwise it is MiPlante's checkout.
+   * The merchant types the amount and the till shows `payUrl` as a QR code. Each sale is an Open
+   * Payments payment request: an incoming payment on the merchant's wallet for exactly that amount.
+   * The QR opens the customer's wallet app on it (the amount and the shop come filled in and locked,
+   * and the signed-in customer only confirms), and MiPlante settles the sale once it completes.
+   * `checkoutUrl` is MiPlante's checkout, the full consent flow, which pays the same request.
    */
   async createSale(
     merchantId: string,
     input: { amount: string; description?: string },
   ) {
     const merchant = await this.merchants.require(merchantId);
+    const amount = toAmount(input.amount, merchant.asset);
+    const request = await this.flows.requestPayment({
+      receiver: merchant.wallet,
+      amount: fromMinorUnits(amount.value, amount.assetScale),
+      description: saleDescription(merchant.name, input.description),
+    });
     const timestamp = this.timestamp();
     const sale = await this.store.saveSale({
       id: randomUUID(),
       merchantId,
-      amount: toAmount(input.amount, merchant.asset),
+      amount,
       description: input.description,
       status: "open",
+      paymentId: request.id,
       settlement: { status: "pending", items: [] },
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -82,14 +91,21 @@ export class SalesService {
       throw new AppError("Esta venta ya se está pagando o ya fue pagada", 409);
     }
     const merchant = await this.merchants.require(sale.merchantId);
+    // Pay the sale's own payment request while it can still be paid, so the QR and the checkout
+    // share one destination and the sale can only be paid once.
+    const current = sale.paymentId
+      ? await this.store.getPayment(sale.paymentId)
+      : undefined;
+    const reusable = current && current.status !== "failed" && current.status !== "rejected";
     const { payment, redirectUrl } = await this.flows.startPayment({
       sender: input.customerWallet,
       receiver: merchant.wallet,
       amount: fromMinorUnits(sale.amount.value, sale.amount.assetScale),
-      description: sale.description
-        ? `${merchant.name} · ${sale.description}`
-        : merchant.name,
+      description: saleDescription(merchant.name, sale.description),
       returnTo: `/pay?sale=${sale.id}`,
+      incoming: reusable
+        ? { url: current.incomingPaymentUrl, accessToken: current.incomingToken }
+        : undefined,
     });
     const updated = await this.store.transitionSale(
       sale.id,
@@ -114,7 +130,9 @@ export class SalesService {
     let sale = await this.require(saleId);
     if (
       sale.paymentId &&
-      (sale.status === "awaiting-consent" || sale.status === "processing")
+      (sale.status === "open" ||
+        sale.status === "awaiting-consent" ||
+        sale.status === "processing")
     ) {
       const payment = await this.flows.refreshPayment(sale.paymentId);
       sale =
@@ -279,6 +297,18 @@ export class SalesService {
     return () => clearInterval(timer);
   }
 
+  /**
+   * The wallet app's send screen on the sale's incoming payment: it reads the amount and the
+   * description from it and locks them, and preselects the signed-in customer's wallet. Without
+   * `walletSendUrl`, the incoming payment URL itself, which any Open Payments wallet can pay.
+   */
+  private qrUrl(incomingPaymentUrl: string): string {
+    if (!this.options.walletSendUrl) return incomingPaymentUrl;
+    const url = new URL(this.options.walletSendUrl);
+    url.searchParams.set("merchantWA", incomingPaymentUrl);
+    return url.toString();
+  }
+
   /** MiPlante's own checkout, where the customer types their wallet name. */
   payUrl(saleId: string): string {
     return `${this.options.frontendUrl}/pay?sale=${saleId}`;
@@ -310,7 +340,11 @@ export class SalesService {
         debitAmount: payment.debitAmount,
         receivedAmount: payment.receivedAmount,
       },
-      payUrl: this.payUrl(sale.id),
+      // The QR: the wallet app on the sale's incoming payment while it can still be paid.
+      payUrl:
+        payment && sale.status !== "failed"
+          ? this.qrUrl(payment.incomingPaymentUrl)
+          : this.payUrl(sale.id),
       checkoutUrl: this.payUrl(sale.id),
       settlement: sale.settlement,
       createdAt: sale.createdAt,
@@ -383,7 +417,10 @@ export class SalesService {
       case "processing":
         return { status: "processing" };
       default:
-        return { status: "awaiting-consent" };
+        // Nobody has paid the sale's payment request yet: the sale is still open.
+        return payment.kind === "payment-request"
+          ? { status: "open" }
+          : { status: "awaiting-consent" };
     }
   }
 }
@@ -397,9 +434,14 @@ function itemStatus(paymentStatus: string): SettlementItemStatus {
 
 function needsWork(sale: SaleRecord): boolean {
   return (
+    (sale.status === "open" && Boolean(sale.paymentId)) ||
     sale.status === "awaiting-consent" ||
     sale.status === "processing" ||
     (sale.status === "paid" && sale.settlement.status === "pending") ||
     sale.settlement.items.some((item) => item.status === "processing")
   );
+}
+
+function saleDescription(merchantName: string, description?: string): string {
+  return description ? `${merchantName} · ${description}` : merchantName;
 }

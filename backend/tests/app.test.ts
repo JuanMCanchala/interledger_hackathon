@@ -159,8 +159,9 @@ describe("MiPlante API", () => {
       amount: "10000",
     });
     expect(created.status).toBe(201);
-    const { sale, payUrl } = await created.json();
-    expect(payUrl).toBe(`${FRONTEND_URL}/pay?sale=${sale.id}`);
+    const { sale, payUrl, checkoutUrl } = await created.json();
+    expect(payUrl).toMatch(/\/incoming-payments\//);
+    expect(checkoutUrl).toBe(`${FRONTEND_URL}/pay?sale=${sale.id}`);
 
     const paying = await postJson(`/api/sales/${sale.id}/pay`, {
       customerWallet: ALICE,

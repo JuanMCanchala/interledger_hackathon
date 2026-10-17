@@ -3,8 +3,8 @@ import { ALICE, BOB } from "./fakeOperations.js";
 import { BASE_URL, cop, setupMiPlante } from "./miplanteHarness.js";
 
 describe("checkout", () => {
-  it("creates a sale with a pay link for the QR code", async () => {
-    const { sales, onboardRosa } = setupMiPlante();
+  it("makes each sale an Open Payments payment request for the exact amount", async () => {
+    const { sales, ops, store, onboardRosa } = setupMiPlante();
     const merchantId = await onboardRosa();
 
     const { sale, payUrl, checkoutUrl } = await sales.createSale(merchantId, {
@@ -12,7 +12,19 @@ describe("checkout", () => {
       description: "Mercado",
     });
 
-    expect(payUrl).toBe(`${BASE_URL}/pay?sale=${sale.id}`);
+    expect(ops.createIncomingPayment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: BOB }),
+      {
+        incomingAmount: cop("1000000"),
+        description: "Tienda Doña Rosa · Mercado",
+      },
+    );
+    // Without a wallet app configured, the QR is the incoming payment itself.
+    const request = (await store.getPayment(
+      (await store.getSale(sale.id))!.paymentId!,
+    ))!;
+    expect(request.kind).toBe("payment-request");
+    expect(payUrl).toBe(request.incomingPaymentUrl);
     expect(sale.payUrl).toBe(payUrl);
     // MiPlante's own checkout stays available for typing the wallet name.
     expect(checkoutUrl).toBe(`${BASE_URL}/pay?sale=${sale.id}`);
