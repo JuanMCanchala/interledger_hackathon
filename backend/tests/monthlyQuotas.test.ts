@@ -54,6 +54,7 @@ describe("monthly quotas", () => {
       salesCount: 3,
       gross: cop("3000000"),
       allocated: cop("200000"),
+      realProfit: cop("2800000"),
     });
     expect(dashboard.month.days[0]!.date).toBe("2026-10-01");
   });

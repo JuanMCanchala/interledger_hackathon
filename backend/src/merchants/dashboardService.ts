@@ -11,7 +11,7 @@ import type { MerchantService } from "./merchantService.js";
 import { buildNotifications } from "./notifications.js";
 import { reservedBalances, type PayoutService } from "./payoutService.js";
 import type { SalesService } from "./salesService.js";
-import type { SaleRecord, SettlementItem } from "./types.js";
+import type { PayoutRecord, SaleRecord, SettlementItem } from "./types.js";
 
 const RECENT_SALES = 20;
 const RECENT_PAYOUTS = 10;
@@ -106,7 +106,7 @@ export class DashboardService {
         kept: money(gross - allocated),
         allocated: money(allocated),
       },
-      month: this.month(paid, now, money),
+      month: this.month(paid, payouts, reserved, now, money),
       /** What the shopkeeper should know or do now, things to act on first (notifications.ts). */
       notifications: buildNotifications({
         merchant,
@@ -130,6 +130,8 @@ export class DashboardService {
    */
   private month(
     paid: SaleRecord[],
+    payouts: PayoutRecord[],
+    reserved: Record<string, bigint>,
     now: Date,
     money: (value: bigint) => Amount,
   ) {
@@ -142,6 +144,16 @@ export class DashboardService {
       sum(list.flatMap(sentItems).map((item) => item.amount));
     const gross = sum(thisMonth.map((sale) => sale.amount));
     const allocated = allocatedOf(thisMonth);
+    // Payouts of this month that left or are on their way; what they took from profit lowers it.
+    const monthPayouts = payouts.filter(
+      (p) => p.month === today.slice(0, 7) && p.status !== "failed",
+    );
+    const topUpOf = (list: PayoutRecord[]) =>
+      sum(list.flatMap((p) => (p.topUp ? [p.topUp] : [])));
+    const fromProfit = topUpOf(monthPayouts);
+    const kindOf = (kind: string) =>
+      sum(thisMonth.flatMap(sentItems).filter((i) => i.kind === kind && i.status !== "reserved").map((i) => i.amount));
+    const reservedNow = Object.values(reserved).reduce((t, v) => t + (v > 0n ? v : 0n), 0n);
     return {
       dayOfMonth: day,
       daysInMonth,
@@ -149,15 +161,34 @@ export class DashboardService {
       gross: money(gross),
       kept: money(gross - allocated),
       allocated: money(allocated),
+      /**
+       * What the shop really has left of this month's sales: what it kept, minus what due-day
+       * payouts took from profit to complete the quotas (ADR 0015). It can go below zero in a month
+       * that paid more than it sold.
+       */
+      realProfit: money(gross - allocated - fromProfit),
+      /** Where the month's money went, for the panel's breakdown. */
+      breakdown: {
+        sentToSavings: money(kindOf("savings")),
+        paidToCreditors: money(sum(monthPayouts.map((p) => p.amount))),
+        fromProfit: money(fromProfit),
+        reservedPending: money(reservedNow),
+      },
       days: lastBogotaDays(now, day).map((date) => {
         const daySales = thisMonth.filter(
           (sale) => bogotaDay(new Date(sale.paidAt!)) === date,
         );
+        const dayGross = sum(daySales.map((sale) => sale.amount));
+        const dayAllocated = allocatedOf(daySales);
+        const dayTopUp = topUpOf(
+          monthPayouts.filter((p) => bogotaDay(new Date(p.createdAt)) === date),
+        );
         return {
           date,
           salesCount: daySales.length,
-          gross: money(sum(daySales.map((sale) => sale.amount))),
-          allocated: money(allocatedOf(daySales)),
+          gross: money(dayGross),
+          allocated: money(dayAllocated),
+          realProfit: money(dayGross - dayAllocated - dayTopUp),
         };
       }),
     };

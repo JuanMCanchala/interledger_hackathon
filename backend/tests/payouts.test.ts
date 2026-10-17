@@ -345,4 +345,24 @@ describe("paying creditors on their due day", () => {
     // 1,500 reserved + 1,000 of room left (30,000 - 27,500 - 1,500 reserved).
     expect(byCap).toMatchObject({ amount: cop("250000"), topUp: cop("100000") });
   });
+
+  it("shows the real profit: what was taken from it to complete a quota is no longer there", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa({ rules: [MICROCREDIT] });
+    await sellAndPay(env, id); // 10,000 sold: 1,500 reserved, 8,500 kept
+    let month = (await env.dashboard.get(id)).month;
+    expect(month).toMatchObject({ kept: cop("850000"), realProfit: cop("850000") });
+    expect(month.breakdown).toMatchObject({ reservedPending: cop("150000"), fromProfit: cop("0") });
+
+    // The due day pays the 20,000 quota: 1,500 reserved and 18,500 taken from the 8,500 profit.
+    await env.payouts.pay(id, { reason: "due-date" });
+    month = (await env.dashboard.get(id)).month;
+    expect(month).toMatchObject({ kept: cop("850000"), realProfit: cop("-1000000") });
+    expect(month.breakdown).toMatchObject({
+      paidToCreditors: cop("2000000"),
+      fromProfit: cop("1850000"),
+      reservedPending: cop("0"),
+    });
+    expect(month.days.at(-1)!.realProfit).toEqual(cop("-1000000"));
+  });
 });

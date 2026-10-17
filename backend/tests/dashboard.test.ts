@@ -63,12 +63,14 @@ describe("merchant dashboard", () => {
       salesCount: 1,
       gross: cop("1000000"),
       allocated: cop("200000"),
+      realProfit: cop("800000"),
     });
     expect(view.month.days.at(-1)).toEqual({
       date: "2026-10-17",
       salesCount: 0,
       gross: cop("0"),
       allocated: cop("0"),
+      realProfit: cop("0"),
     });
   });
 
