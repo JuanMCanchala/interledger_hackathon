@@ -50,13 +50,11 @@ import {
   toNumber,
   walletName,
 } from '../../core/miplante.utils';
-import { Doodle } from '../../shared/brand/doodle';
 import { Gloria, GloriaSection } from '../gloria/gloria';
 import { Logo } from '../../shared/brand/logo';
 import { BarChart, BarEntry } from '../../shared/ui/bar-chart';
 import { ProgressRing } from '../../shared/ui/progress-ring';
 import { QrCode } from '../../shared/ui/qr-code';
-import { SiteFooter } from '../../shared/ui/site-layout';
 import { SplitList } from '../../shared/ui/split-list';
 import { StepsIndicator } from '../../shared/ui/steps-indicator';
 
@@ -113,11 +111,9 @@ let nextRuleDraftKey = 1;
     BarChart,
     ProgressRing,
     QrCode,
-    SiteFooter,
     SplitList,
     StepsIndicator,
     Logo,
-    Doodle,
     Gloria,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
