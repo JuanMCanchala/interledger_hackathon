@@ -196,6 +196,13 @@ export function createApp({
     res.json(await merchants.updateRules(merchant.id, rules));
   });
 
+  /** A new monthly cap: the merchant approves it in the wallet before it replaces the current one. */
+  app.post("/api/merchants/:id/cap", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    const { monthlyCap } = schemas.changeCap.parse(req.body);
+    res.status(201).json(await merchants.changeCap(merchant.id, monthlyCap));
+  });
+
   app.post("/api/merchants/:id/consent", async (req, res) => {
     const merchant = await ownedMerchant(req);
     res.status(201).json(await merchants.renewConsent(merchant.id));

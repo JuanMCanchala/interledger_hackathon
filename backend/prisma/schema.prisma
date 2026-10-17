@@ -24,6 +24,9 @@ model Merchant {
   mandateId        String   @unique @map("mandate_id") @db.Uuid
   /// Optional monthly sales goal, in minor units.
   monthlySalesGoal BigInt?  @map("monthly_sales_goal")
+  /// A new monthly cap waiting for approval, and the mandate that asks for it.
+  pendingCap       BigInt?  @map("pending_cap")
+  pendingMandateId String?  @map("pending_mandate_id") @db.Uuid
   createdAt        DateTime @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime @map("updated_at") @db.Timestamptz(3)
 

@@ -29,6 +29,11 @@ export interface MerchantRecord {
   mandateId: string;
   /** Optional: what the shop wants to sell each calendar month. Shown as a goal. */
   monthlySalesGoal?: Amount;
+  /**
+   * A new monthly cap waiting for the merchant's approval in the wallet. The current grant keeps
+   * working until then; once approved, it replaces `mandateId` and `monthlyCap`.
+   */
+  pendingCap?: { mandateId: string; monthlyCap: Amount };
   createdAt: string;
   updatedAt: string;
 }

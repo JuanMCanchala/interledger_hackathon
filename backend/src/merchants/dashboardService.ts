@@ -31,7 +31,9 @@ export class DashboardService {
   }
 
   async get(merchantId: string) {
-    const merchant = await this.merchants.require(merchantId);
+    const merchant = await this.merchants.syncPendingCap(
+      await this.merchants.require(merchantId),
+    );
     const [mandate, sales, paidThisMonth] = await Promise.all([
       this.flows.getMandate(merchant.mandateId),
       this.store.listSales({ merchantId }),

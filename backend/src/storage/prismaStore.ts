@@ -136,6 +136,10 @@ export class PrismaStore implements Store {
       monthlySalesGoal: record.monthlySalesGoal
         ? BigInt(record.monthlySalesGoal.value)
         : null,
+      pendingCap: record.pendingCap
+        ? BigInt(record.pendingCap.monthlyCap.value)
+        : null,
+      pendingMandateId: record.pendingCap?.mandateId ?? null,
       mandateId: record.mandateId,
       createdAt: new Date(record.createdAt),
       updatedAt: new Date(record.updatedAt),
@@ -499,6 +503,13 @@ function toMerchant(row: MerchantRow): MerchantRecord {
       row.monthlySalesGoal === null
         ? undefined
         : amount(row.monthlySalesGoal, asset),
+    pendingCap:
+      row.pendingCap === null || row.pendingMandateId === null
+        ? undefined
+        : {
+            mandateId: row.pendingMandateId,
+            monthlyCap: amount(row.pendingCap, asset),
+          },
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

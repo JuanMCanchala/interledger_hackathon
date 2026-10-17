@@ -72,6 +72,8 @@ const rule = z.object({
   savingsGoal: decimalAmount.optional(),
 });
 
+export const changeCap = z.object({ monthlyCap: decimalAmount });
+
 export const shopSettings = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),

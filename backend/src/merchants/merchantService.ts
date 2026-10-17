@@ -247,6 +247,73 @@ export class MerchantService {
     return this.view(updated);
   }
 
+  /**
+   * A grant's limit cannot be raised once approved, so a new monthly cap needs a new consent. The
+   * current grant keeps paying the splits until the merchant approves the new one; a shop without
+   * an active grant switches to the new cap at once.
+   */
+  async changeCap(id: string, monthlyCap: string) {
+    const merchant = await this.require(id);
+    const cap = toAmount(monthlyCap, merchant.asset);
+    assertCapCoversQuotas(cap, merchant.rules);
+    const current = await this.flows.findMandate(merchant.mandateId);
+    if (current.status === "active" && cap.value === merchant.monthlyCap.value) {
+      throw new AppError("Ese ya es tu límite mensual", 409);
+    }
+    const { mandate, redirectUrl } = await this.flows.startMandate({
+      sender: merchant.wallet,
+      maxAmount: monthlyCap,
+      interval: MONTHLY_INTERVAL,
+      intervalStart: startOfBogotaMonth(this.now()),
+      description: `MiPlante · ${merchant.name}`,
+      returnTo: `/merchant?id=${merchant.id}#ajustes`,
+    });
+    const updated = await this.store.saveMerchant(
+      current.status === "active"
+        ? {
+            ...merchant,
+            pendingCap: { mandateId: mandate.id, monthlyCap: mandate.maxAmount },
+            updatedAt: this.now().toISOString(),
+          }
+        : {
+            ...merchant,
+            mandateId: mandate.id,
+            monthlyCap: mandate.maxAmount,
+            pendingCap: undefined,
+            updatedAt: this.now().toISOString(),
+          },
+    );
+    return { merchant: await this.view(updated), redirectUrl };
+  }
+
+  /**
+   * Applies a pending cap once its consent is settled: approved, it replaces the current grant
+   * (which is then revoked); rejected or failed, it is dropped and the current cap stays.
+   */
+  async syncPendingCap(merchant: MerchantRecord): Promise<MerchantRecord> {
+    const pending = merchant.pendingCap;
+    if (!pending) return merchant;
+    const { status } = await this.flows.findMandate(pending.mandateId);
+    if (status === "awaiting-consent") return merchant;
+    const approved = status === "active";
+    const updated = await this.store.saveMerchant({
+      ...merchant,
+      ...(approved
+        ? { mandateId: pending.mandateId, monthlyCap: pending.monthlyCap }
+        : {}),
+      pendingCap: undefined,
+      updatedAt: this.now().toISOString(),
+    });
+    if (approved) {
+      try {
+        await this.flows.revokeMandate(merchant.mandateId);
+      } catch {
+        // The old grant may already be gone; the new one is what pays the splits now.
+      }
+    }
+    return updated;
+  }
+
   /** The shop, only if `userId` registered it; anyone else gets a 404, as if it did not exist. */
   async requireOwned(id: string, userId: string): Promise<MerchantRecord> {
     const merchant = await this.require(id);
@@ -292,6 +359,8 @@ export class MerchantService {
       asset: merchant.asset,
       monthlyCap: merchant.monthlyCap,
       monthlySalesGoal: merchant.monthlySalesGoal ?? null,
+      /** A new monthly cap waiting for approval in the wallet. */
+      pendingCap: merchant.pendingCap?.monthlyCap ?? null,
       status: mandate.status,
       rules: merchant.rules,
       createdAt: merchant.createdAt,
