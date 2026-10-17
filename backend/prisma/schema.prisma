@@ -128,7 +128,8 @@ model Payment {
   status             String
   description        String?
   returnTo           String?   @map("return_to")
-  sender             String
+  /// Null for a payment request (the payer is not known).
+  sender             String?
   receiver           String
   mandateId          String?   @map("mandate_id") @db.Uuid
   incomingPaymentUrl String    @map("incoming_payment_url")

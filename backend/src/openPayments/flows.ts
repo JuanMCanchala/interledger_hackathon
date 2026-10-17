@@ -41,6 +41,11 @@ export interface StartPaymentInput {
   description?: string;
   /** Page (path starting with "/") where the browser lands after the consent screen. */
   returnTo?: string;
+  /**
+   * Pay this incoming payment (a payment request already shown to the payer) instead of creating
+   * a new one, so a sale keeps a single destination however the customer pays it.
+   */
+  incoming?: { url: string; accessToken?: string };
 }
 
 export interface StartMandateInput {
@@ -107,13 +112,20 @@ export class PaymentFlows {
       this.resolve(input.sender),
       this.resolve(input.receiver),
     ]);
-    const { incomingPayment, accessToken: incomingToken } =
-      await this.ops.createIncomingPayment(receiver, {
+    let incoming = input.incoming;
+    if (!incoming) {
+      const created = await this.ops.createIncomingPayment(receiver, {
         incomingAmount: toAmount(input.amount, receiver),
         description: input.description,
       });
+      incoming = {
+        url: created.incomingPayment.id,
+        accessToken: created.accessToken,
+      };
+    }
+    const { url: incomingPaymentUrl, accessToken: incomingToken } = incoming;
     const quote = await this.ops.createQuote(sender, {
-      receiver: incomingPayment.id,
+      receiver: incomingPaymentUrl,
     });
     const id = randomUUID();
     const { interaction, redirectUrl } = await this.requestConsent(
@@ -130,7 +142,7 @@ export class PaymentFlows {
       returnTo: assertReturnPath(input.returnTo),
       sender: sender.id,
       receiver: receiver.id,
-      incomingPaymentUrl: incomingPayment.id,
+      incomingPaymentUrl,
       incomingToken,
       ...quoteFields(quote),
       interaction,
@@ -168,7 +180,8 @@ export class PaymentFlows {
         authorizedAt: this.timestamp(),
         interaction: undefined,
       });
-      const sender = await this.resolve(record.sender);
+      // Consented payments always know their sender; only payment requests do not.
+      const sender = await this.resolve(record.sender!);
       const quote = await this.ensureFreshQuote(record, sender);
       const outgoing = await this.ops.createOutgoingPayment(
         sender,
@@ -195,10 +208,47 @@ export class PaymentFlows {
     return this.refreshPayment(id);
   }
 
+  /**
+   * Open Payments payment request: an incoming payment on the receiver's wallet for exactly
+   * `amount`. Any wallet can pay its URL; the payer approves it in their own wallet, where they
+   * are signed in. MiPlante needs no consent callback from the payer: it watches the payment.
+   */
+  async requestPayment(input: {
+    receiver: string;
+    amount: string;
+    description?: string;
+  }) {
+    const receiver = await this.resolve(input.receiver);
+    const amount = toAmount(input.amount, receiver);
+    const { incomingPayment, accessToken } =
+      await this.ops.createIncomingPayment(receiver, {
+        incomingAmount: amount,
+        description: input.description,
+      });
+    const timestamp = this.timestamp();
+    const record = await this.store.savePayment({
+      id: randomUUID(),
+      kind: "payment-request",
+      status: "awaiting-consent",
+      description: input.description,
+      receiver: receiver.id,
+      incomingPaymentUrl: incomingPayment.id,
+      incomingToken: accessToken,
+      receiveAmount: amount,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    return toPublicPayment(record);
+  }
+
   /** Reads the current state from Open Payments. Safe to poll from the frontend. */
   async refreshPayment(id: string) {
     let record = await this.requirePayment(id);
-    if (record.status !== "processing") return toPublicPayment(record);
+    const waitingForPayer =
+      record.kind === "payment-request" && record.status === "awaiting-consent";
+    if (record.status !== "processing" && !waitingForPayer) {
+      return toPublicPayment(record);
+    }
     try {
       const receiver = await this.resolve(record.receiver);
       const { incomingPayment, accessToken } =
@@ -214,15 +264,29 @@ export class PaymentFlows {
         incomingPayment.completed ||
         (record.receiveAmount !== undefined &&
           BigInt(received.value) >= BigInt(record.receiveAmount.value));
+      // A payment request waits until the payer's money starts arriving, and fails if its
+      // incoming payment expires first.
+      const nothingYet = BigInt(received.value) === 0n;
+      const expired =
+        waitingForPayer &&
+        nothingYet &&
+        !fullyReceived &&
+        incomingPayment.expiresAt !== undefined &&
+        Date.parse(incomingPayment.expiresAt) <= this.now().getTime();
       record = await this.updatePayment(record, {
-        status: outgoingFailed
-          ? "failed"
-          : fullyReceived
-            ? "completed"
-            : "processing",
+        status:
+          outgoingFailed || expired
+            ? "failed"
+            : fullyReceived
+              ? "completed"
+              : waitingForPayer && nothingYet
+                ? "awaiting-consent"
+                : "processing",
         error: outgoingFailed
           ? "El pago saliente falló en Interledger"
-          : undefined,
+          : expired
+            ? "La solicitud de pago venció sin recibir el pago"
+            : undefined,
         receivedAmount: received,
         incomingToken: accessToken,
       });
@@ -689,12 +753,18 @@ export function toPublicPayment(record: PaymentRecord) {
     outgoingToken: _ot,
     ...rest
   } = record;
+  // A payment request is authorized and executed in the payer's own wallet: MiPlante sees the
+  // money arriving.
+  const arriving =
+    record.kind === "payment-request" &&
+    (record.status === "completed" ||
+      BigInt(record.receivedAmount?.value ?? "0") > 0n);
   return {
     ...rest,
     steps: {
       request: true,
-      authorization: Boolean(record.authorizedAt),
-      execution: Boolean(record.outgoingPaymentUrl),
+      authorization: arriving || Boolean(record.authorizedAt),
+      execution: arriving || Boolean(record.outgoingPaymentUrl),
       completion: record.status === "completed",
     },
   };

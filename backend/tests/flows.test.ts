@@ -436,3 +436,80 @@ describe("return page after consent", () => {
     }
   });
 });
+
+describe("payment request", () => {
+  it("creates an incoming payment for the exact amount and waits for the payer", async () => {
+    const { flows, ops, deliver } = setup();
+
+    const request = await flows.requestPayment({
+      receiver: BOB,
+      amount: "10000",
+      description: "Tienda · Mercado",
+    });
+
+    expect(ops.createIncomingPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ id: BOB }),
+      { incomingAmount: cop("1000000"), description: "Tienda · Mercado" },
+    );
+    expect(request).toMatchObject({
+      kind: "payment-request",
+      status: "awaiting-consent",
+      steps: { request: true, authorization: false, completion: false },
+    });
+    expect(request.sender).toBeUndefined();
+    // Nobody paid yet: it keeps waiting.
+    expect((await flows.refreshPayment(request.id)).status).toBe("awaiting-consent");
+
+    // The payer approves in their own wallet and the money arrives.
+    deliver(request.incomingPaymentUrl, cop("1000000"));
+    const paid = await flows.refreshPayment(request.id);
+
+    expect(paid.status).toBe("completed");
+    expect(paid.steps).toEqual({
+      request: true,
+      authorization: true,
+      execution: true,
+      completion: true,
+    });
+  });
+
+  it("fails when the incoming payment expires unpaid", async () => {
+    const { flows, ops, clock } = setup();
+    const request = await flows.requestPayment({ receiver: BOB, amount: "10000" });
+    const read = ops.readIncomingPayment.getMockImplementation()!;
+    const expiresAt = new Date(clock.now.getTime() + 60_000).toISOString();
+    ops.readIncomingPayment.mockImplementation(async (url, receiver) => {
+      const result = await read(url, receiver);
+      return { ...result, incomingPayment: { ...result.incomingPayment, expiresAt } };
+    });
+
+    clock.now = new Date(clock.now.getTime() + 2 * 60_000);
+    const expired = await flows.refreshPayment(request.id);
+
+    expect(expired.status).toBe("failed");
+    expect(expired.error).toContain("venció");
+  });
+
+  it("lets a consented payment pay an existing request instead of creating another", async () => {
+    const { flows, ops } = setup();
+    const request = await flows.requestPayment({ receiver: BOB, amount: "10000" });
+    ops.createIncomingPayment.mockClear();
+
+    const { payment } = await flows.startPayment({
+      sender: ALICE,
+      receiver: BOB,
+      amount: "10000",
+      incoming: {
+        url: request.incomingPaymentUrl,
+        accessToken: "incoming-token",
+      },
+    });
+
+    expect(ops.createIncomingPayment).not.toHaveBeenCalled();
+    expect(payment.incomingPaymentUrl).toBe(request.incomingPaymentUrl);
+    expect(ops.createQuote).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: ALICE }),
+      { receiver: request.incomingPaymentUrl },
+    );
+  });
+});
