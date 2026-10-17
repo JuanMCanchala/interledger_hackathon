@@ -2,7 +2,11 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#094641" />
     <title>Mi caja · MiPlante</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/css/miplante.css" />
@@ -15,10 +19,10 @@
     ></script>
     <script type="module" src="/js/merchant.js"></script>
   </head>
-  <body>
+  <body class="panel-page">
     <div class="container">
-      <header class="site-header">
-        <a class="brand" href="/">
+      <header class="site-header panel-header">
+        <a class="brand" href="#inicio" aria-label="MiPlante: inicio del panel">
           <span class="brand-mark" aria-hidden="true">
             <svg
               viewBox="0 0 24 24"
@@ -35,44 +39,136 @@
               <path d="M12 14c0-3-2.5-5.5-7-5.5 0 3 2.5 5.5 7 5.5z" />
             </svg>
           </span>
-          MiPlante
+          <span class="panel-shop">
+            <span id="merchant-name">MiPlante</span>
+            <small class="muted" id="merchant-wallet"></small>
+          </span>
         </a>
-        <div class="row">
-          <span id="merchant-status"></span>
-          <button type="button" class="btn btn-ghost" id="logout">Salir</button>
-        </div>
+        <span id="merchant-status"></span>
       </header>
 
-      <main class="stack">
+      <nav class="panel-nav" id="panel-nav" aria-label="Secciones del panel">
+        <a href="#inicio" data-tab="inicio">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
+          <span>Inicio</span>
+        </a>
+        <a href="#vender" data-tab="vender" class="is-primary">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z" /></svg>
+          <span>Vender</span>
+        </a>
+        <a href="#metas" data-tab="metas">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r="0.5" /></svg>
+          <span>Metas</span>
+        </a>
+        <a href="#repartos" data-tab="repartos">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M12 8l-6 4M12 8l6 4M6 12v6M18 12v6" /></svg>
+          <span>Repartos</span>
+        </a>
+        <a href="#ajustes" data-tab="ajustes">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" /></svg>
+          <span>Ajustes</span>
+        </a>
+      </nav>
+
+      <main class="panel-main stack">
         <section class="card stack" id="missing" hidden>
           <h1 class="h1-sm">No encontramos tu caja</h1>
           <p class="muted" id="missing-text">
-            Este celular o computador no tiene una caja guardada.
+            Esta caja no existe o es de otra cuenta.
           </p>
           <div class="row">
-            <a class="btn btn-primary" href="/onboard"
-              >Registrar mi negocio</a
-            >
+            <a class="btn btn-primary" href="/onboard">Configurar mi tienda</a>
             <a class="btn btn-secondary" href="/login">Entrar con otra cuenta</a>
           </div>
         </section>
 
         <p id="load-error" class="banner banner-bad" role="alert" hidden></p>
+        <div id="status-banner" class="banner" role="status" hidden></div>
 
         <div id="app" class="stack" hidden>
-          <div class="row between">
-            <div class="stack-sm" style="min-width: 0">
-              <p class="eyebrow">Mi caja</p>
-              <h1 class="h1-sm" id="merchant-name"></h1>
-              <p class="muted" id="merchant-wallet"></p>
+          <!-- Inicio ------------------------------------------------------------------------ -->
+          <section class="view stack" data-view="inicio" aria-labelledby="inicio-title">
+            <div class="card stack hero-card">
+              <div class="row between">
+                <h1 class="h1-sm" id="inicio-title">Hoy</h1>
+                <span class="muted small" id="today-date"></span>
+              </div>
+              <p>
+                <span class="amount-xl" id="today-gross">—</span>
+                <span class="muted small" id="today-count-text"></span>
+              </p>
+              <div class="stats">
+                <div class="stat">
+                  <p class="stat-label">Ganancia de hoy</p>
+                  <p class="stat-value" id="today-kept">—</p>
+                </div>
+                <div class="stat">
+                  <p class="stat-label">Repartido hoy</p>
+                  <p class="stat-value" id="today-allocated">—</p>
+                </div>
+                <div class="stat">
+                  <p class="stat-label">Vendido este mes</p>
+                  <p class="stat-value" id="month-gross">—</p>
+                </div>
+                <div class="stat">
+                  <p class="stat-label">Ganancia del mes</p>
+                  <p class="stat-value" id="month-kept">—</p>
+                </div>
+              </div>
+              <a class="btn btn-primary btn-lg btn-block" href="#vender">
+                Nueva venta
+              </a>
             </div>
-          </div>
 
-          <div id="status-banner" class="banner" role="status" hidden></div>
+            <div class="panel-grid">
+              <section class="card stack" aria-labelledby="chart-title">
+                <div class="stack-sm">
+                  <h2 id="chart-title">Ventas del mes</h2>
+                  <p class="muted small" id="chart-caption"></p>
+                </div>
+                <div class="chart-box" id="month-chart"></div>
+                <p class="chart-legend small">
+                  <span class="legend legend-sales">Ventas por día</span>
+                  <span class="legend legend-goal" id="chart-goal-legend" hidden
+                    >Ritmo para tu meta</span
+                  >
+                </p>
+              </section>
 
-          <div class="layout-caja">
-            <section class="card stack sticky" aria-labelledby="register-title">
-              <h2 id="register-title">Nueva venta</h2>
+              <section class="card stack" aria-labelledby="money-title">
+                <h2 id="money-title">A dónde fue tu dinero este mes</h2>
+                <div class="stacked-bar" id="month-bar" aria-hidden="true"></div>
+                <ul class="split" id="month-split"></ul>
+              </section>
+
+              <section class="card stack" aria-labelledby="cap-title">
+                <div class="row between">
+                  <h2 id="cap-title">Límite mensual</h2>
+                  <span class="muted small" id="monthly-cap"></span>
+                </div>
+                <p>
+                  <span class="amount-lg" id="spent-month">—</span>
+                  <span class="muted small">descontado este mes</span>
+                </p>
+                <div class="progress is-gold"><span id="cap-bar"></span></div>
+                <p class="hint">
+                  Nunca sale más de esto en un mes; se renueva el día 1. Lo
+                  cambias en <a href="#ajustes">Ajustes</a>.
+                </p>
+              </section>
+
+              <section class="card stack" aria-labelledby="sales-title">
+                <h2 id="sales-title">Últimas ventas</h2>
+                <ul class="list" id="sales"></ul>
+                <p class="muted small" id="no-sales">Todavía no hay ventas.</p>
+              </section>
+            </div>
+          </section>
+
+          <!-- Vender ------------------------------------------------------------------------ -->
+          <section class="view stack" data-view="vender" aria-labelledby="register-title" hidden>
+            <section class="card stack sell-card">
+              <h1 class="h1-sm" id="register-title">Nueva venta</h1>
 
               <form id="sale-form" class="stack">
                 <label class="field">
@@ -86,6 +182,7 @@
                     placeholder="10.000"
                   />
                 </label>
+                <div class="chips" id="quick-amounts" aria-label="Montos rápidos"></div>
                 <label class="field">
                   <span>Descripción (opcional)</span>
                   <input
@@ -95,17 +192,8 @@
                     placeholder="Arroz, huevos y gaseosa"
                   />
                 </label>
-                <p
-                  id="sale-form-error"
-                  class="banner banner-bad"
-                  role="alert"
-                  hidden
-                ></p>
-                <button
-                  class="btn btn-primary btn-lg btn-block"
-                  type="submit"
-                  id="sale-submit"
-                >
+                <p id="sale-form-error" class="banner banner-bad" role="alert" hidden></p>
+                <button class="btn btn-primary btn-lg btn-block" type="submit" id="sale-submit">
                   Cobrar
                 </button>
                 <p class="hint" id="sale-disabled-hint" hidden>
@@ -123,50 +211,61 @@
                   <span id="sale-status"></span>
                 </div>
                 <p class="muted small" id="sale-description-view" hidden></p>
-                <ol
-                  class="steps"
-                  id="sale-steps"
-                  aria-label="Progreso de la venta"
-                ></ol>
+                <ol class="steps" id="sale-steps" aria-label="Progreso de la venta"></ol>
 
                 <div id="qr-block" class="stack">
-                  <div class="qr-box">
-                    <div id="qr" aria-hidden="true"></div>
-                    <p class="small" id="qr-caption">
-                      Escanea con la cámara del celular para pagar
-                    </p>
-                  </div>
-                  <p class="hint">
-                    ¿Paga con otra billetera Open Payments?
-                    <a id="checkout-link" href="#" target="_blank" rel="noopener"
-                      >Ábrele el pago en MiPlante</a
-                    >.
-                  </p>
-                  <div class="copy-row">
-                    <input id="pay-url" readonly aria-label="Enlace de pago" />
-                    <button
-                      class="btn btn-secondary"
-                      id="copy-url"
-                      type="button"
-                    >
-                      Copiar
+                  <div class="segmented" role="tablist" aria-label="Dónde mostrar el cobro">
+                    <button type="button" role="tab" data-show="phone" id="show-phone">
+                      En mi celular
+                    </button>
+                    <button type="button" role="tab" data-show="here" id="show-here">
+                      En esta pantalla
                     </button>
                   </div>
+
+                  <div id="phone-block" class="stack">
+                    <div class="qr-box">
+                      <div id="phone-qr" aria-hidden="true"></div>
+                      <p class="small center">
+                        Escanéalo con <strong>tu</strong> celular: abre la
+                        pantalla de cobro para mostrársela a tu cliente.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div id="here-block" class="stack" hidden>
+                    <div class="qr-box">
+                      <div id="qr" aria-hidden="true"></div>
+                      <p class="small center" id="qr-caption">
+                        Que tu cliente lo escanee y confirme en su billetera
+                      </p>
+                    </div>
+                    <div class="copy-row">
+                      <input id="pay-url" readonly aria-label="Enlace de pago" />
+                      <button class="btn btn-secondary" id="copy-url" type="button">
+                        Copiar
+                      </button>
+                    </div>
+                    <p class="hint">
+                      ¿Paga con otra billetera Open Payments?
+                      <a id="checkout-link" href="#" target="_blank" rel="noopener"
+                        >Ábrele el pago en MiPlante</a
+                      >.
+                    </p>
+                  </div>
+
+                  <a
+                    class="btn btn-primary btn-block"
+                    id="open-cobro"
+                    href="#"
+                    target="_blank"
+                    rel="noopener"
+                    >Abrir pantalla de cobro</a
+                  >
                 </div>
 
-                <p
-                  id="sale-partial"
-                  class="banner banner-wait"
-                  role="status"
-                  hidden
-                ></p>
-
-                <p
-                  id="sale-error"
-                  class="banner banner-bad"
-                  role="alert"
-                  hidden
-                ></p>
+                <p id="sale-partial" class="banner banner-wait" role="status" hidden></p>
+                <p id="sale-error" class="banner banner-bad" role="alert" hidden></p>
 
                 <div id="split-block" class="stack-sm" hidden>
                   <h3>Así se repartió esta venta</h3>
@@ -174,148 +273,153 @@
                   <p class="hint" id="settlement-note" hidden></p>
                 </div>
 
-                <button
-                  class="btn btn-secondary btn-block"
-                  id="new-sale"
-                  type="button"
-                >
+                <button class="btn btn-secondary btn-block" id="new-sale" type="button">
                   Nueva venta
                 </button>
               </div>
             </section>
+          </section>
 
-            <div class="stack">
-              <section class="card stack" aria-labelledby="today-title">
-                <div class="row between">
-                  <h2 id="today-title">Hoy</h2>
-                  <span class="muted small" id="today-date"></span>
-                </div>
-                <div class="stats">
-                  <div class="stat">
-                    <p class="stat-label">Ventas</p>
-                    <p class="stat-value" id="today-count">0</p>
-                  </div>
-                  <div class="stat">
-                    <p class="stat-label">Vendido</p>
-                    <p class="stat-value" id="today-gross">—</p>
-                  </div>
-                  <div class="stat">
-                    <p class="stat-label">Te quedaste</p>
-                    <p class="stat-value" id="today-kept">—</p>
-                  </div>
-                  <div class="stat">
-                    <p class="stat-label">Repartido</p>
-                    <p class="stat-value" id="today-allocated">—</p>
-                  </div>
-                </div>
-                <ul class="list" id="today-by-rule"></ul>
-              </section>
+          <!-- Metas ------------------------------------------------------------------------- -->
+          <section class="view stack" data-view="metas" aria-labelledby="metas-title" hidden>
+            <div class="stack-sm">
+              <h1 class="h1-sm" id="metas-title">Tus metas</h1>
+              <p class="muted" id="metas-caption"></p>
+            </div>
+            <div class="goals" id="goals"></div>
+            <p class="hint">
+              Las proyecciones usan tu ritmo de este mes. Cuando una obligación
+              completa su cuota, su parte de cada venta vuelve a ser ganancia
+              tuya hasta el próximo mes.
+            </p>
+          </section>
 
-              <section class="card stack" aria-labelledby="cap-title">
-                <div class="row between">
-                  <h2 id="cap-title">Límite mensual</h2>
-                  <span class="muted small" id="monthly-cap"></span>
+          <!-- Repartos ---------------------------------------------------------------------- -->
+          <section class="view stack" data-view="repartos" aria-labelledby="rules-title" hidden>
+            <section class="card stack">
+              <div class="row between">
+                <h1 class="h1-sm" id="rules-title">Repartos</h1>
+                <button type="button" class="btn btn-secondary" id="edit-rules">
+                  Editar repartos
+                </button>
+              </div>
+              <ul class="list" id="rules"></ul>
+
+              <form id="rules-form" class="stack" hidden novalidate>
+                <p class="muted small">
+                  Cambia los porcentajes, las cuotas del mes, las metas de
+                  ahorro o las billeteras, o agrega otras. Aplica desde la
+                  próxima venta y no necesitas volver a autorizar: el límite
+                  mensual sigue igual.
+                </p>
+                <div id="rules-editor" class="stack"></div>
+                <button type="button" class="btn btn-secondary" id="add-rule">
+                  + Agregar billetera
+                </button>
+
+                <div class="stack-sm" aria-live="polite">
+                  <h3>Así se reparte una venta</h3>
+                  <p id="preview-sentence" class="small"></p>
+                  <div class="stacked-bar" id="preview-bar" aria-hidden="true"></div>
+                  <ul class="split" id="preview-list"></ul>
+                  <p id="preview-warning" class="banner banner-bad" hidden></p>
+                  <p id="preview-cap" class="hint" hidden></p>
                 </div>
+
+                <p id="rules-error" class="banner banner-bad" role="alert" hidden></p>
+                <div class="row">
+                  <button type="submit" class="btn btn-primary" id="save-rules">
+                    Guardar repartos
+                  </button>
+                  <button type="button" class="btn btn-ghost" id="cancel-rules">
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+              <p id="rules-saved" class="banner banner-ok" role="status" hidden></p>
+            </section>
+          </section>
+
+          <!-- Ajustes ----------------------------------------------------------------------- -->
+          <section class="view stack" data-view="ajustes" aria-labelledby="ajustes-title" hidden>
+            <h1 class="h1-sm" id="ajustes-title">Ajustes</h1>
+            <div class="panel-grid">
+              <form class="card stack" id="shop-form" novalidate>
+                <h2>Tu tienda</h2>
+                <label class="field">
+                  <span>Nombre del negocio</span>
+                  <input id="shop-name" maxlength="80" autocomplete="organization" />
+                </label>
+                <div class="field">
+                  <span>Billetera del negocio</span>
+                  <p class="mono" id="shop-wallet"></p>
+                </div>
+                <p id="shop-message" class="banner" role="status" hidden></p>
+                <button type="submit" class="btn btn-primary" id="save-shop">
+                  Guardar nombre
+                </button>
+              </form>
+
+              <form class="card stack" id="goal-form" novalidate>
+                <h2>Meta de ventas del mes</h2>
+                <label class="field">
+                  <span>¿Cuánto quieres vender al mes?</span>
+                  <input
+                    id="sales-goal"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="Ej: 3.000.000"
+                  />
+                  <small class="hint">Opcional. Solo es una meta: no cambia cómo se reparte.</small>
+                </label>
+                <p id="goal-message" class="banner" role="status" hidden></p>
+                <div class="row">
+                  <button type="submit" class="btn btn-primary" id="save-goal">
+                    Guardar meta
+                  </button>
+                  <button type="button" class="btn btn-ghost" id="clear-goal">
+                    Quitar meta
+                  </button>
+                </div>
+              </form>
+
+              <form class="card stack" id="cap-form" novalidate>
+                <h2>Límite mensual</h2>
                 <p>
-                  <span class="amount-lg" id="spent-month">—</span>
-                  <span class="muted small">descontado este mes</span>
+                  Hoy: <strong id="cap-current"></strong>
+                  <span class="muted small" id="cap-quotas"></span>
                 </p>
-                <div class="progress is-gold"><span id="cap-bar"></span></div>
+                <p id="cap-pending" class="banner banner-wait" role="status" hidden></p>
+                <label class="field">
+                  <span>Nuevo límite mensual</span>
+                  <input id="cap-new" inputmode="numeric" autocomplete="off" />
+                </label>
                 <p class="hint">
-                  Nunca sale más de esto en un mes; se renueva el día 1. Lo
-                  aprobaste en tu billetera y lo puedes cancelar cuando quieras.
+                  Cambiarlo pide una autorización nueva en tu billetera. Tu
+                  límite actual sigue funcionando hasta que la apruebes.
                 </p>
-              </section>
+                <p id="cap-message" class="banner" role="status" hidden></p>
+                <button type="submit" class="btn btn-primary" id="save-cap">
+                  Cambiar en mi billetera →
+                </button>
+              </form>
 
-              <section class="card stack" aria-labelledby="rules-title">
-                <div class="row between">
-                  <h2 id="rules-title">Lo que se paga solo</h2>
-                  <button
-                    type="button"
-                    class="btn btn-secondary"
-                    id="edit-rules"
-                  >
-                    Editar repartos
-                  </button>
-                </div>
-                <ul class="list" id="rules"></ul>
-
-                <form id="rules-form" class="stack" hidden novalidate>
-                  <p class="muted small">
-                    Cambia los porcentajes, las cuotas del mes, las billeteras o
-                    agrega otras. Aplica desde la próxima venta y no necesitas
-                    volver a autorizar: el límite mensual sigue igual.
-                  </p>
-                  <div id="rules-editor" class="stack"></div>
-                  <button
-                    type="button"
-                    class="btn btn-secondary"
-                    id="add-rule"
-                  >
-                    + Agregar billetera
-                  </button>
-
-                  <div class="stack-sm" aria-live="polite">
-                    <h3>Así se reparte una venta</h3>
-                    <p id="preview-sentence" class="small"></p>
-                    <div
-                      class="stacked-bar"
-                      id="preview-bar"
-                      aria-hidden="true"
-                    ></div>
-                    <ul class="split" id="preview-list"></ul>
-                    <p id="preview-warning" class="banner banner-bad" hidden></p>
-                    <p id="preview-cap" class="hint" hidden></p>
-                  </div>
-
-                  <p
-                    id="rules-error"
-                    class="banner banner-bad"
-                    role="alert"
-                    hidden
-                  ></p>
-                  <div class="row">
-                    <button
-                      type="submit"
-                      class="btn btn-primary"
-                      id="save-rules"
-                    >
-                      Guardar repartos
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-ghost"
-                      id="cancel-rules"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </form>
-                <p id="rules-saved" class="banner banner-ok" role="status" hidden></p>
-              </section>
-
-              <section class="card stack" aria-labelledby="history-title">
-                <div class="stack-sm">
-                  <h2 id="history-title">Pasaporte de ingresos</h2>
-                  <p class="muted small">
-                    Tus ventas de los últimos 7 días, listas para mostrar a un
-                    banco o a un arrendador.
-                  </p>
-                </div>
-                <ul class="bars" id="history"></ul>
-              </section>
-
-              <section class="card stack" aria-labelledby="sales-title">
-                <h2 id="sales-title">Últimas ventas</h2>
-                <ul class="list" id="sales"></ul>
-                <p class="muted small" id="no-sales">Todavía no hay ventas.</p>
+              <section class="card stack">
+                <h2>Tu cuenta</h2>
+                <p>
+                  <strong id="account-name"></strong><br />
+                  <span class="muted" id="account-email"></span>
+                </p>
+                <button type="button" class="btn btn-secondary" id="logout">
+                  Cerrar sesión
+                </button>
               </section>
             </div>
-          </div>
+          </section>
         </div>
       </main>
 
-      <footer class="site-footer">
+      <footer class="site-footer panel-footer">
         <span>Pagos con Open Payments sobre la red Interledger.</span>
         <a href="/sandbox">Sandbox de Open Payments</a>
       </footer>
@@ -323,15 +427,10 @@
 
     <template id="rule-template">
       <fieldset class="rule-row">
-        <legend class="sr-only">Regla de reparto</legend>
+        <legend class="sr-only">Billetera del reparto</legend>
         <label class="field">
           <span>Nombre</span>
-          <input
-            data-field="label"
-            required
-            maxlength="60"
-            placeholder="Microcrédito"
-          />
+          <input data-field="label" required maxlength="60" placeholder="Microcrédito" />
         </label>
         <label class="field">
           <span>Categoría</span>
@@ -364,24 +463,18 @@
         </label>
         <label class="field debt-only">
           <span>Cuota del mes</span>
-          <input
-            data-field="monthlyQuota"
-            inputmode="decimal"
-            autocomplete="off"
-            placeholder="200.000"
-          />
+          <input data-field="monthlyQuota" inputmode="decimal" autocomplete="off" placeholder="200.000" />
         </label>
         <label class="field debt-only">
           <span>Deuda total (opcional)</span>
-          <input
-            data-field="outstanding"
-            inputmode="decimal"
-            autocomplete="off"
-            placeholder="300.000"
-          />
+          <input data-field="outstanding" inputmode="decimal" autocomplete="off" placeholder="300.000" />
+        </label>
+        <label class="field savings-only">
+          <span>Meta de ahorro (opcional)</span>
+          <input data-field="savingsGoal" inputmode="decimal" autocomplete="off" placeholder="1.000.000" />
         </label>
         <label class="field destination-field">
-          <span>Wallet de destino</span>
+          <span>Billetera de destino</span>
           <input
             data-field="destination"
             required

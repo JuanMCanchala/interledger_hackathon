@@ -39,6 +39,7 @@ export function createRulesEditor({
     field(row, "category").value = values.category ?? "";
     field(row, "kind").value = values.kind ?? "debt";
     field(row, "monthlyQuota").value = values.monthlyQuota ?? "";
+    field(row, "savingsGoal").value = values.savingsGoal ?? "";
     field(row, "sharePercent").value = values.sharePercent ?? "";
     field(row, "outstanding").value = values.outstanding ?? "";
     field(row, "destination").value = values.destination ?? "";
@@ -64,11 +65,17 @@ export function createRulesEditor({
     box.replaceChildren();
   }
 
-  /** The monthly quota (required) and the balance (optional) only make sense for obligations. */
+  /**
+   * The monthly quota (required) and the balance (optional) only make sense for obligations, and
+   * the savings goal (optional) only for savings.
+   */
   function syncKind(row) {
     const isDebt = field(row, "kind").value === "debt";
     for (const debtField of row.querySelectorAll(".debt-only")) {
       debtField.hidden = !isDebt;
+    }
+    for (const savingsField of row.querySelectorAll(".savings-only")) {
+      savingsField.hidden = isDebt;
     }
     field(row, "monthlyQuota").required = isDebt;
   }
@@ -94,6 +101,10 @@ export function createRulesEditor({
         outstanding:
           kind === "debt"
             ? normalizeDecimal(field(row, "outstanding").value)
+            : "",
+        savingsGoal:
+          kind === "savings"
+            ? normalizeDecimal(field(row, "savingsGoal").value)
             : "",
       };
     });
@@ -229,6 +240,9 @@ export function createRulesEditor({
       };
       if (rule.id) body.id = rule.id;
       if (rule.kind === "debt") body.monthlyQuota = rule.monthlyQuota;
+      if (rule.kind === "savings" && rule.savingsGoal) {
+        body.savingsGoal = rule.savingsGoal;
+      }
       if (rule.kind === "debt" && !untouched && rule.outstanding) {
         body.outstanding = rule.outstanding;
       }

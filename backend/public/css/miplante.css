@@ -1304,3 +1304,327 @@ fieldset {
 .cobro-done {
   padding: 8px 0;
 }
+
+/* Shopkeeper panel (/merchant) --------------------------------------------------------------- */
+
+.panel-header .brand {
+  min-width: 0;
+}
+
+.panel-shop {
+  display: grid;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.panel-shop > span,
+.panel-shop > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-shop > small {
+  font-weight: 400;
+  font-size: 0.75rem;
+}
+
+/* Phone first: the tabs are a bar at the bottom, within reach of the thumb. */
+.panel-nav {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 6px 6px max(6px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--monte-hondo);
+}
+
+.panel-nav a {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 6px 2px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.panel-nav svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.panel-nav a.is-active {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.panel-nav a.is-primary.is-active,
+.panel-nav a.is-primary:hover {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+.panel-main {
+  padding-bottom: 96px;
+}
+
+.panel-footer {
+  padding-bottom: 88px;
+}
+
+.panel-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  /* On a computer the tabs sit under the header and the cards go in two columns. */
+  .panel-nav {
+    position: static;
+    grid-template-columns: repeat(5, auto);
+    justify-content: start;
+    gap: 6px;
+    margin-bottom: 16px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .panel-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.95rem;
+  }
+
+  .panel-nav svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .panel-main,
+  .panel-footer {
+    padding-bottom: 48px;
+  }
+
+  .panel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sell-card {
+    max-width: 560px;
+  }
+}
+
+.hero-card .amount-xl {
+  display: inline;
+}
+
+/* Charts */
+
+.chart-box {
+  width: 100%;
+  min-height: 120px;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart-bar {
+  fill: color-mix(in srgb, var(--brand) 55%, var(--surface-2));
+}
+
+.chart-bar.is-today {
+  fill: var(--brand);
+}
+
+.chart-goal {
+  stroke: var(--gold);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.chart-label {
+  fill: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend::before {
+  content: "";
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--brand);
+}
+
+.legend-goal::before {
+  height: 0;
+  border-top: 2px dashed var(--gold);
+  background: none;
+}
+
+/* Goals */
+
+.goals {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 700px) {
+  .goals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1000px) {
+  .goals {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.goal-card {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.goal-card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.goal-card .eyebrow {
+  margin: 0;
+}
+
+.goal-ring {
+  width: 92px;
+}
+
+.ring {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ring-track,
+.ring-fill {
+  fill: none;
+  stroke-width: 10;
+}
+
+.ring-track {
+  stroke: var(--surface-2);
+}
+
+.ring-fill {
+  stroke: var(--brand);
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.6s ease;
+}
+
+.ring.is-gold .ring-fill {
+  stroke: var(--gold);
+}
+
+.ring.is-info .ring-fill {
+  stroke: var(--info);
+}
+
+.ring-text {
+  fill: var(--text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+/* Selling */
+
+.chip-button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip-button:hover {
+  border-color: var(--brand);
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.segmented button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.segmented button[aria-selected="true"] {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+@media (min-width: 760px) {
+  .rule-row .savings-only {
+    grid-column: span 2;
+  }
+}
