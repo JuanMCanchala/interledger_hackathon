@@ -56,6 +56,7 @@ import { BarChart, BarEntry } from '../../shared/ui/bar-chart';
 import { ProgressRing } from '../../shared/ui/progress-ring';
 import { QrCode } from '../../shared/ui/qr-code';
 import { SplitList } from '../../shared/ui/split-list';
+import { InstallApp } from '../../shared/ui/install-app';
 
 type TabName = 'inicio' | 'vender' | 'efectivo' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
 const TABS: readonly TabName[] = ['inicio', 'vender', 'efectivo', 'metas', 'repartos', 'ajustes', 'avisos'];
@@ -100,6 +101,7 @@ let nextRuleDraftKey = 1;
     SplitList,
     Logo,
     Gloria,
+    InstallApp,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {

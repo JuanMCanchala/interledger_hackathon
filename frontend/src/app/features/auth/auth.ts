@@ -24,6 +24,7 @@ import { SiteFooter, SiteHeader } from '../../shared/ui/site-layout';
   template: `
     <div class="container">
       <app-site-header
+        [showInstall]="true"
         [badge]="registering() ? 'Registro rápido' : 'Acceso tendero'"
         [actionLabel]="registering() ? 'Ya tengo cuenta' : 'Crear cuenta'"
         [actionLink]="registering() ? '/login' : '/register'"

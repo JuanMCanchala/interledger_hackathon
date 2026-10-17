@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { Params, RouterLink } from '@angular/router';
 import { Logo } from '../brand/logo';
+import { InstallApp } from './install-app';
 
 @Component({
   selector: 'app-site-header',
-  imports: [RouterLink, Logo],
+  imports: [RouterLink, Logo, InstallApp],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="site-header">
@@ -19,21 +20,27 @@ import { Logo } from '../brand/logo';
         }
       </div>
 
-      @if (actionLabel() && actionLink()) {
-        <nav class="site-nav" aria-label="Navegación rápida">
-          <a
-            class="btn btn-lima btn-sm"
-            [routerLink]="actionLink()!"
-            [queryParams]="actionQueryParams()"
-          >
-            {{ actionLabel() }}
-          </a>
+      @if ((actionLabel() && actionLink()) || showInstall()) {
+        <nav class="site-nav header-nav" aria-label="Navegación rápida">
+          @if (showInstall()) {
+            <app-install-app />
+          }
+          @if (actionLabel() && actionLink()) {
+            <a
+              class="btn btn-lima btn-sm"
+              [routerLink]="actionLink()!"
+              [queryParams]="actionQueryParams()"
+            >
+              {{ actionLabel() }}
+            </a>
+          }
         </nav>
       }
     </header>
   `,
 })
 export class SiteHeader {
+  readonly showInstall = input<boolean>(false);
   readonly badge = input<string>('');
   readonly actionLabel = input<string>('');
   readonly actionLink = input<string>('');
