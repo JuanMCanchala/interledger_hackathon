@@ -53,8 +53,9 @@ export interface MerchantRecord {
   updatedAt: string;
 }
 
+/** `cancelled`: replaced by a newer sale before anyone started paying it; its QR takes no money. */
 export type SaleStatus =
-  "open" | "awaiting-consent" | "processing" | "paid" | "failed";
+  "open" | "awaiting-consent" | "processing" | "paid" | "failed" | "cancelled";
 
 /** `reserved`: a debt's share set aside in the merchant's wallet until its due day (ADR 0014). */
 export type SettlementItemStatus =

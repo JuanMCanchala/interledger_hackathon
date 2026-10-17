@@ -314,6 +314,39 @@ export class PaymentFlows {
     return toPublicPayment(await this.requirePayment(id));
   }
 
+  /**
+   * Closes a payment request nobody has started paying, so its QR takes no more money (the shop
+   * made a newer sale). Returns false, and closes nothing, when money already arrived or the payer
+   * is on it. If money lands while it closes, the request goes on as a payment being received.
+   */
+  async closePaymentRequest(id: string): Promise<boolean> {
+    await this.refreshPayment(id);
+    const record = await this.requirePayment(id);
+    const untouched =
+      record.kind === "payment-request" &&
+      record.status === "awaiting-consent" &&
+      BigInt(record.receivedAmount?.value ?? "0") === 0n;
+    if (!untouched) return false;
+    const receiver = await this.resolve(record.receiver);
+    const closed = await this.ops.completeIncomingPayment(
+      record.incomingPaymentUrl,
+      receiver,
+      record.incomingToken,
+    );
+    const received = closed.receivedAmount;
+    if (BigInt(received.value) > 0n) {
+      await this.updatePayment(record, { status: "processing", receivedAmount: received });
+      return false;
+    }
+    // Failed, not completed: a closed request with nothing received must never read as paid.
+    await this.updatePayment(record, {
+      status: "failed",
+      error: "Se reemplazó por un cobro nuevo",
+      receivedAmount: received,
+    });
+    return true;
+  }
+
   /** The mandate that paid a payment, if one did. The public view never carries it. */
   async paymentMandate(id: string): Promise<string | undefined> {
     return (await this.requirePayment(id)).mandateId;

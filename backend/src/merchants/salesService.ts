@@ -105,12 +105,53 @@ export class SalesService {
       updatedAt: timestamp,
     });
     const view = await this.view(sale);
+    // The shop charges one sale at a time: the older ones nobody started paying are closed, in the
+    // background so the new QR shows at once.
+    void this.closeOlderSales(merchantId, sale.id);
     return { sale: view, payUrl: view.payUrl, checkoutUrl: view.checkoutUrl };
+  }
+
+  /**
+   * Closes the shop's open sales other than `keepId` that nobody started paying: their payment
+   * requests stop taking money and they read "cancelled". A sale the customer is authorizing or
+   * paying, or that already received part of its money, is left as it is. Returns how many closed.
+   */
+  async closeOlderSales(merchantId: string, keepId: string): Promise<number> {
+    const open = (await this.store.listSales({ merchantId })).filter(
+      (s) => s.id !== keepId && s.status === "open" && s.paymentId,
+    );
+    const closed = await Promise.all(
+      open.map(async (old) => {
+        try {
+          if (!(await this.flows.closePaymentRequest(old.paymentId!))) {
+            // Its customer is paying: the sale shows that now instead of waiting for a poll.
+            await this.refresh(old.id);
+            return false;
+          }
+          return Boolean(
+            await this.store.transitionSale(
+              old.id,
+              ["open"],
+              { status: "cancelled", error: "Se reemplazó por un cobro nuevo" },
+              this.timestamp(),
+            ),
+          );
+        } catch (error) {
+          // It stays open, as before; the next sale tries again.
+          console.warn(`[sales] no se pudo cerrar la venta ${old.id}: ${describeError(error)}`);
+          return false;
+        }
+      }),
+    );
+    return closed.filter(Boolean).length;
   }
 
   /** The customer enters their wallet; returns the URL where they approve the payment. */
   async pay(saleId: string, input: { customerWallet: string }) {
     const sale = await this.require(saleId);
+    if (sale.status === "cancelled") {
+      throw new AppError("Este cobro se reemplazó por uno nuevo. Pide al negocio el código vigente.", 409);
+    }
     if (sale.status !== "open" && sale.status !== "failed") {
       throw new AppError("Esta venta ya se está pagando o ya fue pagada", 409);
     }
@@ -397,7 +438,7 @@ export class SalesService {
       createdSince: new Date(now - DISPLAY_SALE_MS).toISOString(),
     });
     let sale: ReturnType<typeof toPublicSale> | null = null;
-    if (latest && latest.status !== "failed") {
+    if (latest && latest.status !== "failed" && latest.status !== "cancelled") {
       const view = await this.refresh(latest.id);
       const paidAgo = view.paidAt ? now - Date.parse(view.paidAt) : 0;
       if (view.status !== "failed" && !(view.status === "paid" && paidAgo > DISPLAY_PAID_MS)) {

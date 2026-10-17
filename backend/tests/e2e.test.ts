@@ -377,3 +377,41 @@ describe("counter display over HTTP", () => {
     expect((await call("GET", `/api/displays/${key}`)).body.sale).toBeNull();
   });
 });
+
+describe("one sale at a time", () => {
+  it("closes the older sales nobody started paying when a new one is made", async () => {
+    const { env, call, activeShop } = await start();
+    const { token, id } = await activeShop();
+    const sell = async (amount: string) => {
+      env.clock.now = new Date(env.clock.now.getTime() + 1000);
+      return (await call("POST", `/api/merchants/${id}/sales`, { amount }, token)).body.sale.id as string;
+    };
+    const incomingOf = async (saleId: string) =>
+      (await env.store.getPayment((await env.store.getSale(saleId))!.paymentId!))!.incomingPaymentUrl;
+
+    const forgotten = await sell("50000");
+    const halfPaid = await sell("30000");
+    env.deliver(await incomingOf(halfPaid), cop("1000000"));
+    const current = await sell("10000");
+    // createSale closes them in the background; waiting on the same work keeps the test exact.
+    await env.sales.closeOlderSales(id, current);
+
+    expect((await env.store.getSale(forgotten))!.status).toBe("cancelled");
+    expect(env.ops.completeIncomingPayment).toHaveBeenCalledWith(
+      await incomingOf(forgotten),
+      expect.anything(),
+      expect.anything(),
+    );
+    // A closed request with nothing received never reads as paid, however often it is polled.
+    const after = await call("GET", `/api/sales/${forgotten}`);
+    expect(after.body.status).toBe("cancelled");
+    expect((await call("POST", `/api/sales/${forgotten}/pay`, { customerWallet: "$ilp.interledger-test.dev/alice" })).status).toBe(409);
+
+    // Part of its money arrived: it is the customer's payment in progress, not a forgotten QR.
+    expect((await env.store.getSale(halfPaid))!.status).not.toBe("cancelled");
+    expect((await env.store.getSale(current))!.status).toBe("open");
+
+    const view = await call("GET", `/api/merchants/${id}`, undefined, token);
+    expect(view.body.sales.filter((s: { status: string }) => s.status === "open").map((s: { id: string }) => s.id)).toEqual([current]);
+  });
+});
