@@ -13,6 +13,7 @@ import type {
   StoredToken,
 } from "../openPayments/records.js";
 import type { Amount, Asset } from "../shared/money.js";
+import type { SessionRecord, UserRecord } from "../auth/types.js";
 import type { RuleUpdate, SalePaymentChanges, Store } from "./store.js";
 
 const merchantInclude = { rules: { orderBy: { position: "asc" } } } as const;
@@ -126,6 +127,7 @@ export class PrismaStore implements Store {
 
   async saveMerchant(record: MerchantRecord) {
     const data = {
+      ownerId: record.ownerId ?? null,
       name: record.name,
       wallet: record.wallet,
       assetCode: record.asset.assetCode,
@@ -338,6 +340,70 @@ export class PrismaStore implements Store {
     return count === 1;
   }
 
+  // Accounts ----------------------------------------------------------------------------------
+
+  async saveUser(record: UserRecord) {
+    const data = {
+      name: record.name,
+      email: record.email,
+      passwordHash: record.passwordHash,
+      createdAt: new Date(record.createdAt),
+    };
+    await this.prisma.user.upsert({
+      where: { id: record.id },
+      create: { id: record.id, ...data },
+      update: data,
+    });
+    return record;
+  }
+
+  async getUser(id: string) {
+    const row = await this.prisma.user.findUnique({ where: { id } });
+    return row ? toUser(row) : undefined;
+  }
+
+  async getUserByEmail(email: string) {
+    const row = await this.prisma.user.findUnique({ where: { email } });
+    return row ? toUser(row) : undefined;
+  }
+
+  async saveSession(record: SessionRecord) {
+    await this.prisma.session.create({
+      data: {
+        token: record.token,
+        userId: record.userId,
+        createdAt: new Date(record.createdAt),
+        expiresAt: new Date(record.expiresAt),
+      },
+    });
+    return record;
+  }
+
+  async getSession(token: string) {
+    const row = await this.prisma.session.findUnique({ where: { token } });
+    return row
+      ? {
+          token: row.token,
+          userId: row.userId,
+          createdAt: row.createdAt.toISOString(),
+          expiresAt: row.expiresAt.toISOString(),
+        }
+      : undefined;
+  }
+
+  async deleteSession(token: string) {
+    await this.prisma.session.deleteMany({ where: { token } });
+  }
+
+  async getMerchantByOwner(ownerId: string) {
+    const row = await this.prisma.merchant.findFirst({
+      where: { ownerId },
+      include: merchantInclude,
+      orderBy: { createdAt: "desc" },
+    });
+    return row ? toMerchant(row) : undefined;
+  }
+
   async close() {
     await this.prisma.$disconnect();
   }
@@ -345,7 +411,7 @@ export class PrismaStore implements Store {
   /** Empties every table. Only for the integration tests' throwaway database. */
   async truncateForTests() {
     await this.prisma.$executeRawUnsafe(
-      "TRUNCATE settlement_items, sales, rules, merchants, payments, mandates",
+      "TRUNCATE settlement_items, sales, rules, merchants, payments, mandates, sessions, users",
     );
   }
 }
@@ -401,6 +467,7 @@ function toMerchant(row: MerchantRow): MerchantRecord {
   const asset: Asset = { assetCode: row.assetCode, assetScale: row.assetScale };
   return {
     id: row.id,
+    ownerId: opt(row.ownerId),
     name: row.name,
     wallet: row.wallet,
     asset,
@@ -488,4 +555,20 @@ function json(value: object | undefined) {
 
 function fromJson<T>(value: Prisma.JsonValue): T | undefined {
   return value === null ? undefined : (value as unknown as T);
+}
+
+function toUser(row: {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  createdAt: Date;
+}): UserRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    passwordHash: row.passwordHash,
+    createdAt: row.createdAt.toISOString(),
+  };
 }

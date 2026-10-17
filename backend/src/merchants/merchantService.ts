@@ -63,7 +63,7 @@ export class MerchantService {
    * grant on the merchant's wallet, capped at `monthlyCap` per calendar month. Returns the wallet's
    * consent URL.
    */
-  async onboard(input: OnboardInput) {
+  async onboard(input: OnboardInput, ownerId?: string) {
     const wallet = await this.flows.describeWalletAddress(input.wallet);
     const asset = {
       assetCode: wallet.assetCode,
@@ -106,6 +106,7 @@ export class MerchantService {
     const timestamp = this.now().toISOString();
     const merchant = await this.store.saveMerchant({
       id,
+      ownerId,
       name: input.name,
       wallet: wallet.id,
       asset,
@@ -213,6 +214,21 @@ export class MerchantService {
       updatedAt: this.now().toISOString(),
     });
     return { merchant: await this.view(updated), redirectUrl };
+  }
+
+  /** The shop, only if `userId` registered it; anyone else gets a 404, as if it did not exist. */
+  async requireOwned(id: string, userId: string): Promise<MerchantRecord> {
+    const merchant = await this.require(id);
+    if (merchant.ownerId !== userId) {
+      throw new NotFoundError(`No existe el comercio ${id}`);
+    }
+    return merchant;
+  }
+
+  /** The shop the user registered, if any. */
+  async findByOwner(userId: string) {
+    const merchant = await this.store.getMerchantByOwner(userId);
+    return merchant ? this.view(merchant) : null;
   }
 
   async require(id: string): Promise<MerchantRecord> {

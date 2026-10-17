@@ -14,6 +14,8 @@ datasource db {
 
 model Merchant {
   id         String   @id @db.Uuid
+  /// The account that registered the shop.
+  ownerId    String?  @map("owner_id") @db.Uuid
   name       String
   wallet     String
   assetCode  String   @map("asset_code")
@@ -24,6 +26,7 @@ model Merchant {
   updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
 
   mandate Mandate @relation(fields: [mandateId], references: [id])
+  owner   User?   @relation(fields: [ownerId], references: [id])
   rules   Rule[]
   sales   Sale[]
 
@@ -159,4 +162,31 @@ model Payment {
 
   @@index([mandateId, createdAt(sort: Desc)])
   @@map("payments")
+}
+
+/// A shopkeeper's account. The password is stored only as a salted scrypt hash.
+model User {
+  id           String   @id @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @map("created_at") @db.Timestamptz(3)
+
+  merchants Merchant[]
+  sessions  Session[]
+
+  @@map("users")
+}
+
+/// A signed-in browser; the random token is sent as a Bearer token.
+model Session {
+  token     String   @id
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
 }

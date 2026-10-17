@@ -2,6 +2,7 @@ import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { AuthService } from "../src/auth/authService.js";
 import { createApp } from "../src/http/app.js";
 import { DashboardService } from "../src/merchants/dashboardService.js";
 import { MerchantService } from "../src/merchants/merchantService.js";
@@ -32,6 +33,7 @@ beforeAll(async () => {
     frontendUrl: FRONTEND_URL,
   });
   server = createApp({
+    auth: new AuthService(store),
     flows,
     merchants,
     sales,
@@ -47,12 +49,31 @@ afterAll(() => {
   server.close();
 });
 
-const postJson = (path: string, body: unknown) =>
+const postJson = (path: string, body: unknown, token?: string) =>
   fetch(`${baseUrl}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
+
+const getJson = (path: string, token?: string) =>
+  fetch(`${baseUrl}${path}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+
+let accounts = 0;
+/** Signs a new shopkeeper up and returns their session token. */
+async function signUp(): Promise<string> {
+  const res = await postJson("/api/auth/register", {
+    name: "Rosa",
+    email: `rosa${++accounts}@example.com`,
+    password: "contraseña-segura",
+  });
+  return (await res.json()).token;
+}
 
 describe("HTTP API", () => {
   it("validates the payment body", async () => {
@@ -153,14 +174,17 @@ describe("MiPlante API", () => {
   };
 
   it("onboards a merchant, sells and starts the customer's payment", async () => {
-    const onboarded = await postJson("/api/merchants", rosa);
+    const token = await signUp();
+    const onboarded = await postJson("/api/merchants", rosa, token);
     expect(onboarded.status).toBe(201);
     const { merchant, redirectUrl } = await onboarded.json();
     expect(redirectUrl).toBe("https://wallet.interledger-test.dev/consent/1");
 
-    const created = await postJson(`/api/merchants/${merchant.id}/sales`, {
-      amount: "10000",
-    });
+    const created = await postJson(
+      `/api/merchants/${merchant.id}/sales`,
+      { amount: "10000" },
+      token,
+    );
     expect(created.status).toBe(201);
     const { sale, payUrl, checkoutUrl } = await created.json();
     expect(payUrl).toMatch(/\/incoming-payments\//);
@@ -173,7 +197,7 @@ describe("MiPlante API", () => {
     expect((await paying.json()).sale.status).toBe("awaiting-consent");
 
     const dashboard = await (
-      await fetch(`${baseUrl}/api/merchants/${merchant.id}`)
+      await getJson(`/api/merchants/${merchant.id}`, token)
     ).json();
     expect(dashboard).toMatchObject({
       name: "Tienda Doña Rosa",
@@ -185,20 +209,27 @@ describe("MiPlante API", () => {
   });
 
   it("validates merchant rules at the edge", async () => {
-    const res = await postJson("/api/merchants", {
-      ...rosa,
-      rules: [{ ...rosa.rules[1], sharePercent: 80 }],
-    });
+    const res = await postJson(
+      "/api/merchants",
+      { ...rosa, rules: [{ ...rosa.rules[1], sharePercent: 80 }] },
+      await signUp(),
+    );
     expect(res.status).toBe(400);
     expect((await res.json()).details.join(" ")).toContain("sharePercent");
   });
 
   it("edits the split rules of a merchant", async () => {
-    const { merchant } = await (await postJson("/api/merchants", rosa)).json();
+    const token = await signUp();
+    const { merchant } = await (
+      await postJson("/api/merchants", rosa, token)
+    ).json();
     const put = (body: unknown) =>
       fetch(`${baseUrl}/api/merchants/${merchant.id}/rules`, {
         method: "PUT",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(body),
       });
     const [microcredit] = merchant.rules;
@@ -225,7 +256,8 @@ describe("MiPlante API", () => {
   });
 
   it("answers 404 for unknown merchants and sales", async () => {
-    expect((await fetch(`${baseUrl}/api/merchants/nope`)).status).toBe(404);
+    const token = await signUp();
+    expect((await getJson("/api/merchants/nope", token)).status).toBe(404);
     expect((await fetch(`${baseUrl}/api/sales/nope`)).status).toBe(404);
   });
 });
@@ -252,5 +284,90 @@ describe("clean page URLs", () => {
 
     expect(res.status).toBe(301);
     expect(res.headers.get("location")).toBe("/pay?sale=abc");
+  });
+});
+
+describe("shopkeeper accounts", () => {
+  it("signs up, signs in, knows who is signed in and signs out", async () => {
+    const registered = await postJson("/api/auth/register", {
+      name: "Don Pedro",
+      email: "Pedro@Example.com",
+      password: "una-clave-larga",
+    });
+    expect(registered.status).toBe(201);
+    const { user } = await registered.json();
+    expect(user).toEqual({
+      id: expect.any(String),
+      name: "Don Pedro",
+      email: "pedro@example.com",
+    });
+    // The hash never leaves the server.
+    expect(JSON.stringify(user)).not.toContain("scrypt");
+
+    const login = await postJson("/api/auth/login", {
+      email: "pedro@example.com",
+      password: "una-clave-larga",
+    });
+    const { token } = await login.json();
+    const me = await (await getJson("/api/auth/me", token)).json();
+    expect(me).toEqual({ user, merchant: null });
+
+    expect((await postJson("/api/auth/logout", {}, token)).status).toBe(204);
+    expect((await getJson("/api/auth/me", token)).status).toBe(401);
+  });
+
+  it("refuses a wrong password and a second account with the same email", async () => {
+    await postJson("/api/auth/register", {
+      name: "Lucía",
+      email: "lucia@example.com",
+      password: "una-clave-larga",
+    });
+
+    const wrong = await postJson("/api/auth/login", {
+      email: "lucia@example.com",
+      password: "otra-clave",
+    });
+    expect(wrong.status).toBe(401);
+    expect((await wrong.json()).error).toBe("Correo o contraseña incorrectos");
+
+    const twice = await postJson("/api/auth/register", {
+      name: "Lucía",
+      email: "LUCIA@example.com",
+      password: "una-clave-larga",
+    });
+    expect(twice.status).toBe(409);
+  });
+
+  it("asks for a session to set up a shop, and hides a shop from other accounts", async () => {
+    const rosa = {
+      name: "Tienda Doña Rosa",
+      wallet: "$ilp.interledger-test.dev/bob",
+      monthlyCap: "30000",
+      rules: [
+        {
+          label: "Fondo de emergencia",
+          category: "Ahorro",
+          kind: "savings",
+          destination: SAVINGS,
+          sharePercent: 5,
+        },
+      ],
+    };
+    expect((await postJson("/api/merchants", rosa)).status).toBe(401);
+
+    const owner = await signUp();
+    const { merchant } = await (
+      await postJson("/api/merchants", rosa, owner)
+    ).json();
+    const me = await (await getJson("/api/auth/me", owner)).json();
+    expect(me.merchant.id).toBe(merchant.id);
+
+    const stranger = await signUp();
+    expect((await getJson(`/api/merchants/${merchant.id}`, stranger)).status).toBe(404);
+    expect((await getJson(`/api/merchants/${merchant.id}`)).status).toBe(401);
+    expect(
+      (await postJson(`/api/merchants/${merchant.id}/sales`, { amount: "1000" }, stranger))
+        .status,
+    ).toBe(404);
   });
 });

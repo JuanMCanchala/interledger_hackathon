@@ -5,6 +5,7 @@ import type {
   SaleStatus,
 } from "../merchants/types.js";
 import type { Amount } from "../shared/money.js";
+import type { SessionRecord, UserRecord } from "../auth/types.js";
 import type { MandateRecord, PaymentRecord } from "../openPayments/records.js";
 
 /** Customer-payment fields of a sale; changing them never touches its settlement. */
@@ -85,6 +86,15 @@ export interface Store {
     updatedAt: string,
   ): Promise<void>;
 
+  saveUser(record: UserRecord): Promise<UserRecord>;
+  getUser(id: string): Promise<UserRecord | undefined>;
+  getUserByEmail(email: string): Promise<UserRecord | undefined>;
+  saveSession(record: SessionRecord): Promise<SessionRecord>;
+  getSession(token: string): Promise<SessionRecord | undefined>;
+  deleteSession(token: string): Promise<void>;
+  /** The shop a user registered (the newest one if there are several). */
+  getMerchantByOwner(ownerId: string): Promise<MerchantRecord | undefined>;
+
   close(): Promise<void>;
 }
 
@@ -94,6 +104,8 @@ export class MemoryStore implements Store {
   private readonly mandates = new Map<string, MandateRecord>();
   private readonly merchants = new Map<string, MerchantRecord>();
   private readonly sales = new Map<string, SaleRecord>();
+  private readonly users = new Map<string, UserRecord>();
+  private readonly sessions = new Map<string, SessionRecord>();
 
   async getPayment(id: string) {
     return copy(this.payments.get(id));
@@ -217,6 +229,39 @@ export class MemoryStore implements Store {
       };
     });
     merchant.updatedAt = updatedAt;
+  }
+
+  async saveUser(record: UserRecord) {
+    this.users.set(record.id, copy(record));
+    return record;
+  }
+
+  async getUser(id: string) {
+    return copy(this.users.get(id));
+  }
+
+  async getUserByEmail(email: string) {
+    return copy([...this.users.values()].find((u) => u.email === email));
+  }
+
+  async saveSession(record: SessionRecord) {
+    this.sessions.set(record.token, copy(record));
+    return record;
+  }
+
+  async getSession(token: string) {
+    return copy(this.sessions.get(token));
+  }
+
+  async deleteSession(token: string) {
+    this.sessions.delete(token);
+  }
+
+  async getMerchantByOwner(ownerId: string) {
+    const owned = [...this.merchants.values()]
+      .filter((m) => m.ownerId === ownerId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return copy(owned[0]);
   }
 
   async close() {}

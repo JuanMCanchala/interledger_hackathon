@@ -1,3 +1,4 @@
+import { AuthService } from "./auth/authService.js";
 import { loadConfig } from "./config.js";
 import { createApp } from "./http/app.js";
 import { DashboardService } from "./merchants/dashboardService.js";
@@ -30,6 +31,7 @@ try {
   });
   const frontendOrigin = new URL(config.frontendUrl).origin;
   const app = createApp({
+    auth: new AuthService(store),
     flows,
     merchants,
     sales,

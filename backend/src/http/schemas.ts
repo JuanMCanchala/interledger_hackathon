@@ -95,3 +95,18 @@ export const updateRules = z.object({
 export const createSale = z.object({ amount: decimalAmount, description });
 
 export const paySale = z.object({ customerWallet: walletAddress });
+
+// Accounts ---------------------------------------------------------------------------------------
+
+const email = z.string().trim().max(200).email("escribe un correo válido");
+
+export const register = z.object({
+  name: z.string().trim().min(1).max(80),
+  email,
+  password: z.string().min(8, "usa al menos 8 caracteres").max(200),
+});
+
+export const login = z.object({
+  email,
+  password: z.string().min(1).max(200),
+});

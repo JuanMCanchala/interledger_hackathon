@@ -10,6 +10,8 @@ export interface MerchantRule extends AllocationRule {
 
 export interface MerchantRecord {
   id: string;
+  /** The account that registered the shop; only it can open the till. */
+  ownerId?: string;
   name: string;
   /** Merchant's wallet address: sales are paid into it and splits are debited from it. */
   wallet: string;

@@ -6,6 +6,7 @@ import express, {
   type Response,
 } from "express";
 import { z } from "zod";
+import type { AuthService } from "../auth/authService.js";
 import { describeError } from "../openPayments/errors.js";
 import { AppError } from "../shared/errors.js";
 import type { DashboardService } from "../merchants/dashboardService.js";
@@ -15,6 +16,7 @@ import type { PaymentFlows } from "../openPayments/flows.js";
 import * as schemas from "./schemas.js";
 
 export interface AppOptions {
+  auth: AuthService;
   flows: PaymentFlows;
   merchants: MerchantService;
   sales: SalesService;
@@ -28,6 +30,7 @@ export interface AppOptions {
 const PUBLIC_DIR = fileURLToPath(new URL("../../public", import.meta.url));
 
 export function createApp({
+  auth,
   flows,
   merchants,
   sales,
@@ -130,35 +133,70 @@ export function createApp({
     res.json(await flows.revokeMandate(req.params.id));
   });
 
-  // MiPlante ---------------------------------------------------------------------------------------
+  // Accounts ---------------------------------------------------------------------------------------
+
+  app.post("/api/auth/register", async (req, res) => {
+    res.status(201).json(await auth.register(schemas.register.parse(req.body)));
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    res.json(await auth.login(schemas.login.parse(req.body)));
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    const token = bearerToken(req);
+    if (token) await auth.logout(token);
+    res.sendStatus(204);
+  });
+
+  /** The signed-in user and the shop they registered (null until they set it up). */
+  app.get("/api/auth/me", async (req, res) => {
+    const user = await auth.authenticate(bearerToken(req));
+    res.json({
+      user: auth.view(user),
+      merchant: await merchants.findByOwner(user.id),
+    });
+  });
+
+  // MiPlante: the shopkeeper's routes need their session; the customer's do not -----------------------
+
+  /** The shop in the URL, only for the account that registered it. */
+  const ownedMerchant = async (req: Request<{ id: string }>) => {
+    const user = await auth.authenticate(bearerToken(req));
+    return merchants.requireOwned(req.params.id, user.id);
+  };
 
   app.post("/api/merchants", async (req, res) => {
-    res
-      .status(201)
-      .json(await merchants.onboard(schemas.onboardMerchant.parse(req.body)));
-  });
-
-  app.get("/api/merchants/:id", async (req, res) => {
-    res.json(await dashboard.get(req.params.id));
-  });
-
-  app.put("/api/merchants/:id/rules", async (req, res) => {
-    const { rules } = schemas.updateRules.parse(req.body);
-    res.json(await merchants.updateRules(req.params.id, rules));
-  });
-
-  app.post("/api/merchants/:id/consent", async (req, res) => {
-    res.status(201).json(await merchants.renewConsent(req.params.id));
-  });
-
-  app.post("/api/merchants/:id/sales", async (req, res) => {
+    const user = await auth.authenticate(bearerToken(req));
     res
       .status(201)
       .json(
-        await sales.createSale(
-          req.params.id,
-          schemas.createSale.parse(req.body),
-        ),
+        await merchants.onboard(schemas.onboardMerchant.parse(req.body), user.id),
+      );
+  });
+
+  app.get("/api/merchants/:id", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res.json(await dashboard.get(merchant.id));
+  });
+
+  app.put("/api/merchants/:id/rules", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    const { rules } = schemas.updateRules.parse(req.body);
+    res.json(await merchants.updateRules(merchant.id, rules));
+  });
+
+  app.post("/api/merchants/:id/consent", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res.status(201).json(await merchants.renewConsent(merchant.id));
+  });
+
+  app.post("/api/merchants/:id/sales", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res
+      .status(201)
+      .json(
+        await sales.createSale(merchant.id, schemas.createSale.parse(req.body)),
       );
   });
 
@@ -256,11 +294,16 @@ function cors(origin: string) {
       "Access-Control-Allow-Methods",
       "GET,POST,PUT,DELETE,OPTIONS",
     );
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     if (req.method === "OPTIONS") {
       res.sendStatus(204);
       return;
     }
     next();
   };
+}
+
+/** The session token from `Authorization: Bearer <token>`. */
+function bearerToken(req: Request): string | undefined {
+  return req.headers.authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
 }
