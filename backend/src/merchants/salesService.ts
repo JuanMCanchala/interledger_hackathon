@@ -43,6 +43,8 @@ const QR_CLOCK_SKEW_MS = 60_000;
 export class SalesService {
   private readonly now: () => Date;
   private sweeping = false;
+  /** One look at a merchant's wallet at a time: the till, the dashboard and the sweeper share it. */
+  private readonly matching = new Map<string, Promise<void>>();
 
   constructor(
     private readonly flows: PaymentFlows,
@@ -117,7 +119,7 @@ export class SalesService {
   async refresh(saleId: string) {
     let sale = await this.require(saleId);
     if (sale.status === "open" && !sale.paymentId) {
-      await this.matchQrPayments(sale.merchantId);
+      await this.matchQrPaymentsOnce(sale.merchantId);
       sale = await this.require(saleId);
     }
     if (
@@ -173,66 +175,82 @@ export class SalesService {
       merchant.rules,
       await this.remainingCap(merchant),
     );
-    const items: SettlementItem[] = [];
-    for (const allocation of plan.allocations) {
-      const rule = merchant.rules.find((r) => r.id === allocation.ruleId)!;
-      const base = {
-        ruleId: rule.id,
-        label: rule.label,
-        kind: rule.kind,
-        destination: rule.destination,
-        amount: allocation.amount,
-        capped: allocation.capped,
-      };
-      if (allocation.amount.value === "0") {
-        items.push({ ...base, status: "skipped" });
-        continue;
-      }
-      try {
-        const payment = await this.flows.chargeMandate(merchant.mandateId, {
-          receiver: rule.destination,
-          amount: fromMinorUnits(
-            allocation.amount.value,
-            allocation.amount.assetScale,
-          ),
-          amountType: "send",
-          description: `MiPlante · ${rule.label}`,
+    // The rules are charged in parallel: their amounts already fit the remaining daily cap
+    // (and the wallet rejects any excess anyway), so the split takes one charge, not one per rule.
+    const items: (SettlementItem | undefined)[] = plan.allocations.map(
+      () => undefined,
+    );
+    // Progress is written as each charge finishes, one write at a time, so a crash never hides
+    // money that already moved.
+    let progress = Promise.resolve();
+    const persistProgress = () => {
+      progress = progress.then(async () => {
+        sale = await this.update(await this.require(saleId), {
+          settlement: {
+            ...sale.settlement,
+            status: "running",
+            items: items.filter((item) => item !== undefined),
+          },
         });
-        items.push({
-          ...base,
-          status: itemStatus(payment.status),
-          paymentId: payment.id,
-        });
-        await this.merchants.recordRepayment(
-          merchant.id,
-          rule.id,
-          allocation.amount,
-        );
-      } catch (error) {
-        // The debt balance stays untouched when the repayment could not be sent.
-        items.push({
-          ...base,
-          status: "failed",
-          error: describeError(error),
-        });
-      }
-      // Persist progress after every item, so a crash never hides money that already moved.
-      sale = await this.update(await this.require(saleId), {
-        settlement: {
-          ...sale.settlement,
-          status: "running",
-          items: [...items],
-        },
       });
-    }
+      return progress;
+    };
+    await Promise.all(
+      plan.allocations.map(async (allocation, index) => {
+        const rule = merchant.rules.find((r) => r.id === allocation.ruleId)!;
+        const base = {
+          ruleId: rule.id,
+          label: rule.label,
+          kind: rule.kind,
+          destination: rule.destination,
+          amount: allocation.amount,
+          capped: allocation.capped,
+        };
+        if (allocation.amount.value === "0") {
+          items[index] = { ...base, status: "skipped" };
+          return;
+        }
+        try {
+          const payment = await this.flows.chargeMandate(merchant.mandateId, {
+            receiver: rule.destination,
+            amount: fromMinorUnits(
+              allocation.amount.value,
+              allocation.amount.assetScale,
+            ),
+            amountType: "send",
+            description: `MiPlante · ${rule.label}`,
+          });
+          items[index] = {
+            ...base,
+            status: itemStatus(payment.status),
+            paymentId: payment.id,
+          };
+          await this.merchants.recordRepayment(
+            merchant.id,
+            rule.id,
+            allocation.amount,
+          );
+        } catch (error) {
+          // The debt balance stays untouched when the repayment could not be sent.
+          items[index] = {
+            ...base,
+            status: "failed",
+            error: describeError(error),
+          };
+        }
+        await persistProgress();
+      }),
+    );
+    await progress;
 
-    const sent = items
+    const done = items.filter((item) => item !== undefined);
+    const sent = done
       .filter((item) => item.status !== "failed" && item.status !== "skipped")
       .reduce((total, item) => total + BigInt(item.amount.value), 0n);
     await this.update(await this.require(saleId), {
       settlement: {
         status: "done",
-        items,
+        items: done,
         kept: {
           ...sale.amount,
           value: (BigInt(sale.amount.value) - sent).toString(),
@@ -278,6 +296,16 @@ export class SalesService {
    * was on screen, not one the merchant abandoned earlier. The claim is atomic and an incoming
    * payment pays one sale at most, so concurrent polls and the sweeper never pay a sale twice.
    */
+  private matchQrPaymentsOnce(merchantId: string): Promise<void> {
+    const running = this.matching.get(merchantId);
+    if (running) return running;
+    const match = this.matchQrPayments(merchantId).finally(() =>
+      this.matching.delete(merchantId),
+    );
+    this.matching.set(merchantId, match);
+    return match;
+  }
+
   private async matchQrPayments(merchantId: string): Promise<void> {
     const merchant = await this.merchants.require(merchantId);
     const mandate = await this.flows.findMandate(merchant.mandateId);

@@ -476,7 +476,8 @@ function startSalePolling() {
       return false;
     }
     return true;
-  }, 2000);
+    // The next check starts when this one ends, so a fast cadence never piles requests up.
+  }, 1000);
 }
 
 function renderSale(sale) {
