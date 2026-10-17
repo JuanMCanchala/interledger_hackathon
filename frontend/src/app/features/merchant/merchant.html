@@ -422,20 +422,42 @@
                   </div>
 
                   <form class="stack" (ngSubmit)="submitSale()">
-                    <label class="field">
-                      <span>Monto a cobrar</span>
-                      <input
-                        #saleAmountInput
-                        name="saleAmount"
-                        class="input-xl"
-                        required
-                        inputmode="numeric"
-                        autocomplete="off"
-                        placeholder="10.000"
-                        [ngModel]="saleAmountInputVal()"
-                        (ngModelChange)="onSaleAmountInput($event)"
-                      />
-                    </label>
+                    <div class="field">
+                      <label for="sale-amount">Monto a cobrar</label>
+                      <div class="dictate-row">
+                        <input
+                          #saleAmountInput
+                          id="sale-amount"
+                          name="saleAmount"
+                          class="input-xl"
+                          required
+                          inputmode="numeric"
+                          autocomplete="off"
+                          placeholder="10.000"
+                          [ngModel]="saleAmountInputVal()"
+                          (ngModelChange)="onSaleAmountInput($event); saleHint.set('')"
+                        />
+                        @if (voice.canListen) {
+                          <button
+                            type="button"
+                            class="dictate-button"
+                            [class.is-listening]="voice.listening()"
+                            [attr.aria-pressed]="voice.listening()"
+                            [attr.aria-label]="voice.listening() ? 'Dejar de escuchar' : 'Dictar el monto'"
+                            [title]="voice.listening() ? 'Te escucho…' : 'Dicta el monto: «veinte mil de arroz»'"
+                            (click)="dictateSale()"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <rect x="9" y="3" width="6" height="11" rx="3" />
+                              <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+                            </svg>
+                          </button>
+                        }
+                      </div>
+                    </div>
+                    @if (saleHint()) {
+                      <p class="banner banner-ok" role="status">{{ saleHint() }}</p>
+                    }
                     <div class="stack-sm">
                       <span class="small muted">Montos rápidos:</span>
                       <div class="chips" aria-label="Montos rápidos">
@@ -1256,6 +1278,32 @@
                 </button>
               </form>
 
+              <section class="card stack" aria-labelledby="voice-title">
+                <h2 id="voice-title">Voz y sonido</h2>
+                <p class="muted">
+                  Cuando entra un pago, la caja suena y dice el monto en voz alta, también si un
+                  pago a tus proveedores sale o falla. Todo pasa en este equipo.
+                </p>
+                @if (voice.canSpeak) {
+                  <label class="switch-row">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      [checked]="voice.announcements()"
+                      (change)="toggleAnnouncements()"
+                    />
+                    <span>Avisarme los pagos con voz</span>
+                  </label>
+                  <button type="button" class="btn btn-secondary" (click)="tryVoice()">
+                    Probar la voz
+                  </button>
+                } @else {
+                  <p class="banner banner-wait" role="status">
+                    Este navegador no puede hablar. Prueba con Chrome, Edge o Safari actualizados.
+                  </p>
+                }
+              </section>
+
               <form class="card stack" (ngSubmit)="saveSalesGoal()" novalidate>
                 <h2>Meta de ventas del mes</h2>
                 <label class="field">
@@ -1419,6 +1467,15 @@
       </div>
     }
   </main>
+
+  @if (merchant(); as m) {
+    <app-gloria
+      [merchantId]="merchantId"
+      [shopName]="m.name"
+      (prepareSale)="takeGloriaSale($event)"
+      (openSection)="takeGloriaSection($event)"
+    />
+  }
 
   <app-site-footer [panelFooter]="true" />
 </div>

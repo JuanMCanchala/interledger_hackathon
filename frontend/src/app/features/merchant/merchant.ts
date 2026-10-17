@@ -11,6 +11,8 @@ import { FormsModule } from '@angular/forms';
 import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../core/api.service';
+import { parseSpokenSale } from '../../core/spoken-amount';
+import { VoiceService } from '../../core/voice.service';
 import {
   MeResponse,
   MerchantDashboard,
@@ -48,6 +50,7 @@ import {
   walletName,
 } from '../../core/miplante.utils';
 import { Doodle } from '../../shared/brand/doodle';
+import { Gloria, GloriaSection } from '../gloria/gloria';
 import { Logo } from '../../shared/brand/logo';
 import { BarChart, BarEntry } from '../../shared/ui/bar-chart';
 import { ProgressRing } from '../../shared/ui/progress-ring';
@@ -114,6 +117,7 @@ let nextRuleDraftKey = 1;
     StepsIndicator,
     Logo,
     Doodle,
+    Gloria,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
@@ -128,6 +132,7 @@ export default class MerchantPage implements OnInit {
   private readonly api = inject(ApiService);
   private readonly title = inject(Title);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly voice = inject(VoiceService);
 
   protected readonly formatAmount = formatAmount;
   protected readonly formatMoney = formatMoney;
@@ -167,6 +172,8 @@ export default class MerchantPage implements OnInit {
       : 'phone',
   );
   protected readonly copyLabel = signal('Copiar');
+  /** What GlorIA or the dictation filled in, for the shopkeeper to check before charging. */
+  protected readonly saleHint = signal('');
 
   // Repartos & Payouts state
   protected readonly editingRules = signal(false);
@@ -196,10 +203,12 @@ export default class MerchantPage implements OnInit {
   protected readonly emergencyMessage = signal<BannerMessage | null>(null);
   protected readonly simulateMessage = signal<BannerMessage | null>(null);
 
-  private merchantId = '';
+  protected merchantId = '';
   private merchantPath = '';
   private resumed = false;
   private stopSalePoll: (() => void) | null = null;
+  /** Notices already known on this screen: only the ones arriving later are said out loud. */
+  private announcedNotices: Set<string> | null = null;
 
   protected readonly canSell = computed(() => this.merchant()?.status === 'active');
 
@@ -735,6 +744,7 @@ export default class MerchantPage implements OnInit {
       this.missingText.set('');
       this.merchant.set(m);
       this.title.setTitle(`${m.name} · MiPlante`);
+      this.announceNewNotices(m);
 
       if (this.tab() === 'avisos') {
         this.markNoticesSeen((m.notifications ?? []).map((n) => n.id));
@@ -891,6 +901,67 @@ export default class MerchantPage implements OnInit {
     this.saleFormError.set('');
   }
 
+  /** "Veinte mil de arroz" said to the till fills the amount and the note; charging is still a tap. */
+  protected async dictateSale(): Promise<void> {
+    if (this.voice.listening()) {
+      this.voice.stopListening();
+      return;
+    }
+    this.saleFormError.set('');
+    try {
+      const heard = await this.voice.listen();
+      const sale = parseSpokenSale(heard);
+      if (!sale) {
+        this.saleFormError.set(`Escuché "${heard}", pero no un monto. Intenta con "veinte mil pesos".`);
+        return;
+      }
+      this.fillSale(sale.amount, sale.description, `Escuché "${heard}". Revisa y genera el QR.`);
+    } catch (err: unknown) {
+      this.saleFormError.set((err as Error).message);
+    }
+  }
+
+  /** A sale GlorIA prepared: it lands in the form, never charged until the shopkeeper taps. */
+  protected takeGloriaSale(sale: { amount: number; description: string }): void {
+    if (this.currentSale()) this.resetSaleForm();
+    this.selectTab('vender');
+    this.fillSale(sale.amount, sale.description, 'GlorIA te dejó listo este cobro. Revísalo y genera el QR.');
+  }
+
+  protected takeGloriaSection(section: GloriaSection): void {
+    this.selectTab(section);
+  }
+
+  private fillSale(amount: number, description: string, hint: string): void {
+    this.saleAmountInputVal.set(amount.toLocaleString('es-CO'));
+    if (description) this.saleDescription = description.slice(0, 120);
+    this.saleFormError.set('');
+    this.saleHint.set(hint);
+  }
+
+  protected toggleAnnouncements(): void {
+    this.voice.setAnnouncements(!this.voice.announcements());
+  }
+
+  protected tryVoice(): void {
+    this.voice.chime();
+    this.voice.speak('¡Pago recibido! Veinte mil pesos. Así te aviso cada venta.');
+  }
+
+  private announceNewNotices(m: MerchantDashboard): void {
+    const notices = m.notifications ?? [];
+    if (!this.announcedNotices) {
+      this.announcedNotices = new Set(notices.map((n) => n.id));
+      return;
+    }
+    for (const notice of notices) {
+      if (this.announcedNotices.has(notice.id)) continue;
+      this.announcedNotices.add(notice.id);
+      if (notice.kind === 'payout-failed') this.voice.announce(notice.title, true);
+      if (notice.kind === 'payout-sent') this.voice.announce(notice.title, false);
+    }
+  }
+
   private isSaleFinal(sale: SaleView): boolean {
     if (sale.status === 'failed') return true;
     return (
@@ -942,6 +1013,7 @@ export default class MerchantPage implements OnInit {
     this.saleAmountInputVal.set('');
     this.saleDescription = '';
     this.saleFormError.set('');
+    this.saleHint.set('');
   }
 
   private stopSalePolling(): void {
@@ -967,6 +1039,9 @@ export default class MerchantPage implements OnInit {
         const nextPayUrl = sale.payUrl
           ? new URL(sale.payUrl, window.location.origin).toString()
           : nowCur.payUrl;
+        if (nowCur.sale.status !== 'paid' && sale.status === 'paid') {
+          this.voice.announcePayment(toNumber(sale.amount));
+        }
         this.currentSale.set({ sale, payUrl: nextPayUrl });
         if (this.isSaleFinal(sale)) {
           await this.loadMerchant();

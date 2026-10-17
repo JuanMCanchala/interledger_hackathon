@@ -531,10 +531,81 @@
   min-width: 0;
 }
 
-.field > span {
+.field > span,
+.field > label {
   color: var(--text);
   font-size: 0.9rem;
   font-weight: 700;
+}
+
+/* An input with a mic beside it: the amount can be dictated. */
+.dictate-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+
+  input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.dictate-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 64px;
+  border: 2px solid var(--monte);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--monte);
+  cursor: pointer;
+
+  svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  &.is-listening {
+    background: var(--lima);
+    animation: dictate-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes dictate-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(204 241 55 / 60%);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgb(204 241 55 / 0%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dictate-button.is-listening {
+    animation: none;
+  }
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  font-weight: 700;
+  cursor: pointer;
+
+  input {
+    width: 24px;
+    height: 24px;
+    accent-color: var(--monte);
+  }
 }
 
 .input-with-action {
