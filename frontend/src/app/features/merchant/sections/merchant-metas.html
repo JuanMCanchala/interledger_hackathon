@@ -1,0 +1,168 @@
+@if (merchant(); as m) {
+  <section class="view stack" aria-label="Tus metas y proyecciones">
+    <!-- Aspiration 1: Monthly Sales Goal -->
+    @if (salesGoalCard(); as sg) {
+      <section class="workspace-panel stack" aria-labelledby="sales-goal-title">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Aspiración del mes</p>
+            <h2 id="sales-goal-title">Meta de ventas de {{ currentMonthName }}</h2>
+            <p class="muted small">
+              Día {{ m.month.dayOfMonth }} de {{ m.month.daysInMonth }} · Proyección según tu ritmo actual
+            </p>
+          </div>
+          @if (!editingSalesGoal()) {
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              (click)="editingSalesGoal.set(true); goalMessage.set(null)"
+            >
+              {{ sg.hasGoal ? 'Cambiar meta' : 'Definir meta' }}
+            </button>
+          }
+        </div>
+
+        <div class="aspiration-hero">
+          <div class="goal-ring">
+            <app-progress-ring
+              [ratio]="sg.ratio"
+              tone="brand"
+              [label]="sg.ringLabel"
+            />
+          </div>
+          <div class="stack-sm">
+            @if (sg.hasGoal) {
+              <p class="amount-lg num">
+                {{ sg.soldFormatted }}
+                <span class="muted small">de {{ sg.goalFormatted }}</span>
+              </p>
+              <p class="small">
+                Ritmo ideal diario: <strong>{{ sg.dailyPaceFormatted }}</strong> por día
+              </p>
+            } @else {
+              <p class="amount-lg num">{{ sg.soldFormatted }} vendidos este mes</p>
+            }
+            <p class="muted small">{{ sg.note }}</p>
+          </div>
+        </div>
+
+        @if (editingSalesGoal()) {
+          <form
+            class="inline-goal-form"
+            (ngSubmit)="saveSalesGoal()"
+            novalidate
+          >
+            <label class="field">
+              <span>¿Cuánto te propones vender al mes?</span>
+              <input
+                name="salesGoal"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="Ej: 3.000.000"
+                [ngModel]="salesGoalInput"
+                (ngModelChange)="onSalesGoalInput($event)"
+              />
+            </label>
+            <div class="row">
+              <button
+                type="submit"
+                class="btn btn-lima"
+                [disabled]="settingsBusy()"
+              >
+                {{ settingsBusy() ? 'Guardando…' : 'Guardar meta' }}
+              </button>
+              @if (sg.hasGoal) {
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  [disabled]="settingsBusy()"
+                  (click)="clearSalesGoal()"
+                >
+                  Quitar meta
+                </button>
+              }
+              <button
+                type="button"
+                class="btn btn-ghost"
+                (click)="editingSalesGoal.set(false)"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        }
+
+        @if (goalMessage(); as gm) {
+          <p [class]="'banner banner-' + gm.tone" role="status">{{ gm.text }}</p>
+        }
+      </section>
+    }
+
+    <!-- Aspiration 2: Savings Pockets & Projections -->
+    <section class="workspace-panel stack" aria-labelledby="savings-goals-title">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Futuro y colchón financiero</p>
+          <h2 id="savings-goals-title">Metas de ahorro y proyección</h2>
+          <p class="muted small">
+            Calculamos cuándo alcanzas cada meta según lo que llevas ahorrado este mes
+          </p>
+        </div>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          (click)="editSavingsRules.emit()"
+        >
+          Configurar ahorros
+        </button>
+      </div>
+
+      @if (savingsGoalCards().length === 0) {
+        <div class="empty-inline">
+          <p class="muted small">
+            Todavía no tienes bolsillos de ahorro. Agrega uno en Repartos para separar un porcentaje de cada venta hacia una meta futura.
+          </p>
+          <button
+            type="button"
+            class="btn btn-lima"
+            (click)="editSavingsRules.emit()"
+          >
+            + Crear bolsillo de ahorro
+          </button>
+        </div>
+      } @else {
+        <div class="goals">
+          @for (card of savingsGoalCards(); track card.id) {
+            <article class="pocket-row goal-card">
+              <app-progress-ring
+                [ratio]="card.ratio"
+                [tone]="card.tone"
+                [label]="card.ringLabel"
+              />
+              <div class="stack-sm goal-card-body">
+                <p class="eyebrow">{{ card.eyebrow }}</p>
+                <h3>{{ card.title }}</h3>
+                <p class="num"><strong>{{ card.detail }}</strong></p>
+                <p class="small muted">
+                  Ahorrado este mes: <strong>{{ card.thisMonthFormatted }}</strong>
+                </p>
+                <p class="small muted">{{ card.note }}</p>
+                @if (!card.hasGoal) {
+                  <div>
+                    <button
+                      type="button"
+                      class="btn btn-lima btn-sm"
+                      (click)="editSavingsRules.emit()"
+                    >
+                      Ponerle meta
+                    </button>
+                  </div>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  </section>
+}

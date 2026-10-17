@@ -1,0 +1,275 @@
+@let m = merchant();
+
+<section class="view" aria-label="Ajustes de tu tienda">
+  <div class="workspace-panel settings-sheet">
+    <!-- Section 1: Negocio y Billetera -->
+    <div class="settings-section">
+      <div class="settings-meta">
+        <h2>Negocio y billetera</h2>
+        <p class="muted small">
+          Nombre comercial y dirección Open Payments conectada a tu caja
+        </p>
+      </div>
+
+      <div class="settings-body stack-sm">
+        <form class="settings-inline-form" (ngSubmit)="saveShopName()" novalidate>
+          <label class="field">
+            <span>Nombre del negocio</span>
+            <input
+              name="shopName"
+              maxlength="80"
+              autocomplete="organization"
+              [(ngModel)]="shopNameInput"
+            />
+          </label>
+          <button
+            type="submit"
+            class="btn btn-lima"
+            [disabled]="settingsBusy()"
+          >
+            Guardar
+          </button>
+        </form>
+        @if (shopMessage(); as sm) {
+          <p [class]="'banner banner-' + sm.tone" role="status">{{ sm.text }}</p>
+        }
+        <div class="settings-kv">
+          <span class="muted small">Billetera conectada</span>
+          <strong class="mono">{{ walletName(m.wallet) }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Límite mensual Open Payments -->
+    <div class="settings-section">
+      <div class="settings-meta">
+        <h2>Límite mensual</h2>
+        <p class="muted small">
+          Tope autorizado en tu billetera para repartos automáticos del mes
+        </p>
+      </div>
+
+      <div class="settings-body stack-sm">
+        <div class="settings-kv">
+          <span class="muted small">Autorizado actualmente</span>
+          <strong>
+            {{ formatAmount(m.monthlyCap) }}
+            @if (totalQuotasAmount() > 0) {
+              <span class="muted small"> · cuotas: {{ money(totalQuotasAmount()) }}</span>
+            }
+          </strong>
+        </div>
+
+        @if (m.pendingCap) {
+          <p class="banner banner-wait" role="status">
+            Cambio pendiente a {{ formatAmount(m.pendingCap) }}: falta aprobarlo en tu billetera.
+          </p>
+        }
+
+        <form class="settings-inline-form" (ngSubmit)="saveNewCap()" novalidate>
+          <label class="field">
+            <span>Nuevo límite mensual</span>
+            <input
+              name="capNew"
+              inputmode="numeric"
+              autocomplete="off"
+              [ngModel]="capNewInput"
+              (ngModelChange)="onCapNewInput($event)"
+            />
+          </label>
+          <button
+            type="submit"
+            class="btn btn-secondary"
+            [disabled]="settingsBusy()"
+          >
+            Cambiar en billetera →
+          </button>
+        </form>
+        @if (capMessage(); as cm) {
+          <p [class]="'banner banner-' + cm.tone" role="status">{{ cm.text }}</p>
+        }
+      </div>
+    </div>
+
+    <!-- Section 3: Fondo de emergencia -->
+    <div class="settings-section">
+      <div class="settings-meta">
+        <h2>Fondo de emergencia</h2>
+        <p class="muted small">
+          Respaldo opcional desde tu bolsillo de ahorro si falta saldo para una cuota
+        </p>
+      </div>
+
+      <div class="settings-body stack-sm">
+        <p
+          [class]="'banner banner-' + emergencyBanner().tone"
+          role="status"
+        >
+          {{ emergencyBanner().text }}
+        </p>
+
+        @if (savingsRules().length > 0 && m.emergency?.status !== 'active') {
+          <div class="settings-inline-form">
+            @if (savingsRules().length >= 2) {
+              <label class="field">
+                <span>Bolsillo de respaldo</span>
+                <select name="emergencyPick" [(ngModel)]="emergencyPickId">
+                  @for (sr of savingsRules(); track sr.id) {
+                    <option [value]="sr.id">
+                      {{ sr.label }} · {{ walletName(sr.destination) }}
+                    </option>
+                  }
+                </select>
+              </label>
+            }
+            <button
+              type="button"
+              class="btn btn-secondary"
+              [disabled]="settingsBusy()"
+              (click)="authorizeEmergency()"
+            >
+              {{
+                m.emergency?.status === 'awaiting-consent'
+                  ? 'Abrir mi billetera →'
+                  : 'Autorizar fondo de emergencia →'
+              }}
+            </button>
+          </div>
+        }
+        @if (emergencyMessage(); as em) {
+          <p [class]="'banner banner-' + em.tone" role="status">{{ em.text }}</p>
+        }
+      </div>
+    </div>
+
+    <!-- Section 4: Pantalla de cobro en mostrador -->
+    <div class="settings-section">
+      <div class="settings-meta">
+        <h2>Pantalla de cobro</h2>
+        <p class="muted small">
+          Enlaza un celular o tablet en mostrador para mostrar cada QR automáticamente
+        </p>
+      </div>
+
+      <div class="settings-body stack-sm">
+        @if (m.displayUrl) {
+          <div class="row">
+            <a
+              class="btn btn-lima btn-sm"
+              [href]="m.displayUrl"
+              target="_blank"
+              rel="noopener"
+            >
+              Abrir pantalla →
+            </a>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              (click)="showDisplayQr.set(!showDisplayQr())"
+            >
+              {{ showDisplayQr() ? 'Ocultar código QR' : 'Ver código QR para celular' }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              [disabled]="displayBusy()"
+              (click)="linkDisplay(true)"
+            >
+              Rotar enlace
+            </button>
+          </div>
+          @if (showDisplayQr()) {
+            <div class="qr-box">
+              <app-qr-code [value]="m.displayUrl" [size]="180" />
+            </div>
+          }
+        } @else {
+          <div>
+            <button
+              type="button"
+              class="btn btn-lima btn-sm"
+              [disabled]="displayBusy()"
+              (click)="linkDisplay(); showDisplayQr.set(true)"
+            >
+              Enlazar pantalla de mostrador
+            </button>
+          </div>
+        }
+        @if (displayMessage(); as dm) {
+          <p [class]="'banner banner-' + dm.tone" role="status">{{ dm.text }}</p>
+        }
+      </div>
+    </div>
+
+    <!-- Section 5: Voz y asistente GlorIA -->
+    <div class="settings-section">
+      <div class="settings-meta">
+        <h2>Voz y sonido</h2>
+        <p class="muted small">
+          Confirmaciones habladas al recibir pagos y activación por voz con «Gloria»
+        </p>
+      </div>
+
+      <div class="settings-body stack-sm">
+        @if (voice.canSpeak) {
+          <div class="settings-switches">
+            <label class="switch-row">
+              <input
+                type="checkbox"
+                role="switch"
+                [checked]="voice.announcements()"
+                (change)="toggleAnnouncements()"
+              />
+              <span>Anunciar pagos recibidos en voz alta</span>
+            </label>
+            @if (voice.canListen) {
+              <label class="switch-row">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  [checked]="voice.handsFree()"
+                  (change)="voice.setHandsFree(!voice.handsFree())"
+                />
+                <span>Manos libres: escuchar la palabra «Gloria»</span>
+              </label>
+              @if (voice.handsFreeError()) {
+                <p class="banner banner-bad" role="alert">{{ voice.handsFreeError() }}</p>
+              }
+            }
+          </div>
+          <div>
+            <button type="button" class="btn btn-secondary btn-sm" (click)="tryVoice()">
+              Probar sonido de voz
+            </button>
+          </div>
+        } @else {
+          <p class="banner banner-wait" role="status">
+            Este navegador no soporta síntesis de voz. Usa Chrome, Edge o Safari actualizados.
+          </p>
+        }
+      </div>
+    </div>
+
+    <!-- Section 6: Cuenta y Sesión -->
+    <div class="settings-section">
+      <div class="settings-meta">
+        <h2>Cuenta y sesión</h2>
+        <p class="muted small">
+          Usuario autenticado en este dispositivo
+        </p>
+      </div>
+
+      <div class="settings-body">
+        <div class="row between">
+          <div>
+            <strong>{{ account()?.name }}</strong>
+            <p class="muted small">{{ account()?.email }}</p>
+          </div>
+          <button type="button" class="btn btn-danger btn-sm" (click)="logout.emit()">
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { MOTION, animate, gsap } from '../../../../core/motion';
-import { Plant } from './plant';
+import { Plant } from '../../../../shared/brand/plant';
 
 const DAYS = 30;
 

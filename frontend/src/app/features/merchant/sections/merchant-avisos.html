@@ -1,0 +1,119 @@
+@if (merchant(); as m) {
+  <section class="view stack" aria-label="Avisos y confirmaciones">
+    <div class="workspace-panel stack">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Centro de control</p>
+          <h2>Actividad y pagos por confirmar</h2>
+          <p class="muted small">
+            Un pago que falla no se vuelve a intentar solo: tú decides,
+            para no pagar dos veces.
+          </p>
+        </div>
+      </div>
+
+      @if (noticeMessage(); as nm) {
+        <p [class]="'banner banner-' + nm.tone" role="status">{{ nm.text }}</p>
+      }
+      @if (!m.notifications?.length) {
+        <p class="muted small">Todo al día: no tienes avisos pendientes por ahora.</p>
+      } @else {
+        <ul class="list notices">
+          @for (n of m.notifications; track n.id) {
+            <li [class]="'list-item notice is-' + n.tone">
+              <div class="row between">
+                <strong>{{ n.title }}</strong>
+                <span [class]="'badge ' + noticeBadgeClass(n.tone)">
+                  {{ noticeKindLabel(n.kind) }}
+                </span>
+              </div>
+              <p class="small">{{ n.text }}</p>
+              <p class="muted small">{{ formatDateTime(n.createdAt) }}</p>
+
+              @if (n.actions?.length && n.payoutId) {
+                <div class="row notice-actions">
+                  @if (confirmingNotice()[n.id] === 'mark-paid') {
+                    <p class="small">
+                      ¿Viste el dinero en la billetera de quien recibe? No se enviará de nuevo.
+                    </p>
+                    <button
+                      type="button"
+                      class="btn btn-lima"
+                      [disabled]="noticeBusy()"
+                      (click)="resolveNoticePayout(n.id, n.payoutId!, 'mark-paid', 'Listo: lo marcamos como pagado y no se envía nada más.')"
+                    >
+                      Sí, el dinero llegó
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      (click)="setNoticeConfirm(n.id, null)"
+                    >
+                      Cancelar
+                    </button>
+                  } @else if (confirmingNotice()[n.id] === 'use-emergency') {
+                    <p class="small">
+                      Es tu último recurso: pasaremos el monto de este pago de tu fondo de emergencia a tu tienda, y de ahí se le paga completo.
+                    </p>
+                    <button
+                      type="button"
+                      class="btn btn-lima"
+                      [disabled]="noticeBusy()"
+                      (click)="resolveNoticePayout(n.id, n.payoutId!, 'use-emergency', 'Listo: estamos pasando la plata de tu fondo de emergencia a tu tienda. Cuando llegue, enviamos el pago completo.')"
+                    >
+                      Sí, usar mi fondo
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      (click)="setNoticeConfirm(n.id, null)"
+                    >
+                      Cancelar
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="btn btn-lima"
+                      [disabled]="noticeBusy()"
+                      (click)="resolveNoticePayout(n.id, n.payoutId!, 'retry', 'Listo: enviamos el pago otra vez.')"
+                    >
+                      Reintentar el pago
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-secondary"
+                      [disabled]="noticeBusy()"
+                      (click)="setNoticeConfirm(n.id, 'mark-paid')"
+                    >
+                      Ya llegó, marcar como pagado
+                    </button>
+                    @if (n.actions?.includes('use-emergency')) {
+                      <button
+                        type="button"
+                        class="btn btn-ghost"
+                        [disabled]="noticeBusy()"
+                        (click)="setNoticeConfirm(n.id, 'use-emergency')"
+                      >
+                        Usar mi fondo de emergencia
+                      </button>
+                    }
+                  }
+                </div>
+              }
+
+              @if (n.kind === 'consent' || n.kind === 'cap-pending') {
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  (click)="navigateTab.emit('ajustes')"
+                >
+                  Ir a Ajustes
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </section>
+}

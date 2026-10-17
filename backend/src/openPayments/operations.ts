@@ -89,7 +89,8 @@ export interface PaymentOperations {
   cancelGrant(continuation: Continuation): Promise<void>;
 }
 
-const DEFAULT_INCOMING_EXPIRY_MS = 60 * 60 * 1000;
+/** How long an incoming payment (a sale's payment request) can be paid. */
+export const DEFAULT_INCOMING_EXPIRY_MS = 60 * 60 * 1000;
 /** Wallet addresses barely change, and every payment step needs them: keep them for a while. */
 const WALLET_CACHE_MS = 10 * 60_000;
 /** Non-interactive grants are reused until shortly before they expire (or ten minutes at most). */

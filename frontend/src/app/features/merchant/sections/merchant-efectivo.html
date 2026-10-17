@@ -1,0 +1,167 @@
+@if (merchant(); as m) {
+  <section class="view stack" aria-label="Efectivo y consignaciones">
+    <section class="metrics-ribbon" aria-label="Estado de tu efectivo">
+      <div class="metric-cell is-highlight">
+        <span class="metric-label">Efectivo pendiente por consignar</span>
+        <strong class="metric-value-xl">
+          {{ formatAmount(m.cash?.toDeposit) }}
+        </strong>
+        <small class="metric-foot">
+          @if (m.cash && toNumber(m.cash.toDeposit) > 0) {
+            Parte de tus bolsillos que aún está en efectivo sin consignar
+          } @else {
+            No tienes repartos en efectivo pendientes por consignar
+          }
+        </small>
+      </div>
+
+      <div class="metric-cell">
+        <span class="metric-label">Consignado a favor</span>
+        <strong class="metric-value">
+          {{ formatAmount(m.cash?.credit) }}
+        </strong>
+        <small class="metric-foot">
+          Saldo abonado que cubre los siguientes repartos en efectivo
+        </small>
+      </div>
+
+      <div class="metric-cell">
+        <span class="metric-label">Vendido en efectivo hoy</span>
+        <strong class="metric-value">
+          {{ formatAmount(m.cash?.today) }}
+        </strong>
+        <small class="metric-foot">
+          Total de ventas cobradas en efectivo hoy
+        </small>
+      </div>
+
+      <div class="metric-cell">
+        <span class="metric-label">Vendido en efectivo este mes</span>
+        <strong class="metric-value">
+          {{ formatAmount(m.cash?.month) }}
+        </strong>
+        <small class="metric-foot">
+          Acumulado de ventas en efectivo del mes
+        </small>
+      </div>
+    </section>
+
+    <div class="workspace-columns">
+      <!-- Left Column: Registrar consignación y desglose por bolsillo -->
+      <section class="workspace-panel stack" aria-labelledby="cash-title">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">
+              @if (m.cash && toNumber(m.cash.toDeposit) > 0) {
+                Pendiente por llevar a tu billetera
+              } @else {
+                Al día con tus bolsillos
+              }
+            </p>
+            <h2 id="cash-title">
+              @if (m.cash && toNumber(m.cash.toDeposit) > 0) {
+                Falta por consignar: {{ formatAmount(m.cash.toDeposit) }}
+              } @else {
+                Todo tu efectivo por repartir ya fue consignado
+              }
+            </h2>
+          </div>
+          @if (m.cash && toNumber(m.cash.credit) > 0) {
+            <span class="badge badge-info">
+              A favor: {{ formatAmount(m.cash.credit) }}
+            </span>
+          }
+        </div>
+
+        <p class="muted small">
+          Cuando vendes en efectivo, tu ganancia se queda contigo en el cajón. Solo la
+          parte que le corresponde a tus bolsillos debe consignarse a tu billetera para
+          que MiPlante la envíe por Open Payments.
+        </p>
+
+        @if (m.cash && toNumber(m.cash.toDeposit) > 0) {
+          <div class="stack-sm">
+            <span class="eyebrow">Pendiente en efectivo por bolsillo</span>
+            <ul class="cash-shares">
+              @for (r of m.rules; track r.id) {
+                @if (r.inCash && toNumber(r.inCash) > 0) {
+                  <li>
+                    <span>{{ r.label }}</span>
+                    <strong class="num">{{ formatAmount(r.inCash) }}</strong>
+                  </li>
+                }
+              }
+            </ul>
+          </div>
+        }
+
+        <form class="cash-deposit" (ngSubmit)="depositCash()">
+          <label class="field">
+            <span>¿Cuánto consignaste a tu billetera?</span>
+            <input
+              name="deposit"
+              inputmode="numeric"
+              autocomplete="off"
+              [disabled]="!m.cash || toNumber(m.cash.toDeposit) <= 0 || cashBusy()"
+              [placeholder]="m.cash && toNumber(m.cash.toDeposit) > 0 ? groupThousandsOf(m.cash.toDeposit) : 'Sin saldo pendiente por consignar'"
+              [(ngModel)]="depositInput"
+            />
+          </label>
+          <button
+            type="submit"
+            class="btn btn-lima"
+            [disabled]="!m.cash || toNumber(m.cash.toDeposit) <= 0 || cashBusy()"
+          >
+            {{ cashBusy() ? 'Registrando…' : 'Registrar consignación' }}
+          </button>
+        </form>
+
+        @if (cashMessage(); as cm) {
+          <p [class]="'banner banner-' + cm.tone" role="status">{{ cm.text }}</p>
+        }
+      </section>
+
+      <!-- Right Column: Ventas en efectivo registradas -->
+      <section class="workspace-panel stack" aria-labelledby="cash-sales-title">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Historial de efectivo</p>
+            <h2 id="cash-sales-title">Ventas en efectivo recientes</h2>
+          </div>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            (click)="registerCashSale.emit()"
+          >
+            + Registrar venta en efectivo
+          </button>
+        </div>
+
+        @if (cashSales().length === 0) {
+          <div class="empty-inline">
+            <p class="muted small">
+              Aún no has registrado ventas en efectivo. Cuando cobres en efectivo en el
+              mostrador, regístralo para que tus bolsillos lleven la cuenta exacta.
+            </p>
+          </div>
+        } @else {
+          <ul class="list">
+            @for (s of cashSales().slice(0, 8); track s.id) {
+              <li class="list-button is-cash">
+                <span>
+                  <strong>{{ formatAmount(s.amount) }}</strong>
+                  <small>
+                    {{ formatTime(s.createdAt) }} · En efectivo{{
+                      s.description ? ' · ' + s.description : ''
+                    }}
+                  </small>
+                </span>
+                <span class="badge badge-ok">Registrada</span>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    </div>
+  </section>
+}
