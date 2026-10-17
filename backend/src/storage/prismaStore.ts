@@ -475,6 +475,13 @@ export class PrismaStore implements Store {
     );
   }
 
+  async isMerchantMandate(mandateId: string) {
+    const count = await this.prisma.merchant.count({
+      where: { OR: [{ mandateId }, { pendingMandateId: mandateId }] },
+    });
+    return count > 0;
+  }
+
   async close() {
     await this.prisma.$disconnect();
   }

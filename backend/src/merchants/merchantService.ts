@@ -336,6 +336,11 @@ export class MerchantService {
     return merchant ? this.view(merchant) : null;
   }
 
+  /** Whether a shop's grant is this mandate (or the one it is waiting for to change its cap). */
+  usesMandate(mandateId: string): Promise<boolean> {
+    return this.store.isMerchantMandate(mandateId);
+  }
+
   async require(id: string): Promise<MerchantRecord> {
     const merchant = await this.store.getMerchant(id);
     if (!merchant) throw new NotFoundError(`No existe el comercio ${id}`);

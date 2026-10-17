@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { AuthService } from "../auth/authService.js";
 import type { PayoutService } from "../merchants/payoutService.js";
 import { describeError } from "../openPayments/errors.js";
-import { AppError } from "../shared/errors.js";
+import { AppError, NotFoundError } from "../shared/errors.js";
 import type { DashboardService } from "../merchants/dashboardService.js";
 import type { MerchantService } from "../merchants/merchantService.js";
 import type { SalesService } from "../merchants/salesService.js";
@@ -66,6 +66,8 @@ export function createApp({
   });
 
   app.get("/api/payments/:id", async (req, res) => {
+    const { mandateId } = await flows.getPayment(req.params.id);
+    if (mandateId) await sandboxMandate(mandateId);
     res.json(await flows.refreshPayment(req.params.id));
   });
 
@@ -86,6 +88,17 @@ export function createApp({
 
   // Mandates (recurring / capped consent) ---------------------------------------------------------
 
+  /**
+   * These routes are the sandbox's: they act on a mandate with nothing but its id. A shop's grant
+   * pays its splits and nothing else, so it does not exist for them.
+   */
+  const sandboxMandate = async (id: string) => {
+    if (await merchants.usesMandate(id)) {
+      throw new NotFoundError(`No existe la autorización ${id}`);
+    }
+    return id;
+  };
+
   app.post("/api/mandates", async (req, res) => {
     res
       .status(201)
@@ -93,7 +106,7 @@ export function createApp({
   });
 
   app.get("/api/mandates/:id", async (req, res) => {
-    res.json(await flows.getMandate(req.params.id));
+    res.json(await flows.getMandate(await sandboxMandate(req.params.id)));
   });
 
   app.get("/api/mandates/:id/callback", async (req, res) => {
@@ -115,7 +128,7 @@ export function createApp({
       .status(201)
       .json(
         await flows.chargeMandate(
-          req.params.id,
+          await sandboxMandate(req.params.id),
           schemas.chargeMandate.parse(req.body),
         ),
       );
@@ -126,14 +139,14 @@ export function createApp({
       .status(201)
       .json(
         await flows.splitMandate(
-          req.params.id,
+          await sandboxMandate(req.params.id),
           schemas.splitMandate.parse(req.body),
         ),
       );
   });
 
   app.delete("/api/mandates/:id", async (req, res) => {
-    res.json(await flows.revokeMandate(req.params.id));
+    res.json(await flows.revokeMandate(await sandboxMandate(req.params.id)));
   });
 
   // Accounts ---------------------------------------------------------------------------------------
