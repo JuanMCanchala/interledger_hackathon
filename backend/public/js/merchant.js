@@ -476,11 +476,11 @@ function startSalePolling() {
 
 function renderSale(sale) {
   $("sale-caption").textContent = `Venta · ${formatTime(sale.createdAt)}`;
-  // The QR opens the customer's wallet app with the shop as the receiver: they pick their wallet
-  // and type the amount there.
-  const typesAmount = Boolean(sale.payUrl) && sale.payUrl !== sale.checkoutUrl;
-  $("qr-caption").textContent = typesAmount
-    ? `Escanea, entra a tu billetera y envía ${formatAmount(sale.amount)}`
+  // The QR opens the customer's wallet on the sale's payment request: the amount and the shop come
+  // filled in, so the customer only confirms.
+  const inWallet = Boolean(sale.payUrl) && sale.payUrl !== sale.checkoutUrl;
+  $("qr-caption").textContent = inWallet
+    ? `Escanea y confirma ${formatAmount(sale.amount)} en tu billetera`
     : "Escanea con la cámara del celular para pagar";
   $("sale-amount-view").textContent = formatAmount(sale.amount);
   $("sale-description-view").hidden = !sale.description;
