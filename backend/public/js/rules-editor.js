@@ -110,6 +110,12 @@ export function createRulesEditor({
             ? normalizeDecimal(field(row, "savingsGoal").value)
             : "",
         dueDay: kind === "debt" ? field(row, "dueDay").valueAsNumber : NaN,
+        // What was typed in the amounts this kind uses, to tell a mistake from an empty field.
+        typed: {
+          monthlyQuota: kind === "debt" ? field(row, "monthlyQuota").value.trim() : "",
+          outstanding: kind === "debt" ? field(row, "outstanding").value.trim() : "",
+          savingsGoal: kind === "savings" ? field(row, "savingsGoal").value.trim() : "",
+        },
       };
     });
   }
@@ -223,6 +229,15 @@ export function createRulesEditor({
       }
       if (!rule.category) {
         throw new Error(`${position}: escribe su categoría, por ejemplo Proveedores`);
+      }
+      for (const [name, what] of [
+        ["monthlyQuota", "la cuota del mes"],
+        ["outstanding", "la deuda total"],
+        ["savingsGoal", "la meta de ahorro"],
+      ]) {
+        if (rule.typed[name] && !rule[name]) {
+          throw new Error(`${position}: revisa ${what}, por ejemplo 200.000`);
+        }
       }
       if (rule.kind === "debt" && !rule.monthlyQuota) {
         throw new Error(
