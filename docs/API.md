@@ -98,7 +98,8 @@ Registers the signed-in account's shop and starts the single consent MiPlante ne
   each sale until this calendar month's quota is paid; after that its share stays with the shop
   until the 1st of next month. `outstanding`, the total balance, is optional: when set, the debt
   also stops once it is paid off.
-- Savings have no quota and always take their share, within the monthly cap.
+- Savings have no quota and always take their share, within the monthly cap. A savings rule can
+  carry an optional `savingsGoal`, the amount the shop wants to reach; it is only shown as a goal.
 - `monthlyCap` must be at least the sum of the quotas; what is left is room for savings.
 
 `201` → `{ "merchant": Merchant, "redirectUrl": "…" }`. Send the browser to `redirectUrl`: the
@@ -114,14 +115,19 @@ The till and dashboard.
   "id": "…", "name": "Tienda Doña Rosa", "wallet": "https://ilp.interledger-test.dev/tienda-rosa",
   "asset": { "assetCode": "COP", "assetScale": 2 },
   "monthlyCap": Amount,
+  "pendingCap": Amount | null,          // a new cap waiting for approval in the wallet
+  "monthlySalesGoal": Amount | null,
   "status": "awaiting-consent" | "active" | "rejected" | "revoked" | "failed",
   "spentThisMonth": Amount | null,      // spent from the grant in its current interval (this month)
   "rules": [{ "id", "label", "category", "kind", "destination", "shareBps",
-              "monthlyQuota"?: Amount, "outstanding"?: Amount, "repaid": Amount,
-              "paidThisMonth": Amount }],
+              "monthlyQuota"?: Amount, "outstanding"?: Amount, "savingsGoal"?: Amount,
+              "repaid": Amount, "paidThisMonth": Amount }],
   "today": { "salesCount", "gross": Amount, "kept": Amount, "allocated": Amount,
              "byRule": [{ "ruleId", "label", "amount": Amount }] },
   "history": [{ "date": "2026-10-16", "salesCount", "gross": Amount }],   // 7 Bogotá days, oldest first
+  "month": { "dayOfMonth": 16, "daysInMonth": 31, "salesCount", "gross": Amount, "kept": Amount,
+             "allocated": Amount,
+             "days": [{ "date", "salesCount", "gross": Amount, "allocated": Amount }] },  // 1st to today
   "sales": [Sale],                      // newest first, at most 20
   "createdAt": "…"
 }
@@ -156,6 +162,19 @@ are applied by MiPlante (ADR 0004, ADR 0013).
   quotas within the monthly cap, and never the shop's own wallet as a destination. Otherwise the
   answer is `400` and nothing changes.
 
+### `PUT /api/merchants/:id/settings`
+
+`{ "name"?: "La Esquina", "monthlySalesGoal"?: "3000000" | null }` → `200` with the merchant.
+Renames the shop or sets (`null` clears) its monthly sales goal. Neither touches the wallet grant.
+
+### `POST /api/merchants/:id/cap`
+
+`{ "monthlyCap": "600000" }` → `201 { "merchant", "redirectUrl" }`. An approved grant's limit cannot
+be raised, so this asks for a new grant: send the browser to `redirectUrl`. The current grant keeps
+paying the splits (`pendingCap` shows the new one) until the merchant approves; then the new grant
+replaces it and the old one is revoked. If the merchant rejects, the current cap stays. The cap must
+still cover the month's quotas, and a shop without an active grant switches at once.
+
 ### `POST /api/merchants/:id/consent`
 
 Asks for the monthly-capped consent again, with the same cap and rules, when the first attempt was
@@ -167,6 +186,9 @@ consent is already active.
 
 `{ "amount": "10000", "description": "Mercado" }` →
 `201 { "sale": Sale, "payUrl": "https://wallet.interledger-test.dev/send?merchantWA=<incoming payment>", "checkoutUrl": "…/pay?sale=<id>" }`.
+
+The panel also offers `/cobro?sale=<id>`, a full-screen checkout for the shopkeeper's phone: the
+same QR, the amount and the live state, with no session needed (it only reads `GET /api/sales/:id`).
 
 Each sale is an Open Payments **payment request**: an incoming payment on the shop's wallet with
 `incomingAmount` equal to the sale. Show `payUrl` as a QR code. There are two ways to pay it, and
