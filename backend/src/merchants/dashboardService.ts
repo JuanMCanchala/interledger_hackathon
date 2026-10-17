@@ -90,9 +90,13 @@ export class DashboardService {
         ruleId: p.ruleId,
         label: p.label,
         amount: p.amount,
+        /** The part that came from the shop's profit to complete the quota. */
+        topUp: p.topUp ?? null,
         reason: p.reason,
         status: p.status,
         error: p.error,
+        /** A failed payout waits for the shopkeeper until this is set. */
+        resolution: p.resolution ?? null,
         createdAt: p.createdAt,
       })),
       today: {

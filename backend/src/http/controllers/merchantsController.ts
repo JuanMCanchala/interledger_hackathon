@@ -69,6 +69,18 @@ export function merchantsController({
     res.status(201).json({ payouts: await payouts.pay(merchant.id, schemas.payout.parse(req.body)) });
   });
 
+  /** A failed payout, after the shopkeeper checked it did not arrive: send it again. */
+  router.post("/:id/payouts/:payoutId/retry", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res.status(201).json(await payouts.retry(merchant.id, req.params.payoutId));
+  });
+
+  /** A failed payout whose money did arrive (e.g. after a timeout): it counts as paid. */
+  router.post("/:id/payouts/:payoutId/mark-paid", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res.json(await payouts.markPaid(merchant.id, req.params.payoutId));
+  });
+
   router.post("/:id/consent", async (req, res) => {
     const merchant = await ownedMerchant(req);
     res.status(201).json(await merchants.renewConsent(merchant.id));

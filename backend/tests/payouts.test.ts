@@ -24,7 +24,7 @@ const MICROCREDIT = {
 };
 
 describe("paying creditors on their due day", () => {
-  it("reserves each sale's share and pays the creditor once, on the due day", async () => {
+  it("reserves each sale's share and pays the creditor the month's quota once, on the due day", async () => {
     const env = setupMiPlante();
     const id = await env.onboardRosa({ rules: [MICROCREDIT] });
     await sellAndPay(env, id);
@@ -39,7 +39,7 @@ describe("paying creditors on their due day", () => {
       paidThisMonth: cop("300000"),
     });
 
-    // The 20th: one payment with everything reserved.
+    // The 20th: one payment of the whole 20,000 quota: the 3,000 reserved and 17,000 from profit.
     env.clock.now = new Date("2026-10-20T15:00:00Z");
     await env.payouts.runDue();
     await env.payouts.runDue();
@@ -47,7 +47,8 @@ describe("paying creditors on their due day", () => {
     const [payout] = await env.store.listPayouts(id);
     expect(payout).toMatchObject({
       destination: COOP,
-      amount: cop("300000"),
+      amount: cop("2000000"),
+      topUp: cop("1700000"),
       reason: "due-date",
       month: "2026-10",
       status: "processing",
@@ -58,14 +59,19 @@ describe("paying creditors on their due day", () => {
     const view = await env.dashboard.get(id);
     expect(view.rules[0]).toMatchObject({
       reserved: cop("0"),
-      paidOutThisMonth: cop("300000"),
-      repaid: cop("300000"),
-      outstanding: cop("29700000"),
+      paidThisMonth: cop("2000000"), // the quota is covered: later sales this month are profit
+      paidOutThisMonth: cop("2000000"),
+      repaid: cop("2000000"),
+      outstanding: cop("28000000"),
     });
-    expect(view.payouts.map((p) => [p.amount, p.status])).toEqual([[cop("300000"), "completed"]]);
+    expect(view.payouts.map((p) => [p.amount, p.status])).toEqual([[cop("2000000"), "completed"]]);
+
+    // With the quota covered, the next sale this month reserves nothing for it.
+    const after = await sellAndPay(env, id);
+    expect(after.settlement.items).toEqual([]);
   });
 
-  it("lets the merchant pay early, and the due day then pays only what was reserved since", async () => {
+  it("lets the merchant pay early, and the due day then completes the rest of the quota", async () => {
     const env = setupMiPlante();
     const id = await env.onboardRosa({ rules: [MICROCREDIT] });
     const ruleId = (await env.store.getMerchant(id))!.rules[0]!.id;
@@ -79,9 +85,10 @@ describe("paying creditors on their due day", () => {
     env.clock.now = new Date("2026-10-21T15:00:00Z");
     await env.payouts.runDue();
     const payouts = await env.store.listPayouts(id);
-    expect(payouts.map((p) => [p.reason, p.amount.value])).toEqual([
-      ["due-date", "150000"],
-      ["manual", "150000"],
+    // 1,500 paid early; on the 21st the other 1,500 reserved plus 17,000 from profit.
+    expect(payouts.map((p) => [p.reason, p.amount.value, p.topUp?.value])).toEqual([
+      ["due-date", "1850000", "1700000"],
+      ["manual", "150000", undefined],
     ]);
   });
 
@@ -147,10 +154,17 @@ describe("paying creditors on their due day", () => {
     ]);
     await env.payouts.runDue();
 
+    // The reserved money of each debt left once, and each debt had at most one due-day payout.
     const payouts = await env.store.listPayouts(id);
-    const perRule = new Map<string, number>();
-    for (const p of payouts) perRule.set(p.ruleId, (perRule.get(p.ruleId) ?? 0) + 1);
-    expect([...perRule.values()]).toEqual([1, 1]);
+    const fromReserve = new Map<string, bigint>();
+    const dueDay = new Map<string, number>();
+    for (const p of payouts) {
+      const reserved = BigInt(p.amount.value) - BigInt(p.topUp?.value ?? "0");
+      fromReserve.set(p.ruleId, (fromReserve.get(p.ruleId) ?? 0n) + reserved);
+      if (p.reason === "due-date") dueDay.set(p.ruleId, (dueDay.get(p.ruleId) ?? 0) + 1);
+    }
+    expect([...fromReserve.values()].sort()).toEqual([100000n, 150000n]);
+    expect([...dueDay.values()].every((n) => n <= 1)).toBe(true);
     // The click that found the shop busy says so instead of paying.
     expect(results.some((r) => r.status === "rejected" && /intenta en un momento|apartado/.test(String(r.reason)))).toBe(true);
   });
@@ -227,5 +241,108 @@ describe("paying creditors on their due day", () => {
       .filter((p) => p.ruleId === microcredit.id && p.status !== "failed")
       .reduce((sum, p) => sum + BigInt(p.amount.value), 0n);
     expect(paid).toBe(150000n); // the 1,500 reserved, once
+  });
+
+  it("never retries a failed due-day payout on its own: it waits for the shopkeeper", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa({ rules: [MICROCREDIT] });
+    await sellAndPay(env, id);
+    env.clock.now = new Date("2026-10-20T15:00:00Z");
+    env.ops.createOutgoingPayment.mockRejectedValueOnce(
+      new OpenPaymentsClientError("Forbidden", { description: "insufficient funds", status: 403 }),
+    );
+
+    await env.payouts.runDue();
+    const charges = env.ops.createOutgoingPayment.mock.calls.length;
+    // The scheduler keeps running every minute, and the next day: no new try.
+    await env.payouts.runDue();
+    env.clock.now = new Date("2026-10-21T15:00:00Z");
+    await env.payouts.runDue();
+
+    expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(charges);
+    const [failed] = await env.store.listPayouts(id);
+    expect(failed).toMatchObject({ status: "failed", reason: "due-date" });
+    expect(failed!.resolvedAt).toBeUndefined();
+  });
+
+  it("retries a failed payout when the shopkeeper asks, once", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa({ rules: [MICROCREDIT] });
+    await sellAndPay(env, id);
+    env.ops.createOutgoingPayment.mockRejectedValueOnce(new Error("timeout"));
+    const [failed] = await env.payouts.pay(id, { reason: "due-date" });
+
+    const retried = await env.payouts.retry(id, failed!.id);
+
+    expect(retried).toMatchObject({ status: "processing", reason: "due-date", amount: failed!.amount });
+    const stored = await env.store.listPayouts(id);
+    expect(stored.find((p) => p.id === failed!.id)).toMatchObject({ resolution: "retried" });
+    await expect(env.payouts.retry(id, failed!.id)).rejects.toThrow(/revisión/);
+  });
+
+  it("marks a failed payout paid when its money did arrive, without sending it again", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa({ rules: [MICROCREDIT] });
+    await sellAndPay(env, id);
+    env.ops.createOutgoingPayment.mockRejectedValueOnce(new Error("timeout"));
+    const [failed] = await env.payouts.pay(id, { reason: "manual" });
+    const charges = env.ops.createOutgoingPayment.mock.calls.length;
+
+    const paid = await env.payouts.markPaid(id, failed!.id);
+
+    expect(paid).toMatchObject({ status: "completed", resolution: "marked-paid" });
+    expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(charges);
+    expect((await env.dashboard.get(id)).rules[0]).toMatchObject({
+      reserved: cop("0"),
+      repaid: cop("150000"),
+    });
+  });
+
+  it("turns a payout the wallet never confirmed into one to review", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa({ rules: [MICROCREDIT] });
+    await sellAndPay(env, id);
+    // The process stopped between writing the payout and charging it.
+    const ruleId = (await env.store.getMerchant(id))!.rules[0]!.id;
+    await env.store.savePayout({
+      id: "00000000-0000-4000-8000-000000000001",
+      merchantId: id,
+      ruleId,
+      label: "Microcrédito",
+      destination: COOP,
+      amount: cop("150000"),
+      reason: "manual",
+      month: "2026-10",
+      status: "processing",
+      createdAt: env.clock.now.toISOString(),
+      updatedAt: env.clock.now.toISOString(),
+    });
+
+    env.clock.now = new Date(env.clock.now.getTime() + 11 * 60_000);
+    await env.payouts.refresh(id);
+
+    const [stuck] = await env.store.listPayouts(id);
+    expect(stuck).toMatchObject({ status: "failed", error: "No pudimos confirmar si el pago salió" });
+  });
+
+  it("takes from profit only what the monthly cap and the debt allow", async () => {
+    const env = setupMiPlante();
+    // Quota 20,000 but only 2,500 still owed: the due day sends 2,500, not the whole quota.
+    const owed = await env.onboardRosa({ rules: [{ ...MICROCREDIT, outstanding: "2500" }] });
+    await sellAndPay(env, owed);
+    const [byDebt] = await env.payouts.pay(owed, { reason: "due-date" });
+    expect(byDebt).toMatchObject({ amount: cop("250000"), topUp: cop("100000") });
+
+    // A cap of 30,000 with 29,000 already spent: only 1,000 of room beyond what is reserved.
+    const capped = setupMiPlante();
+    const shop = await capped.onboardRosa({ rules: [MICROCREDIT] });
+    await sellAndPay(capped, shop);
+    capped.ops.getGrantSpentAmounts.mockResolvedValue({
+      spentDebitAmount: cop("2750000"),
+      spentReceiveAmount: null,
+    });
+    const [byCap] = await capped.payouts.pay(shop, { reason: "due-date" });
+    // 1,500 reserved + 1,000 of room left (30,000 - 27,500 - 1,500 reserved).
+    expect(byCap).toMatchObject({ amount: cop("250000"), topUp: cop("100000") });
   });
 });
