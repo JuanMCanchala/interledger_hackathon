@@ -1,4 +1,6 @@
 import {
+  MAX_RULES,
+  MAX_TOTAL_PERCENT,
   el,
   formatMoney,
   normalizeDecimal,
@@ -8,8 +10,6 @@ import {
   toMinor,
 } from "./app.js";
 
-export const MAX_RULES = 10;
-export const MAX_TOTAL_PERCENT = 50;
 /** The preview shows how a sale of this amount splits. */
 const PREVIEW_SALE = "10000";
 

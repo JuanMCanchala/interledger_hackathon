@@ -1,9 +1,12 @@
 import {
+  MAX_RULES,
+  MAX_TOTAL_PERCENT,
   STORAGE_KEYS,
   api,
   checkWallet,
   el,
   formatMoney,
+  moneyInput,
   normalizeDecimal,
   normalizeWallet,
   postJson,
@@ -23,8 +26,6 @@ import {
  * is paid, so the rest of the month's sales are profit.
  */
 
-const MAX_TOTAL_PERCENT = 50;
-const MAX_WALLETS = 10;
 /** The preview shows a 10,000 COP sale, like the demo. */
 const PREVIEW_SALE = 10000n * 100n;
 
@@ -83,14 +84,6 @@ const form = $("onboard-form");
 const peso = (minor) => formatMoney(Number(minor) / 100, "COP");
 const pesos = (decimal) => (decimal ? peso(toMinor(decimal, 2)) : "—");
 
-/** Formats what the person types as pesos with thousands separators: 300000 → "300.000". */
-function moneyInput(input) {
-  input.addEventListener("input", () => {
-    const digits = input.value.replace(/\D/g, "").replace(/^0+/, "");
-    input.value = digits ? Number(digits).toLocaleString("es-CO") : "";
-  });
-}
-
 // Step 2: categories and their wallets ------------------------------------------------------------
 
 const categoriesBox = $("categories");
@@ -99,7 +92,7 @@ const field = (row, name) => row.querySelector(`[data-field="${name}"]`);
 const walletRows = () => [...categoriesBox.querySelectorAll(".wallet-row")];
 
 function addWallet(category, values = {}) {
-  if (walletRows().length >= MAX_WALLETS) return;
+  if (walletRows().length >= MAX_RULES) return;
   const row = walletTemplate.content.firstElementChild.cloneNode(true);
   field(row, "label").value = values.label ?? "";
   field(row, "destination").value = values.destination ?? "";
@@ -315,7 +308,7 @@ function render() {
     (sum, w) => sum + (Number.isFinite(w.sharePercent) ? w.sharePercent : 0),
     0,
   );
-  const full = wallets.length >= MAX_WALLETS;
+  const full = wallets.length >= MAX_RULES;
   for (const button of categoriesBox.querySelectorAll(".add-wallet")) {
     button.disabled = full;
   }
@@ -323,7 +316,7 @@ function render() {
   totalText.className = `small${total > MAX_TOTAL_PERCENT ? " error-text" : ""}`;
   totalText.textContent =
     `Entre todas toman ${total.toLocaleString("es-CO")}% de cada venta (máximo ${MAX_TOTAL_PERCENT}%).` +
-    (full ? ` Llegaste al máximo de ${MAX_WALLETS} billeteras.` : "");
+    (full ? ` Llegaste al máximo de ${MAX_RULES} billeteras.` : "");
   renderSummary();
 }
 

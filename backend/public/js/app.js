@@ -36,7 +36,7 @@ export const SALE_STATUS = {
   failed: { text: "Pago fallido", tone: "bad" },
 };
 
-export const ITEM_STATUS = {
+const ITEM_STATUS = {
   processing: { text: "Enviando…", tone: "wait" },
   completed: { text: "Enviado", tone: "ok" },
   failed: { text: "Falló", tone: "bad" },
@@ -105,7 +105,7 @@ export const session = {
 };
 
 /** Sends the shopkeeper to sign in, and back to this page afterwards. */
-export function goToLogin() {
+function goToLogin() {
   const here = `${window.location.pathname}${window.location.search}`;
   window.location.href = `/login?next=${encodeURIComponent(here)}`;
 }
@@ -177,7 +177,7 @@ const FRIENDLY_ERRORS = [
   ],
 ];
 
-export function friendlyError(message) {
+function friendlyError(message) {
   const match = FRIENDLY_ERRORS.find(([pattern]) => pattern.test(message));
   return match ? match[1] : "";
 }
@@ -192,7 +192,7 @@ function friendlyStatus(status) {
 // Wallets -----------------------------------------------------------------------------------------
 
 /** All demo wallets live on the Interledger test network, so people only type the name. */
-export const WALLET_HOST = "ilp.interledger-test.dev";
+const WALLET_HOST = "ilp.interledger-test.dev";
 
 /**
  * What a person types → what the API accepts:
@@ -240,6 +240,18 @@ export async function checkWallet(input) {
 }
 
 // Money -------------------------------------------------------------------------------------------
+
+/** The server's limits on a shop's split rules (src/domain/allocation.ts). */
+export const MAX_RULES = 10;
+export const MAX_TOTAL_PERCENT = 50;
+
+/** Formats what the person types as whole pesos with thousands separators: 300000 → "300.000". */
+export function moneyInput(input) {
+  input.addEventListener("input", () => {
+    const digits = input.value.replace(/\D/g, "").replace(/^0+/, "");
+    input.value = digits ? Number(digits).toLocaleString("es-CO") : "";
+  });
+}
 
 /** Open Payments amount ({ value in minor units, assetCode, assetScale }) → number. */
 export function toNumber(amount) {
@@ -598,15 +610,6 @@ export function formatDay(date) {
     weekday: "short",
     day: "numeric",
   });
-}
-
-export function localDate(now = new Date()) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-export function absoluteUrl(url) {
-  return new URL(url, window.location.origin).toString();
 }
 
 export async function copyText(text, fallbackInput) {

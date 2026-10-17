@@ -13,6 +13,7 @@ import {
   formatTime,
   homeOfSignedIn,
   logout,
+  moneyInput,
   normalizeDecimal,
   param,
   poll,
@@ -90,14 +91,6 @@ function toDecimal(amount) {
   const whole = scale ? digits.slice(0, -scale) : digits;
   const fraction = scale ? digits.slice(-scale).replace(/0+$/, "") : "";
   return fraction ? `${whole}.${fraction}` : whole;
-}
-
-/** Formats what the person types as pesos with thousands separators: 300000 → "300.000". */
-function moneyInput(input) {
-  input.addEventListener("input", () => {
-    const digits = input.value.replace(/\D/g, "").replace(/^0+/, "");
-    input.value = digits ? Number(digits).toLocaleString("es-CO") : "";
-  });
 }
 
 const groupThousands = (decimal) =>
