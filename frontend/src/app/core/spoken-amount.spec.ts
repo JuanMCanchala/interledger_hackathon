@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSpokenSale, pesosInWords, parseChargeRequest } from './spoken-amount';
+import { parseCashSale, parseChargeRequest, parseDeposit, parseSpokenSale, pesosInWords } from './spoken-amount';
 
 describe('parseSpokenSale', () => {
   it('reads amounts the way people say them', () => {
@@ -68,5 +68,31 @@ describe('parseChargeRequest', () => {
 describe('parseSpokenSale articles', () => {
   it('does not take "un" in "un cobro de" for one peso', () => {
     expect(parseSpokenSale('un cobro de veinte mil')).toEqual({ amount: 20000, description: '' });
+  });
+});
+
+describe('cash', () => {
+  it('reads cash sales however they are said', () => {
+    expect(parseCashSale('vendí 15 mil de pan en efectivo')).toEqual({ amount: 15000, description: 'pan' });
+    expect(parseCashSale('me pagaron 20.000 en efectivo')).toEqual({ amount: 20000, description: '' });
+    expect(parseCashSale('registra una venta en efectivo de 8 mil')).toEqual({ amount: 8000, description: '' });
+    expect(parseCashSale('cobra 20 mil en efectivo')).toEqual({ amount: 20000, description: '' });
+    expect(parseCashSale('venta en billetes de $12,500 de gaseosas')).toEqual({ amount: 12500, description: 'gaseosas' });
+  });
+
+  it('leaves questions and deposits alone', () => {
+    expect(parseCashSale('¿cuánto vendí en efectivo hoy?')).toBeNull();
+    expect(parseCashSale('cuánto efectivo tengo que consignar')).toBeNull();
+    expect(parseCashSale('consigné 10 mil del efectivo')).toBeNull();
+    expect(parseCashSale('vendí 15 mil')).toBeNull();
+  });
+
+  it('reads deposits', () => {
+    expect(parseDeposit('consigné 50 mil')).toBe(50000);
+    expect(parseDeposit('ya deposité los 3.000')).toBe(3000);
+    expect(parseDeposit('Gloria, consigne 4500 pesos')).toBe(4500);
+    expect(parseDeposit('cuánto tengo que consignar')).toBeNull();
+    expect(parseDeposit('¿ya consigné?')).toBeNull();
+    expect(parseDeposit('voy a consignar')).toBeNull();
   });
 });

@@ -118,6 +118,38 @@ export function parseChargeRequest(text: string): { amount: number; description:
   return { amount: sale.amount, description: sale.description.replace(/^(a|al|para)\s+/i, '') };
 }
 
+/** "En efectivo", "en billetes": how the customer paid when it was not by QR. */
+const CASH_WORDS = /\b(en efectivo|efectivo|en billetes|en cash|cash)\b/gi;
+const DEPOSIT_WORD = /\b(consign[a-z]*|deposit[a-z]*)\b/;
+
+function isQuestion(raw: string): boolean {
+  const p = plain(raw).replace(/[^a-z0-9 ]/g, ' ').trim();
+  return raw.includes('¿') || raw.trim().endsWith('?') || /^(cuanto|cuantos|cuanta|que|como|cuando|tengo que|debo)\b/.test(p);
+}
+
+/**
+ * A sale paid in cash ("vendí 15 mil de pan en efectivo", "me pagaron 20.000 en efectivo",
+ * "registra una venta en efectivo de 8 mil"), read on the device (ADR 0019). Null for questions,
+ * deposits, or phrases without an amount.
+ */
+export function parseCashSale(text: string): { amount: number; description: string } | null {
+  if (isQuestion(text) || DEPOSIT_WORD.test(plain(text))) return null;
+  if (!text.match(CASH_WORDS)) return null;
+  const sale = parseSpokenSale(text.replace(CASH_WORDS, ' ').replace(/\s+/g, ' '));
+  if (!sale || sale.amount < 100) return null;
+  return { amount: sale.amount, description: sale.description.replace(/^(de|del|por)\s+/i, '') };
+}
+
+/** Cash deposited into the wallet ("consigné 50 mil", "ya deposité 3.000"), or null. */
+export function parseDeposit(text: string): number | null {
+  if (isQuestion(text)) return null;
+  const words = text.trim().split(/\s+/);
+  const at = words.findIndex((w) => DEPOSIT_WORD.test(plain(w)));
+  if (at < 0) return null;
+  const sale = parseSpokenSale(words.slice(at + 1).join(' '));
+  return sale && sale.amount > 0 ? sale.amount : null;
+}
+
 const ONES = ['', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
   'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve',
   'veinte', 'veintiún', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis',
