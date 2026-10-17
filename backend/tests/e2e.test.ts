@@ -2,6 +2,7 @@ import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
+import { GloriaService } from "../src/assistant/gloriaService.js";
 import { AuthService } from "../src/auth/authService.js";
 import { createApp } from "../src/http/app.js";
 import { ALICE, COOP, SAVINGS } from "./fakeOperations.js";
@@ -22,9 +23,16 @@ afterEach(() => {
   server = undefined;
 });
 
-async function start() {
+async function start(withGloria = false) {
   const env = setupMiPlante();
+  const gloria = withGloria
+    ? new GloriaService(
+        { complete: async () => ({ content: "¡Hola! Vas muy bien.", toolCalls: [] }) },
+        env.dashboard,
+      )
+    : undefined;
   server = createApp({
+    gloria,
     auth: new AuthService(env.store, { now: env.now }),
     payouts: env.payouts,
     flows: env.flows,
@@ -293,5 +301,40 @@ describe("one account cannot see or touch another's shop (QA risk R2)", () => {
     const { call } = await start();
     expect((await call("GET", "/api/sales/not-a-real-id")).status).toBe(404);
     expect((await call("GET", "/api/sales/00000000-0000-4000-8000-000000000000")).status).toBe(404);
+  });
+});
+
+describe("GlorIA over HTTP", () => {
+  const ask = { messages: [{ role: "user", content: "¿Cómo voy?" }] };
+
+  it("answers the shop's owner, and nobody else", async () => {
+    const { call, signUp, activeShop } = await start(true);
+    const { token, id } = await activeShop();
+
+    const answer = await call("POST", `/api/merchants/${id}/assistant`, ask, token);
+    expect(answer.status).toBe(200);
+    expect(answer.body).toEqual({ reply: "¡Hola! Vas muy bien.", actions: [] });
+
+    expect((await call("POST", `/api/merchants/${id}/assistant`, ask)).status).toBe(401);
+    expect((await call("POST", `/api/merchants/${id}/assistant`, ask, await signUp())).status).toBe(404);
+    expect((await call("POST", `/api/merchants/${id}/assistant`, { messages: [] }, token)).status).toBe(400);
+  });
+
+  it("says GlorIA is off when no model is configured, and keeps her pace", async () => {
+    const off = await start(false);
+    const shop = await off.activeShop();
+    const offAnswer = await off.call("POST", `/api/merchants/${shop.id}/assistant`, ask, shop.token);
+    expect(offAnswer.status).toBe(503);
+    expect(offAnswer.body.error).toMatch(/GlorIA no está configurada/);
+    server?.close();
+
+    const on = await start(true);
+    const busy = await on.activeShop();
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i += 1) {
+      statuses.push((await on.call("POST", `/api/merchants/${busy.id}/assistant`, ask, busy.token)).status);
+    }
+    expect(statuses.slice(0, 20).every((s) => s === 200)).toBe(true);
+    expect(statuses[20]).toBe(429);
   });
 });

@@ -1,4 +1,5 @@
 import express from "express";
+import type { GloriaService } from "../assistant/gloriaService.js";
 import type { AuthService } from "../auth/authService.js";
 import type { DashboardService } from "../merchants/dashboardService.js";
 import type { MerchantService } from "../merchants/merchantService.js";
@@ -25,6 +26,8 @@ export interface AppOptions {
   frontendUrl: string;
   /** Origin allowed to call /api from another host (e.g. an Angular dev server). */
   corsOrigin?: string;
+  /** GlorIA, when a model is configured (ADR 0017). */
+  gloria?: GloriaService;
 }
 
 /**

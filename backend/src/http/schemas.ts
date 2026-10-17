@@ -75,6 +75,19 @@ const rule = z.object({
 
 export const changeCap = z.object({ monthlyCap: decimalAmount });
 
+/** A conversation with GlorIA, as the browser keeps it (ADR 0017). */
+export const assistantChat = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().trim().min(1).max(1000),
+      }),
+    )
+    .min(1)
+    .max(40),
+});
+
 /** Which savings rule's wallet to keep as the last resort; the first one if not given. */
 export const authorizeEmergency = z.object({ ruleId: z.uuid().optional() });
 

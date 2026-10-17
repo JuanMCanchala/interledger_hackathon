@@ -1,9 +1,11 @@
 import { Router, type Request } from "express";
+import type { GloriaService } from "../../assistant/gloriaService.js";
 import type { AuthService } from "../../auth/authService.js";
 import type { DashboardService } from "../../merchants/dashboardService.js";
 import type { MerchantService } from "../../merchants/merchantService.js";
 import type { PayoutService } from "../../merchants/payoutService.js";
 import type { SalesService } from "../../merchants/salesService.js";
+import { AppError } from "../../shared/errors.js";
 import { bearerToken } from "../middleware/session.js";
 import * as schemas from "../schemas.js";
 
@@ -11,20 +13,26 @@ import * as schemas from "../schemas.js";
  * The shopkeeper's routes: setting up the shop and running it. Every one needs a session, and a
  * shop answers only to the account that registered it (anyone else gets 404).
  */
+/** GlorIA's answers per shop and minute: plenty for a person, a ceiling on cost and abuse. */
+const GLORIA_PER_MINUTE = 20;
+
 export function merchantsController({
   auth,
   merchants,
   dashboard,
   payouts,
   sales,
+  gloria,
 }: {
   auth: AuthService;
   merchants: MerchantService;
   dashboard: DashboardService;
   payouts: PayoutService;
   sales: SalesService;
+  gloria?: GloriaService;
 }): Router {
   const router = Router();
+  const gloriaCalls = new Map<string, number[]>();
 
   /** The shop in the URL, only for the account that registered it. */
   const ownedMerchant = async (req: Request<{ id: string }>) => {
@@ -92,6 +100,20 @@ export function merchantsController({
   router.post("/:id/payouts/:payoutId/use-emergency", async (req, res) => {
     const merchant = await ownedMerchant(req);
     res.status(201).json(await payouts.useEmergency(merchant.id, req.params.payoutId));
+  });
+
+  /** GlorIA, the shopkeeper's assistant: answers from the shop's own data, never moves money. */
+  router.post("/:id/assistant", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    if (!gloria) throw new AppError("GlorIA no está configurada en este servidor", 503);
+    const { messages } = schemas.assistantChat.parse(req.body);
+    const now = Date.now();
+    const recent = (gloriaCalls.get(merchant.id) ?? []).filter((t) => now - t < 60_000);
+    if (recent.length >= GLORIA_PER_MINUTE) {
+      throw new AppError("Vamos muy rápido: dame un minuto y me vuelves a preguntar", 429);
+    }
+    gloriaCalls.set(merchant.id, [...recent, now]);
+    res.json(await gloria.chat(merchant.id, messages));
   });
 
   router.post("/:id/consent", async (req, res) => {

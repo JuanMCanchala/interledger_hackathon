@@ -1,3 +1,5 @@
+import { DeepSeekChatModel } from "./assistant/chatModel.js";
+import { GloriaService } from "./assistant/gloriaService.js";
 import { AuthService } from "./auth/authService.js";
 import { loadConfig } from "./config.js";
 import { createApp } from "./http/app.js";
@@ -31,6 +33,10 @@ try {
     walletSendUrl: config.walletSendUrl,
   });
   const payouts = new PayoutService(flows, merchants, store);
+  const dashboard = new DashboardService(flows, merchants, sales, store, { payouts });
+  const gloria = config.assistant
+    ? new GloriaService(new DeepSeekChatModel(config.assistant), dashboard)
+    : undefined;
   const frontendOrigin = new URL(config.frontendUrl).origin;
   const app = createApp({
     auth: new AuthService(store),
@@ -38,7 +44,8 @@ try {
     flows,
     merchants,
     sales,
-    dashboard: new DashboardService(flows, merchants, sales, store, { payouts }),
+    dashboard,
+    gloria,
     frontendUrl: config.frontendUrl,
     corsOrigin:
       frontendOrigin === new URL(config.publicBaseUrl).origin
@@ -49,7 +56,7 @@ try {
   const stopPayouts = payouts.startScheduler();
   const server = app.listen(config.port, () => {
     console.log(
-      `Open Payments listo en ${config.publicBaseUrl} (wallet de la app: ${config.clientWalletAddress})`,
+      `Open Payments listo en ${config.publicBaseUrl} (wallet de la app: ${config.clientWalletAddress}); GlorIA ${gloria ? `con ${config.assistant!.model}` : "apagada (sin DEEPSEEK_API_KEY)"}`,
     );
   });
   const shutdown = () => {

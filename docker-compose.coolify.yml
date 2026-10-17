@@ -42,6 +42,9 @@ services:
       OP_ALLOWED_WALLET_HOSTS: ${OP_ALLOWED_WALLET_HOSTS:-ilp.interledger-test.dev}
       OP_WALLET_SEND_URL: ${OP_WALLET_SEND_URL:-https://wallet.interledger-test.dev/send}
       OP_LOG_LEVEL: ${OP_LOG_LEVEL:-warn}
+      # GlorIA, the shopkeeper's assistant (ADR 0017). Leave the key empty to turn her off.
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
     expose:
       - "3000"
     healthcheck:
