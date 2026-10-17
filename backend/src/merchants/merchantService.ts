@@ -240,7 +240,7 @@ export class MerchantService {
       description: `MiPlante · ${merchant.name}`,
       returnTo: `/merchant?id=${merchant.id}`,
     });
-    const updated = await this.store.saveMerchant({
+    const updated = await this.store.updateMerchant({
       ...merchant,
       mandateId: mandate.id,
       updatedAt: this.now().toISOString(),
@@ -260,7 +260,7 @@ export class MerchantService {
     if (goal && BigInt(goal.value) <= 0n) {
       throw new AppError("La meta de ventas debe ser mayor que cero");
     }
-    const updated = await this.store.saveMerchant({
+    const updated = await this.store.updateMerchant({
       ...merchant,
       name: input.name ?? merchant.name,
       monthlySalesGoal: goal,
@@ -275,7 +275,8 @@ export class MerchantService {
    * an active grant switches to the new cap at once.
    */
   async changeCap(id: string, monthlyCap: string) {
-    const merchant = await this.require(id);
+    // A cap approved since the last look applies first, so the new request never orphans it.
+    const merchant = await this.syncPendingCap(await this.require(id));
     const cap = toAmount(monthlyCap, merchant.asset);
     assertCapCoversQuotas(cap, merchant.rules);
     const current = await this.flows.findMandate(merchant.mandateId);
@@ -290,7 +291,7 @@ export class MerchantService {
       description: `MiPlante · ${merchant.name}`,
       returnTo: `/merchant?id=${merchant.id}#ajustes`,
     });
-    const updated = await this.store.saveMerchant(
+    const updated = await this.store.updateMerchant(
       current.status === "active"
         ? {
             ...merchant,
@@ -318,7 +319,7 @@ export class MerchantService {
     const { status } = await this.flows.findMandate(pending.mandateId);
     if (status === "awaiting-consent") return merchant;
     const approved = status === "active";
-    const updated = await this.store.saveMerchant({
+    const updated = await this.store.updateMerchant({
       ...merchant,
       ...(approved
         ? { mandateId: pending.mandateId, monthlyCap: pending.monthlyCap }
@@ -345,15 +346,15 @@ export class MerchantService {
     return merchant;
   }
 
-  /** Whether a mandate is a shop's grant: only MiPlante's own flows may use it. */
-  async isShopMandate(mandateId: string): Promise<boolean> {
-    return Boolean(await this.store.getMerchantByMandate(mandateId));
-  }
-
   /** The shop the user registered, if any. */
   async findByOwner(userId: string) {
     const merchant = await this.store.getMerchantByOwner(userId);
     return merchant ? this.view(merchant) : null;
+  }
+
+  /** Whether a shop's grant is this mandate (or the one it is waiting for to change its cap). */
+  usesMandate(mandateId: string): Promise<boolean> {
+    return this.store.isMerchantMandate(mandateId);
   }
 
   async require(id: string): Promise<MerchantRecord> {

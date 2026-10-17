@@ -21,10 +21,11 @@ import {
 const FRONTEND_URL = "http://localhost:5173";
 let server: Server;
 let baseUrl: string;
+let store: MemoryStore;
 
 beforeAll(async () => {
   const { ops } = createFakeOperations();
-  const store = new MemoryStore();
+  store = new MemoryStore();
   const flows = new PaymentFlows(ops, store, {
     publicBaseUrl: "http://localhost:3000",
     allowedWalletHosts: ["ilp.interledger-test.dev"],
@@ -210,6 +211,33 @@ describe("MiPlante API", () => {
     expect(dashboard.sales).toHaveLength(1);
   });
 
+  it("keeps a shop's grant out of the sandbox's mandate routes", async () => {
+    const token = await signUp();
+    const { merchant } = await (
+      await postJson("/api/merchants", rosa, token)
+    ).json();
+    const { mandateId } = (await store.getMerchant(merchant.id))!;
+    const path = `/api/mandates/${mandateId}`;
+    const charge = { receiver: ALICE, amount: "1000" };
+
+    expect((await fetch(`${baseUrl}${path}`)).status).toBe(404);
+    expect((await postJson(`${path}/charges`, charge)).status).toBe(404);
+    expect(
+      (await postJson(`${path}/split`, { receivers: [{ receiver: ALICE, amount: "1000" }] }))
+        .status,
+    ).toBe(404);
+    expect((await fetch(`${baseUrl}${path}`, { method: "DELETE" })).status).toBe(404);
+    expect((await store.getMandate(mandateId))!.status).not.toBe("revoked");
+
+    // The sandbox's own mandates still work.
+    const sandbox = await postJson("/api/mandates", {
+      sender: ALICE,
+      maxAmount: "100",
+    });
+    const { mandate } = await sandbox.json();
+    expect((await fetch(`${baseUrl}/api/mandates/${mandate.id}`)).status).toBe(200);
+  });
+
   it("validates merchant rules at the edge", async () => {
     const res = await postJson(
       "/api/merchants",
@@ -338,6 +366,18 @@ describe("shopkeeper accounts", () => {
       password: "una-clave-larga",
     });
     expect(twice.status).toBe(409);
+  });
+
+  it("lets one of two simultaneous sign-ups with the same email in and refuses the other", async () => {
+    const body = {
+      name: "Marta",
+      email: "marta@example.com",
+      password: "una-clave-larga",
+    };
+    const statuses = (
+      await Promise.all([1, 2, 3].map(() => postJson("/api/auth/register", body)))
+    ).map((response) => response.status);
+    expect(statuses.sort()).toEqual([201, 409, 409]);
   });
 
   it("asks for a session to set up a shop, and hides a shop from other accounts", async () => {

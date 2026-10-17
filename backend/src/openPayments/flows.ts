@@ -314,6 +314,11 @@ export class PaymentFlows {
     return toPublicPayment(await this.requirePayment(id));
   }
 
+  /** The mandate that paid a payment, if one did. The public view never carries it. */
+  async paymentMandate(id: string): Promise<string | undefined> {
+    return (await this.requirePayment(id)).mandateId;
+  }
+
   /** Stored view of a mandate, without calling the wallet. */
   async findMandate(id: string) {
     return toPublicMandate(await this.requireMandate(id));

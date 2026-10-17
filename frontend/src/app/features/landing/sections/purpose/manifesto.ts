@@ -1,5 +1,3 @@
-import { DoodleName } from '../../../../shared/brand/doodle';
-
 export interface Source {
   readonly label: string;
   readonly url: string;
@@ -7,7 +5,6 @@ export interface Source {
 
 export interface Figure {
   readonly value: string;
-  readonly doodle: DoodleName;
   /** 1-based position in SOURCES, shown as the footnote number. */
   readonly source: number;
 }
@@ -31,15 +28,15 @@ export const SOURCES: readonly Source[] = [
 
 export const MANIFESTO: readonly Segment[] = [
   'En Colombia hay ',
-  { value: '5,3 millones de micronegocios', doodle: 'billetera', source: 1 },
+  { value: '5,3 millones de micronegocios', source: 1 },
   ', y en ',
-  { value: '9 de cada 10', doodle: 'ahorro', source: 1 },
+  { value: '9 de cada 10', source: 1 },
   ' su dueño trabaja por su cuenta. Casi la mitad del trabajo del país, el ',
-  { value: '44,7 %', doodle: 'crecimiento', source: 2 },
+  { value: '44,7 %', source: 2 },
   ', es independiente. El ',
-  { value: '97,5 % recibe pagos en efectivo', doodle: 'pago', source: 1 },
+  { value: '97,5 % recibe pagos en efectivo', source: 1 },
   ' y lo mezcla todo en un solo bolsillo. Cuando no alcanza, el «gota a gota» les cobra hasta ',
-  { value: '382 % de interés al año', doodle: 'duda', source: 3 },
+  { value: '382 % de interés al año', source: 3 },
   '. MiPlante existe para que manejen sus deudas, su pensión, sus proveedores y sus gastos sin enredos.',
 ];
 

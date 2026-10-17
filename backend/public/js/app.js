@@ -106,7 +106,10 @@ export const session = {
 
 /** Sends the shopkeeper to sign in, and back to this page afterwards. */
 function goToLogin() {
-  const here = `${window.location.pathname}${window.location.search}`;
+  // On the sign-in page already (it tried an old session): its form is the way on, and reloading
+  // it would lose the page it should return to.
+  if (window.location.pathname.startsWith("/login")) return;
+  const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   window.location.href = `/login?next=${encodeURIComponent(here)}`;
 }
 
@@ -140,14 +143,18 @@ export async function homeOfSignedIn() {
  * matched as text: browsers read "/\evil.com" as "//evil.com", another site.
  */
 export function safeNext(next) {
-  if (!next) return "";
+  if (!next?.startsWith("/")) return "";
+  // Resolve it as the browser will: "/\\evil.com" or a tab in "//" also lead to another domain.
+  let url;
   try {
-    const url = new URL(next, window.location.origin);
-    if (url.origin !== window.location.origin || url.pathname.startsWith("/login")) return "";
-    return `${url.pathname}${url.search}${url.hash}`;
+    url = new URL(next, window.location.origin);
   } catch {
     return "";
   }
+  return url.origin === window.location.origin &&
+    !url.pathname.startsWith("/login")
+    ? `${url.pathname}${url.search}${url.hash}`
+    : "";
 }
 
 /**
@@ -558,7 +565,9 @@ export function param(name) {
  * Calls `task` until it returns false or `stop()` is called, waiting `interval` ms between calls
  * (a number, or a function so the pace can slow down). The next call starts when the previous one
  * ends, so requests never pile up. While the page is hidden (another tab, the phone locked) it
- * makes no requests, and it checks again as soon as the page is visible.
+ * makes no requests, and it checks again as soon as the page is visible. A lost connection or a
+ * server error is tried again; an answer that will not change (the sale does not exist, the session
+ * ended) stops it.
  */
 export function poll(task, interval) {
   let timer;
@@ -572,8 +581,9 @@ export function poll(task, interval) {
     let again = true;
     try {
       again = (await task()) !== false;
-    } catch {
-      again = true;
+    } catch (error) {
+      const status = error?.status ?? 0;
+      again = status < 400 || status >= 500 || status === 408 || status === 429;
     }
     running = false;
     if (!again) stop();

@@ -1,6 +1,7 @@
 import { OpenPaymentsClientError } from "@interledger/open-payments";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ALICE, BOB, COOP, SAVINGS } from "./fakeOperations.js";
+import { toPublicSale } from "../src/merchants/salesService.js";
 import { cop, setupMiPlante } from "./miplanteHarness.js";
 
 /** Rosa sells 10,000 COP; the customer approves and the money arrives. */
@@ -20,6 +21,39 @@ async function paidSale(
 }
 
 describe("settlement", () => {
+  it("tries the split again when it fails before any money moves", async () => {
+    const env = setupMiPlante();
+    const merchantId = await env.onboardRosa();
+    const saleId = await paidSale(env, merchantId);
+    vi.spyOn(env.merchants, "require").mockRejectedValueOnce(new Error("database down"));
+    vi.spyOn(console, "warn").mockImplementationOnce(() => {});
+
+    const failed = await env.sales.refresh(saleId);
+    expect(failed.settlement).toEqual({ status: "pending", items: [] });
+
+    const retried = await env.sales.refresh(saleId);
+    expect(retried.settlement.status).toBe("done");
+    expect(retried.settlement.kept).toEqual(cop("800000"));
+  });
+
+  it("shows anyone with the sale link the split, but not where the shares went", async () => {
+    const env = setupMiPlante();
+    const merchantId = await env.onboardRosa();
+    const saleId = await paidSale(env, merchantId);
+
+    const sale = toPublicSale(await env.sales.refresh(saleId));
+
+    expect(sale.settlement.items).toEqual([
+      expect.objectContaining({ label: "Microcrédito", amount: cop("150000") }),
+      expect.objectContaining({ label: "Fondo de emergencia", amount: cop("50000") }),
+    ]);
+    for (const item of sale.settlement.items) {
+      expect(item).not.toHaveProperty("destination");
+      expect(item).not.toHaveProperty("paymentId");
+      expect(item).not.toHaveProperty("ruleId");
+    }
+  });
+
   it("splits a paid sale: 1,500 reserved for the microcredit, 500 to savings, 8,000 stay", async () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();

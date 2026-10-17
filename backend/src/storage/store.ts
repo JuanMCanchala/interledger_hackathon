@@ -42,7 +42,14 @@ export interface Store {
   savePayout(record: PayoutRecord): Promise<PayoutRecord>;
   /** Newest first. */
   listPayouts(merchantId: string): Promise<PayoutRecord[]>;
+
+  /** Stores a shop with its rules, replacing any stored before: for a new shop. */
   saveMerchant(record: MerchantRecord): Promise<MerchantRecord>;
+  /**
+   * Saves a shop's own fields (name, goal, cap, grant) and keeps its rules as they are stored, so a
+   * change made from an earlier read never undoes a repayment recorded meanwhile. Returns the shop.
+   */
+  updateMerchant(record: MerchantRecord): Promise<MerchantRecord>;
 
   getSale(id: string): Promise<SaleRecord | undefined>;
   saveSale(record: SaleRecord): Promise<SaleRecord>;
@@ -98,10 +105,10 @@ export interface Store {
   saveSession(record: SessionRecord): Promise<SessionRecord>;
   getSession(token: string): Promise<SessionRecord | undefined>;
   deleteSession(token: string): Promise<void>;
-  /** The shop whose grant (current or pending) is this mandate, if any. */
-  getMerchantByMandate(mandateId: string): Promise<MerchantRecord | undefined>;
   /** The shop a user registered (the newest one if there are several). */
   getMerchantByOwner(ownerId: string): Promise<MerchantRecord | undefined>;
+  /** Whether a shop pays its splits with this mandate, or is waiting for it to approve a new cap. */
+  isMerchantMandate(mandateId: string): Promise<boolean>;
 
   close(): Promise<void>;
 }
@@ -162,10 +169,15 @@ export class MemoryStore implements Store {
   }
 
   async saveMerchant(record: MerchantRecord) {
-    // Like PrismaStore: an existing shop keeps its stored rules (they change through updateRules).
-    const stored = this.merchants.get(record.id);
-    this.merchants.set(record.id, copy({ ...record, rules: stored?.rules ?? record.rules }));
+    this.merchants.set(record.id, copy(record));
     return record;
+  }
+
+  async updateMerchant(record: MerchantRecord) {
+    const stored = this.merchants.get(record.id);
+    if (!stored) throw new Error(`No merchant ${record.id}`);
+    this.merchants.set(record.id, { ...copy(record), rules: stored.rules });
+    return copy(this.merchants.get(record.id))!;
   }
 
   async getSale(id: string) {
@@ -259,6 +271,12 @@ export class MemoryStore implements Store {
   }
 
   async saveUser(record: UserRecord) {
+    // Like the unique email in PostgreSQL.
+    for (const user of this.users.values()) {
+      if (user.email === record.email && user.id !== record.id) {
+        throw new Error(`Unique constraint failed on the email ${record.email}`);
+      }
+    }
     this.users.set(record.id, copy(record));
     return record;
   }
@@ -284,19 +302,17 @@ export class MemoryStore implements Store {
     this.sessions.delete(token);
   }
 
-  async getMerchantByMandate(mandateId: string) {
-    return copy(
-      [...this.merchants.values()].find(
-        (m) => m.mandateId === mandateId || m.pendingCap?.mandateId === mandateId,
-      ),
-    );
-  }
-
   async getMerchantByOwner(ownerId: string) {
     const owned = [...this.merchants.values()]
       .filter((m) => m.ownerId === ownerId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return copy(owned[0]);
+  }
+
+  async isMerchantMandate(mandateId: string) {
+    return [...this.merchants.values()].some(
+      (m) => m.mandateId === mandateId || m.pendingCap?.mandateId === mandateId,
+    );
   }
 
   async close() {}

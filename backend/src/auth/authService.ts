@@ -16,6 +16,8 @@ const scrypt = promisify(scryptCallback) as (
 ) => Promise<Buffer>;
 
 const KEY_LENGTH = 64;
+/** Checked against when the email has no account; no password matches it. */
+const unknownUserHash = hashPassword(randomBytes(32).toString("base64url"));
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export class UnauthorizedError extends AppError {
@@ -45,20 +47,35 @@ export class AuthService {
     if (await this.store.getUserByEmail(email)) {
       throw new AppError("Ya existe una cuenta con ese correo", 409);
     }
-    const user = await this.store.saveUser({
-      id: randomUUID(),
-      name: input.name.trim(),
-      email,
-      passwordHash: await hashPassword(input.password),
-      createdAt: this.now().toISOString(),
-    });
+    const passwordHash = await hashPassword(input.password);
+    let user: UserRecord;
+    try {
+      user = await this.store.saveUser({
+        id: randomUUID(),
+        name: input.name.trim(),
+        email,
+        passwordHash,
+        createdAt: this.now().toISOString(),
+      });
+    } catch (error) {
+      // Two sign-ups with one email at once (a double tap): the unique email lets only one in.
+      if (await this.store.getUserByEmail(email)) {
+        throw new AppError("Ya existe una cuenta con ese correo", 409);
+      }
+      throw error;
+    }
     return this.startSession(user);
   }
 
   async login(input: { email: string; password: string }) {
     const user = await this.store.getUserByEmail(normalizeEmail(input.email));
-    // Same message for an unknown email and a wrong password.
-    if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
+    // Same message, and the same scrypt work, for an unknown email and a wrong password, so neither
+    // the answer nor its timing tells which emails have an account.
+    const valid = await verifyPassword(
+      input.password,
+      user?.passwordHash ?? (await unknownUserHash),
+    );
+    if (!user || !valid) {
       throw new UnauthorizedError("Correo o contraseña incorrectos");
     }
     return this.startSession(user);

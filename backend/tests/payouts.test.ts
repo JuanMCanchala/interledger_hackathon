@@ -208,4 +208,24 @@ describe("paying creditors on their due day", () => {
     const updated = await env.merchants.updateRules(id, [savings]);
     expect(updated.rules.map((r) => r.label)).toEqual(["Ahorro"]);
   });
+
+  it("never pays a reserved balance twice when the due day and an early payment meet", async () => {
+    const env = setupMiPlante();
+    const supplier = { ...MICROCREDIT, label: "Distribuidora", category: "Proveedores", monthlyQuota: "5000", outstanding: undefined };
+    const id = await env.onboardRosa({ rules: [supplier, MICROCREDIT] });
+    await sellAndPay(env, id);
+    const microcredit = (await env.store.getMerchant(id))!.rules.find((r) => r.label === "Microcrédito")!;
+    env.clock.now = new Date("2026-10-20T15:00:00Z");
+
+    // The scheduler pays both debts while the shopkeeper taps "pay now" on the microcredit.
+    await Promise.all([
+      env.payouts.runDue(),
+      env.payouts.pay(id, { ruleId: microcredit.id, reason: "manual" }).catch(() => []),
+    ]);
+
+    const paid = (await env.store.listPayouts(id))
+      .filter((p) => p.ruleId === microcredit.id && p.status !== "failed")
+      .reduce((sum, p) => sum + BigInt(p.amount.value), 0n);
+    expect(paid).toBe(150000n); // the 1,500 reserved, once
+  });
 });

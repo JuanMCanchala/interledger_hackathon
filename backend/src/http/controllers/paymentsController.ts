@@ -1,15 +1,19 @@
 import { Router } from "express";
 import { describeError } from "../../openPayments/errors.js";
+import type { MerchantService } from "../../merchants/merchantService.js";
 import type { PaymentFlows } from "../../openPayments/flows.js";
+import { NotFoundError } from "../../shared/errors.js";
 import * as schemas from "../schemas.js";
 import { returnPath } from "./consentReturn.js";
 
 /** One-off Open Payments payments: the sandbox's, and the customer's checkout of a sale. */
 export function paymentsController({
   flows,
+  merchants,
   frontendUrl,
 }: {
   flows: PaymentFlows;
+  merchants: MerchantService;
   frontendUrl: string;
 }): Router {
   const router = Router();
@@ -18,7 +22,12 @@ export function paymentsController({
     res.status(201).json(await flows.startPayment(schemas.createPayment.parse(req.body)));
   });
 
+  /** A payment under a shop's grant (a split share, a payout) is the shop's business: not found. */
   router.get("/:id", async (req, res) => {
+    const mandateId = await flows.paymentMandate(req.params.id);
+    if (mandateId && (await merchants.usesMandate(mandateId))) {
+      throw new NotFoundError(`No existe el pago ${req.params.id}`);
+    }
     res.json(await flows.refreshPayment(req.params.id));
   });
 

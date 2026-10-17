@@ -945,7 +945,8 @@ fieldset {
 
 .banner-info {
   border-color: color-mix(in srgb, var(--info) 30%, transparent);
-  background: var(--info-soft);
+  /* Solid paper: on the dark page (the onboarding tip) a see-through tint left dark text on dark. */
+  background: color-mix(in srgb, var(--info) 10%, var(--surface));
 }
 
 .check {

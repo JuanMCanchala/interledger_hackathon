@@ -27,7 +27,7 @@ export function mandatesController({
    * does not exist.
    */
   const sandboxMandate = async (req: Request<{ id: string }>) => {
-    if (await merchants.isShopMandate(req.params.id)) {
+    if (await merchants.usesMandate(req.params.id)) {
       throw new NotFoundError(`No existe la autorización ${req.params.id}`);
     }
     return req.params.id;

@@ -130,36 +130,14 @@ export class PrismaStore implements Store {
   }
 
   async saveMerchant(record: MerchantRecord) {
-    const data = {
-      ownerId: record.ownerId ?? null,
-      name: record.name,
-      wallet: record.wallet,
-      assetCode: record.asset.assetCode,
-      assetScale: record.asset.assetScale,
-      monthlyCap: BigInt(record.monthlyCap.value),
-      monthlySalesGoal: record.monthlySalesGoal
-        ? BigInt(record.monthlySalesGoal.value)
-        : null,
-      pendingCap: record.pendingCap
-        ? BigInt(record.pendingCap.monthlyCap.value)
-        : null,
-      pendingMandateId: record.pendingCap?.mandateId ?? null,
-      mandateId: record.mandateId,
-      createdAt: new Date(record.createdAt),
-      updatedAt: new Date(record.updatedAt),
-    };
-    const exists = await this.prisma.merchant.findUnique({
-      where: { id: record.id },
-      select: { id: true },
-    });
-    if (exists) {
-      // An existing shop's rules change only through updateRules and recordRepayment: rewriting
-      // them from this snapshot would undo a repayment recorded while the caller was busy.
-      await this.prisma.merchant.update({ where: { id: record.id }, data });
-      return record;
-    }
+    const data = merchantColumns(record);
     await this.prisma.$transaction([
-      this.prisma.merchant.create({ data: { id: record.id, ...data } }),
+      this.prisma.merchant.upsert({
+        where: { id: record.id },
+        create: { id: record.id, ...data },
+        update: data,
+      }),
+      this.prisma.rule.deleteMany({ where: { merchantId: record.id } }),
       this.prisma.rule.createMany({
         data: record.rules.map((rule, position) => ({
           merchantId: record.id,
@@ -181,6 +159,15 @@ export class PrismaStore implements Store {
       }),
     ]);
     return record;
+  }
+
+  async updateMerchant(record: MerchantRecord) {
+    const row = await this.prisma.merchant.update({
+      where: { id: record.id },
+      data: merchantColumns(record),
+      include: merchantInclude,
+    });
+    return toMerchant(row);
   }
 
   async recordRepayment(
@@ -417,15 +404,6 @@ export class PrismaStore implements Store {
     await this.prisma.session.deleteMany({ where: { token } });
   }
 
-  async getMerchantByMandate(mandateId: string) {
-    if (!isUuid(mandateId)) return undefined;
-    const row = await this.prisma.merchant.findFirst({
-      where: { OR: [{ mandateId }, { pendingMandateId: mandateId }] },
-      include: merchantInclude,
-    });
-    return row ? toMerchant(row) : undefined;
-  }
-
   async getMerchantByOwner(ownerId: string) {
     const row = await this.prisma.merchant.findFirst({
       where: { ownerId },
@@ -489,6 +467,14 @@ export class PrismaStore implements Store {
     );
   }
 
+  async isMerchantMandate(mandateId: string) {
+    if (!isUuid(mandateId)) return false;
+    const count = await this.prisma.merchant.count({
+      where: { OR: [{ mandateId }, { pendingMandateId: mandateId }] },
+    });
+    return count > 0;
+  }
+
   async close() {
     await this.prisma.$disconnect();
   }
@@ -545,6 +531,28 @@ function toMandate(row: MandateRow): MandateRecord {
     interaction: fromJson<Interaction>(row.interaction),
     token: fromJson<StoredToken>(row.token),
     continuation: fromJson<MandateRecord["continuation"]>(row.continuation),
+  };
+}
+
+/** The shop's own columns; its rules are stored apart. */
+function merchantColumns(record: MerchantRecord) {
+  return {
+    ownerId: record.ownerId ?? null,
+    name: record.name,
+    wallet: record.wallet,
+    assetCode: record.asset.assetCode,
+    assetScale: record.asset.assetScale,
+    monthlyCap: BigInt(record.monthlyCap.value),
+    monthlySalesGoal: record.monthlySalesGoal
+      ? BigInt(record.monthlySalesGoal.value)
+      : null,
+    pendingCap: record.pendingCap
+      ? BigInt(record.pendingCap.monthlyCap.value)
+      : null,
+    pendingMandateId: record.pendingCap?.mandateId ?? null,
+    mandateId: record.mandateId,
+    createdAt: new Date(record.createdAt),
+    updatedAt: new Date(record.updatedAt),
   };
 }
 

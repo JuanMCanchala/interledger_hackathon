@@ -64,5 +64,6 @@ form.addEventListener("submit", async (event) => {
 
 // Already signed in on this device: straight to the till.
 if (session.token()) {
-  goOn().catch(() => session.clear());
+  // api() already ends a session the server refused; a network blip keeps it and shows the form.
+  goOn().catch(() => {});
 }
