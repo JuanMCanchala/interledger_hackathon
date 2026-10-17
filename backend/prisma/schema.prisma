@@ -39,7 +39,7 @@ model Merchant {
   @@map("merchants")
 }
 
-/// Applied in `position` order, which is also their priority when the daily cap runs out.
+/// Applied in `position` order, which is also their priority when the monthly cap runs out.
 model Rule {
   merchantId   String  @map("merchant_id") @db.Uuid
   id           String  @db.Uuid

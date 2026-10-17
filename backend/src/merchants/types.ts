@@ -50,7 +50,10 @@ export type SaleStatus =
 export type SettlementItemStatus =
   "processing" | "completed" | "failed" | "skipped" | "reserved";
 
-/** One rule's share of a sale, paid from the merchant's wallet under the daily-capped grant. */
+/**
+ * One rule's share of a sale: sent from the merchant's wallet under the monthly-capped grant
+ * (savings), or reserved there until the debt's due day (ADR 0014).
+ */
 export interface SettlementItem {
   ruleId: string;
   label: string;
@@ -58,7 +61,7 @@ export interface SettlementItem {
   destination: string;
   amount: Amount;
   status: SettlementItemStatus;
-  /** The daily cap reduced this item (possibly to zero). */
+  /** The monthly cap reduced this item (possibly to zero). */
   capped: boolean;
   paymentId?: string;
   error?: string;
