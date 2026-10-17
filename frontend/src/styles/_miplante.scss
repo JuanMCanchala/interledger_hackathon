@@ -538,6 +538,43 @@
   font-weight: 700;
 }
 
+/* Cash sales (ADR 0019): what is still in the drawer, and the deposit that releases it. */
+.cash-card {
+  border-left: 6px solid var(--lima);
+}
+
+.cash-shares {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+  }
+}
+
+.cash-deposit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+
+  .field {
+    flex: 1 1 180px;
+  }
+}
+
+.list-button.is-cash {
+  cursor: default;
+}
+
 /* An input with a mic beside it: the amount can be dictated. */
 .dictate-row {
   display: flex;

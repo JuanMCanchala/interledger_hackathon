@@ -41,6 +41,8 @@ export interface RuleView {
   savingsGoal?: Amount;
   dueDay?: number;
   paidThisMonth?: Amount;
+  /** Of what it took, the part of cash sales not deposited yet. */
+  inCash?: Amount;
   paidOutThisMonth?: Amount;
   reserved?: Amount;
   repaid?: Amount;
@@ -51,7 +53,8 @@ export interface SettlementItemView {
   label: string;
   kind: 'debt' | 'savings';
   amount: Amount;
-  status: 'processing' | 'completed' | 'failed' | 'skipped' | 'reserved';
+  /** `cash`: a cash sale's share, waiting for the shopkeeper to deposit it (ADR 0019). */
+  status: 'processing' | 'completed' | 'failed' | 'skipped' | 'reserved' | 'cash';
   capped?: boolean;
   error?: string;
 }
@@ -77,6 +80,8 @@ export interface SaleView {
   amount: Amount;
   pending?: Amount;
   description?: string;
+  /** How the customer paid: QR through Open Payments, or cash (ADR 0019). */
+  method?: 'qr' | 'cash';
   /** `cancelled`: replaced by a newer sale before anyone paid it. */
   status: 'open' | 'awaiting-consent' | 'processing' | 'paid' | 'failed' | 'cancelled';
   error?: string;
@@ -149,6 +154,8 @@ export interface MerchantDashboard {
   pendingCap?: Amount;
   spentThisMonth?: Amount;
   monthlySalesGoal?: Amount;
+  /** Cash sales: sold in cash, and the shares still to deposit so they can leave (ADR 0019). */
+  cash?: { today: Amount; month: Amount; toDeposit: Amount; credit: Amount };
   /** The link a phone opens once to show each new sale's QR (ADR 0018); null until linked. */
   displayUrl?: string | null;
   today: {

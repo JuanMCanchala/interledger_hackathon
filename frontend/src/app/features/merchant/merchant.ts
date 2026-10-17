@@ -14,6 +14,7 @@ import { ApiError, ApiService } from '../../core/api.service';
 import { parseSpokenSale } from '../../core/spoken-amount';
 import { VoiceService } from '../../core/voice.service';
 import {
+  Amount,
   MeResponse,
   MerchantDashboard,
   PayoutView,
@@ -136,6 +137,8 @@ export default class MerchantPage implements OnInit {
 
   protected readonly formatAmount = formatAmount;
   protected readonly formatMoney = formatMoney;
+  protected readonly groupThousandsOf = (amount?: Amount | null) =>
+    amount ? groupThousands(toDecimal(amount)) : '';
   protected readonly formatTime = formatTime;
   protected readonly toNumber = toNumber;
   protected readonly walletName = walletName;
@@ -174,6 +177,11 @@ export default class MerchantPage implements OnInit {
   protected readonly copyLabel = signal('Copiar');
   /** What GlorIA or the dictation filled in, for the shopkeeper to check before charging. */
   protected readonly saleHint = signal('');
+  /** How the next sale is paid: a QR the customer scans, or cash in hand (ADR 0019). */
+  protected readonly sellMode = signal<'qr' | 'cash'>('qr');
+  protected readonly cashMessage = signal<BannerMessage | null>(null);
+  protected readonly cashBusy = signal(false);
+  protected depositInput = '';
   protected readonly displayBusy = signal(false);
   protected readonly displayMessage = signal<BannerMessage | null>(null);
 
@@ -979,6 +987,105 @@ export default class MerchantPage implements OnInit {
       this.displayBusy.set(false);
     }
   }
+
+  /** Records the sale in the form as paid in cash: counted and split, its shares held in cash. */
+  protected async submitCashSale(): Promise<void> {
+    if (this.saleBusy()) return;
+    const amount = normalizeDecimal(this.saleAmountInputVal());
+    if (!amount || Number(amount) < MIN_SALE) {
+      this.saleFormError.set(`Escribe un monto de al menos ${formatMoney(MIN_SALE, 'COP')}.`);
+      return;
+    }
+    const problem = await this.recordCash(Number(amount), this.saleDescription.trim());
+    if (problem) {
+      this.saleFormError.set(problem);
+      return;
+    }
+    this.saleAmountInputVal.set('');
+    this.saleDescription = '';
+  }
+
+  /** Records a cash sale; resolves with what went wrong, or null. */
+  private async recordCash(amount: number, description: string): Promise<string | null> {
+    this.saleBusy.set(true);
+    this.saleFormError.set('');
+    try {
+      await this.api.post(`${this.merchantPath}/cash-sales`, {
+        amount: String(amount),
+        ...(description && { description }),
+      });
+      await this.loadMerchant();
+      const toDeposit = this.merchant()?.cash?.toDeposit;
+      this.cashMessage.set({
+        tone: 'ok',
+        text: `Venta en efectivo de ${formatMoney(amount, 'COP')} registrada.${
+          toDeposit && toNumber(toDeposit) > 0
+            ? ` Por consignar para tus repartos: ${formatAmount(toDeposit)}.`
+            : ''
+        }`,
+      });
+      this.depositInput = toDeposit ? groupThousands(toDecimal(toDeposit)) : '';
+      return null;
+    } catch (err: unknown) {
+      return (err as Error)?.message || 'No pudimos registrar la venta en efectivo.';
+    } finally {
+      this.saleBusy.set(false);
+    }
+  }
+
+  /** The shopkeeper deposited cash: it releases the oldest shares held in cash. */
+  protected async depositCash(): Promise<void> {
+    const amount = normalizeDecimal(this.depositInput);
+    if (!amount || Number(amount) <= 0) {
+      this.cashMessage.set({ tone: 'bad', text: 'Escribe cuánto consignaste.' });
+      return;
+    }
+    const result = await this.deposit(Number(amount));
+    this.cashMessage.set({ tone: result.ok ? 'ok' : 'bad', text: result.text });
+  }
+
+  /** Records a deposit; the message says what it released and what is still in cash. */
+  private async deposit(amount: number): Promise<{ ok: boolean; text: string }> {
+    if (this.cashBusy()) return { ok: false, text: 'Ya estoy registrando una consignación.' };
+    this.cashBusy.set(true);
+    try {
+      const r = await this.api.post<{
+        sent: Amount;
+        reserved: Amount;
+        stillInCash: Amount;
+        credit: Amount;
+        paidNow: string[];
+        failed: string[];
+      }>(`${this.merchantPath}/cash-deposits`, { amount: String(amount) });
+      await this.loadMerchant();
+      this.depositInput = toNumber(r.stillInCash) > 0 ? groupThousands(toDecimal(r.stillInCash)) : '';
+      const parts = [
+        `Consignación de ${formatMoney(amount, 'COP')} registrada.`,
+        toNumber(r.sent) > 0 ? `Enviado a tus ahorros: ${formatAmount(r.sent)}.` : '',
+        toNumber(r.reserved) > 0 ? `Apartado para tus proveedores: ${formatAmount(r.reserved)}.` : '',
+        r.paidNow.length ? `Pagado ya a ${r.paidNow.join(', ')}.` : '',
+        r.failed.length ? `No se pudo enviar a ${r.failed.join(', ')}.` : '',
+        toNumber(r.stillInCash) > 0
+          ? `Falta por consignar: ${formatAmount(r.stillInCash)}.`
+          : 'No queda nada por consignar.',
+      ];
+      return { ok: r.failed.length === 0, text: parts.filter(Boolean).join(' ') };
+    } catch (err: unknown) {
+      return { ok: false, text: (err as Error)?.message || 'No pudimos registrar la consignación.' };
+    } finally {
+      this.cashBusy.set(false);
+    }
+  }
+
+  /** A cash sale asked of GlorIA ("vendí 15 mil en efectivo"). Resolves with what went wrong, or null. */
+  protected readonly cashSaleFromGloria = async (sale: {
+    amount: number;
+    description: string;
+  }): Promise<string | null> => this.recordCash(sale.amount, sale.description);
+
+  /** A deposit told to GlorIA ("consigné 50 mil"): what it did, said back to the shopkeeper. */
+  protected readonly depositFromGloria = (amount: number): Promise<{ ok: boolean; text: string }> =>
+    this.deposit(amount);
 
   protected toggleAnnouncements(): void {
     this.voice.setAnnouncements(!this.voice.announcements());

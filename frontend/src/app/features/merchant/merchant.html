@@ -260,6 +260,58 @@
               </div>
             </div>
 
+            @if (m.cash && (toNumber(m.cash.toDeposit) > 0 || toNumber(m.cash.month) > 0 || cashMessage())) {
+              <section class="card stack cash-card" aria-labelledby="cash-title">
+                <div class="row between">
+                  <div>
+                    <p class="eyebrow">Efectivo · hoy {{ formatAmount(m.cash.today) }} · este mes {{ formatAmount(m.cash.month) }}</p>
+                    <h2 id="cash-title">
+                      @if (toNumber(m.cash.toDeposit) > 0) {
+                        Por consignar: {{ formatAmount(m.cash.toDeposit) }}
+                      } @else {
+                        Todo tu efectivo está al día
+                      }
+                    </h2>
+                  </div>
+                  <span class="doodle-badge" aria-hidden="true"><app-doodle name="monedas" /></span>
+                </div>
+                @if (toNumber(m.cash.toDeposit) > 0) {
+                  <p class="muted">
+                    Solo los repartos de tus ventas en efectivo tienen que llegar a tu billetera:
+                    consigna esto y MiPlante los envía. El resto del efectivo es tuyo.
+                  </p>
+                  <ul class="cash-shares">
+                    @for (r of m.rules; track r.id) {
+                      @if (r.inCash && toNumber(r.inCash) > 0) {
+                        <li>
+                          <span>{{ r.label }}</span>
+                          <strong class="num">{{ formatAmount(r.inCash) }}</strong>
+                        </li>
+                      }
+                    }
+                  </ul>
+                  <form class="cash-deposit" (ngSubmit)="depositCash()">
+                    <label class="field">
+                      <span>¿Cuánto consignaste?</span>
+                      <input
+                        name="deposit"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        [placeholder]="groupThousandsOf(m.cash.toDeposit)"
+                        [(ngModel)]="depositInput"
+                      />
+                    </label>
+                    <button type="submit" class="btn btn-lima" [disabled]="cashBusy()">
+                      {{ cashBusy() ? 'Registrando…' : 'Ya consigné' }}
+                    </button>
+                  </form>
+                }
+                @if (cashMessage(); as cm) {
+                  <p [class]="'banner banner-' + cm.tone" role="status">{{ cm.text }}</p>
+                }
+              </section>
+            }
+
             <div class="panel-grid">
               <section class="card stack" aria-labelledby="chart-title">
                 <div class="row between">
@@ -384,7 +436,8 @@
                         <button
                           type="button"
                           class="list-button"
-                          (click)="openSaleFromHistory(s)"
+                          [class.is-cash]="s.method === 'cash'"
+                          (click)="s.method !== 'cash' && openSaleFromHistory(s)"
                         >
                           <span>
                             <strong class="num">{{ formatAmount(s.amount) }}</strong>
@@ -392,9 +445,13 @@
                               · {{ formatTime(s.createdAt) }}{{ s.description ? ' · ' + s.description : '' }}
                             </span>
                           </span>
-                          <span [class]="saleStatusBadgeClass(s.status)">
-                            {{ saleStatusText(s.status) }}
-                          </span>
+                          @if (s.method === 'cash') {
+                            <span class="badge badge-ok">Efectivo</span>
+                          } @else {
+                            <span [class]="saleStatusBadgeClass(s.status)">
+                              {{ saleStatusText(s.status) }}
+                            </span>
+                          }
                         </button>
                       </li>
                     }
@@ -421,9 +478,28 @@
                     </span>
                   </div>
 
-                  <form class="stack" (ngSubmit)="submitSale()">
+                  <div class="segmented" role="tablist" aria-label="Cómo te paga el cliente">
+                    <button
+                      type="button"
+                      role="tab"
+                      [attr.aria-selected]="sellMode() === 'qr'"
+                      (click)="sellMode.set('qr'); saleFormError.set('')"
+                    >
+                      Con QR
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      [attr.aria-selected]="sellMode() === 'cash'"
+                      (click)="sellMode.set('cash'); saleFormError.set('')"
+                    >
+                      En efectivo
+                    </button>
+                  </div>
+
+                  <form class="stack" (ngSubmit)="sellMode() === 'cash' ? submitCashSale() : submitSale()">
                     <div class="field">
-                      <label for="sale-amount">Monto a cobrar</label>
+                      <label for="sale-amount">{{ sellMode() === 'cash' ? 'Monto recibido en efectivo' : 'Monto a cobrar' }}</label>
                       <div class="dictate-row">
                         <input
                           #saleAmountInput
@@ -486,15 +562,33 @@
                     @if (saleFormError()) {
                       <p class="banner banner-bad" role="alert">{{ saleFormError() }}</p>
                     }
-                    <button
-                      class="btn btn-lima btn-lg btn-block"
-                      type="submit"
-                      [disabled]="!canSell() || saleBusy()"
-                      [attr.aria-busy]="saleBusy() ? 'true' : null"
-                    >
-                      {{ saleBusy() ? 'Generando código QR…' : 'Generar QR de cobro →' }}
-                    </button>
-                    @if (!canSell()) {
+                    @if (sellMode() === 'cash') {
+                      <button
+                        class="btn btn-lima btn-lg btn-block"
+                        type="submit"
+                        [disabled]="saleBusy()"
+                        [attr.aria-busy]="saleBusy() ? 'true' : null"
+                      >
+                        {{ saleBusy() ? 'Registrando…' : 'Registrar venta en efectivo' }}
+                      </button>
+                      <p class="hint">
+                        Se suma a tus ventas y se reparte; sus repartos quedan en efectivo hasta
+                        que consignes, y solo hay que consignar esa parte.
+                      </p>
+                      @if (cashMessage(); as cm) {
+                        <p [class]="'banner banner-' + cm.tone" role="status">{{ cm.text }}</p>
+                      }
+                    } @else {
+                      <button
+                        class="btn btn-lima btn-lg btn-block"
+                        type="submit"
+                        [disabled]="!canSell() || saleBusy()"
+                        [attr.aria-busy]="saleBusy() ? 'true' : null"
+                      >
+                        {{ saleBusy() ? 'Generando código QR…' : 'Generar QR de cobro →' }}
+                      </button>
+                    }
+                    @if (!canSell() && sellMode() === 'qr') {
                       <p class="hint">
                         Para cobrar, primero autoriza tu límite mensual en tu
                         billetera.
@@ -1549,6 +1643,8 @@
       [shopName]="m.name"
       [section]="tab()"
       [charge]="chargeFromGloria"
+      [cashSale]="cashSaleFromGloria"
+      [cashDeposit]="depositFromGloria"
       (openSection)="takeGloriaSection($event)"
     />
   }

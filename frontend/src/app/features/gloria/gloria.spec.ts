@@ -10,6 +10,8 @@ import { ChargeRequest, Gloria, GloriaSection, afterWakeWord } from './gloria';
     merchantId="shop-1"
     shopName="Tienda Rosa"
     [charge]="charge"
+    [cashSale]="cashSale"
+    [cashDeposit]="cashDeposit"
     (openSection)="sections.push($event)"
   />`,
 })
@@ -20,6 +22,16 @@ class Host {
   readonly charge = async (sale: ChargeRequest) => {
     if (!this.problem) this.sales.push(sale);
     return this.problem;
+  };
+  readonly cashSales: ChargeRequest[] = [];
+  readonly deposits: number[] = [];
+  readonly cashSale = async (sale: ChargeRequest) => {
+    this.cashSales.push(sale);
+    return null;
+  };
+  readonly cashDeposit = async (amount: number) => {
+    this.deposits.push(amount);
+    return { ok: true, text: `Consignación de ${amount} registrada. No queda nada por consignar.` };
   };
 }
 
@@ -97,6 +109,36 @@ describe('GlorIA chat', () => {
     expect(post).toHaveBeenCalledTimes(1);
     expect(fixture.componentInstance.sales).toEqual([{ amount: 20000, description: 'Arroz' }]);
     expect(root.querySelector('.peek')!.textContent).toContain('Cobro de $ 20.000 por Arroz');
+  });
+
+  it('records cash sales and deposits, never as a QR charge, without the model', async () => {
+    const { fixture, root } = await openChat();
+    await type(fixture, root, 'vendí 15 mil de pan en efectivo');
+    expect(fixture.componentInstance.cashSales).toEqual([{ amount: 15000, description: 'pan' }]);
+    expect(root.textContent).toContain('Registré la venta en efectivo');
+    await type(fixture, root, 'cobra 20 mil en efectivo');
+    expect(fixture.componentInstance.cashSales).toHaveLength(2);
+    expect(fixture.componentInstance.sales).toEqual([]);
+    await type(fixture, root, 'ya consigné 3.000');
+    expect(fixture.componentInstance.deposits).toEqual([3000]);
+    expect(root.textContent).toContain('No queda nada por consignar');
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('carries out the cash actions the model understood', async () => {
+    answers.set([
+      {
+        reply: 'Listo.',
+        actions: [
+          { type: 'cash-sale', amount: '8000', description: 'huevos' },
+          { type: 'cash-deposit', amount: '1200' },
+        ],
+      },
+    ]);
+    const { fixture, root } = await openChat();
+    await type(fixture, root, 'el señor me dio ocho mil por los huevos y metí mil doscientos a la billetera');
+    expect(fixture.componentInstance.cashSales).toEqual([{ amount: 8000, description: 'huevos' }]);
+    expect(fixture.componentInstance.deposits).toEqual([1200]);
   });
 
   it('says why when the till cannot charge', async () => {

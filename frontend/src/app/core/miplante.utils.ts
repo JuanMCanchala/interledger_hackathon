@@ -47,6 +47,7 @@ export const ITEM_STATUS: Record<string, StatusInfo> = {
   failed: { text: 'Falló', tone: 'bad' },
   skipped: { text: 'Límite mensual alcanzado', tone: 'neutral' },
   reserved: { text: 'Apartado', tone: 'info' },
+  cash: { text: 'En efectivo · por consignar', tone: 'wait' },
 };
 
 export const PAYOUT_STATUS: Record<string, StatusInfo> = {

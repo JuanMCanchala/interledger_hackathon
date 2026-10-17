@@ -14,7 +14,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiError, ApiService } from '../../core/api.service';
-import { parseChargeRequest, pesosInWords } from '../../core/spoken-amount';
+import { parseCashSale, parseChargeRequest, parseDeposit, pesosInWords } from '../../core/spoken-amount';
 import { VoiceService } from '../../core/voice.service';
 import { afterWakeWord } from '../../core/wake-word';
 import { SECTION_LABEL, parseNavigation, wentTo } from '../../core/navigation-intent';
@@ -23,6 +23,8 @@ import { Doodle } from '../../shared/brand/doodle';
 /** What GlorIA prepared for the shopkeeper to confirm (backend/src/assistant/gloriaService.ts). */
 export type GloriaAction =
   | { type: 'sale'; amount: string; description?: string }
+  | { type: 'cash-sale'; amount: string; description?: string }
+  | { type: 'cash-deposit'; amount: string }
   | { type: 'open'; section: GloriaSection };
 
 export type GloriaSection = 'inicio' | 'vender' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
@@ -76,6 +78,10 @@ export class Gloria {
    * what went wrong, or null once the QR is on screen.
    */
   readonly charge = input.required<(sale: ChargeRequest) => Promise<string | null>>();
+  /** Records a sale paid in cash (ADR 0019); resolves with what went wrong, or null. */
+  readonly cashSale = input.required<(sale: ChargeRequest) => Promise<string | null>>();
+  /** Records cash deposited into the wallet; resolves with what it did, to say back. */
+  readonly cashDeposit = input.required<(amount: number) => Promise<{ ok: boolean; text: string }>>();
   /** A section GlorIA takes the shopkeeper to, right away. */
   readonly openSection = output<GloriaSection>();
 
@@ -234,6 +240,21 @@ export class Gloria {
     this.draft.set('');
     const speakIt = spoken || this.speakReplies();
 
+    // "Consigné 50 mil" and "vendí 15 mil en efectivo" (ADR 0019): read here too, and first, so a
+    // cash sale is never taken for a QR charge.
+    const deposited = parseDeposit(content);
+    if (deposited) {
+      this.turns.update((t) => [...t, { role: 'user', content, local: true }]);
+      await this.depositNow(deposited, speakIt);
+      return;
+    }
+    const cash = parseCashSale(content);
+    if (cash) {
+      this.turns.update((t) => [...t, { role: 'user', content, local: true }]);
+      await this.cashNow(cash, speakIt);
+      return;
+    }
+
     // "Cobra 50.000", "haz un cobro de $50,000": charged here and now, without the model, so a
     // charge never depends on how the model reads it.
     const request = parseChargeRequest(content);
@@ -263,6 +284,18 @@ export class Gloria {
           ...(this.section() && { section: this.section() }),
         },
       );
+      const cashSale = answer.actions.find((a) => a.type === 'cash-sale');
+      const cashDeposit = answer.actions.find((a) => a.type === 'cash-deposit');
+      if (cashSale || cashDeposit) {
+        if (cashSale) {
+          await this.cashNow(
+            { amount: Number(cashSale.amount), description: cashSale.description ?? '' },
+            speakIt,
+          );
+        }
+        if (cashDeposit) await this.depositNow(Number(cashDeposit.amount), speakIt);
+        return;
+      }
       const sale = answer.actions.find((a): a is SaleAction => a.type === 'sale');
       // A section she opened, or one she says she opened without asking the till to.
       const section = answer.actions.find((a) => a.type === 'open')?.section ?? wentTo(answer.reply);
@@ -315,6 +348,50 @@ export class Gloria {
     // The chat steps aside so the QR is what shows.
     this.hidePanel();
     this.showPeek(`Cobro de ${amount}${note} listo: el QR está en pantalla.`);
+  }
+
+  /** Records a cash sale in the till and says so; its shares wait in cash for a deposit. */
+  private async cashNow(request: ChargeRequest, speakIt: boolean): Promise<void> {
+    this.thinking.set(true);
+    let problem: string | null;
+    try {
+      problem = await this.cashSale()(request);
+    } catch (error) {
+      problem = error instanceof Error ? error.message : 'No pude registrar la venta.';
+    } finally {
+      this.thinking.set(false);
+    }
+    const amount = `$\u00a0${request.amount.toLocaleString('es-CO')}`;
+    if (problem) {
+      this.say(`No pude registrar la venta en efectivo de ${amount}: ${problem}`, true);
+      if (speakIt) void this.voice.speak(`No pude registrar la venta en efectivo. ${problem}`);
+      return;
+    }
+    const note = request.description ? ` por ${request.description}` : '';
+    this.say(
+      `¡Listo! Registré la venta en efectivo de ${amount}${note}. Sus repartos quedan por consignar: cuando lo consignes, dime «consigné» y el monto.`,
+      true,
+    );
+    if (speakIt) void this.voice.speak(`Listo, registré la venta en efectivo de ${pesosInWords(request.amount)}.`);
+  }
+
+  /** Records a cash deposit in the till and says what it released. */
+  private async depositNow(amount: number, speakIt: boolean): Promise<void> {
+    this.thinking.set(true);
+    let result: { ok: boolean; text: string };
+    try {
+      result = await this.cashDeposit()(amount);
+    } catch (error) {
+      result = { ok: false, text: error instanceof Error ? error.message : 'No pude registrar la consignación.' };
+    } finally {
+      this.thinking.set(false);
+    }
+    this.say(result.text, true);
+    if (speakIt) {
+      void this.voice.speak(
+        result.ok ? `Listo, registré la consignación de ${pesosInWords(amount)}.` : result.text,
+      );
+    }
   }
 
   /**
