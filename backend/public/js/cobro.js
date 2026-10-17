@@ -6,6 +6,7 @@ import {
   formatTime,
   param,
   poll,
+  salePace,
   showMessage,
   statusBadge,
 } from "./app.js";
@@ -94,7 +95,7 @@ window.addEventListener("load", () => {
 });
 
 if (saleId) {
-  poll(refresh, 1000);
+  poll(refresh, () => (lastSale ? salePace(lastSale.createdAt) : 1000));
 } else {
   $("missing").hidden = false;
 }

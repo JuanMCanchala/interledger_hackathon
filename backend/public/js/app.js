@@ -529,25 +529,55 @@ export function param(name) {
   return new URLSearchParams(window.location.search).get(name);
 }
 
-/** Calls `task` every `intervalMs` until it returns false or `stop()` is called. */
-export function poll(task, intervalMs) {
+/**
+ * Calls `task` until it returns false or `stop()` is called, waiting `interval` ms between calls
+ * (a number, or a function so the pace can slow down). The next call starts when the previous one
+ * ends, so requests never pile up. While the page is hidden (another tab, the phone locked) it
+ * makes no requests, and it checks again as soon as the page is visible.
+ */
+export function poll(task, interval) {
   let timer;
   let stopped = false;
+  let running = false;
+  const delay = () => (typeof interval === "function" ? interval() : interval);
   const run = async () => {
-    if (stopped) return;
+    timer = undefined;
+    if (stopped || running || document.hidden) return;
+    running = true;
     let again = true;
     try {
       again = (await task()) !== false;
     } catch {
       again = true;
     }
-    if (!stopped && again) timer = setTimeout(run, intervalMs);
+    running = false;
+    if (!again) stop();
+    else if (!stopped) timer = setTimeout(run, delay());
   };
-  run();
-  return () => {
+  const onVisibility = () => {
+    if (document.hidden || stopped || running) return;
+    clearTimeout(timer);
+    run();
+  };
+  const stop = () => {
     stopped = true;
     clearTimeout(timer);
+    document.removeEventListener("visibilitychange", onVisibility);
   };
+  document.addEventListener("visibilitychange", onVisibility);
+  run();
+  return stop;
+}
+
+/**
+ * How often to check a sale, by its age: every second while the customer is likely paying, then
+ * less and less, so an abandoned sale left on screen does not spend the shop's mobile data.
+ */
+export function salePace(createdAt) {
+  const age = Date.now() - Date.parse(createdAt);
+  if (!Number.isFinite(age) || age < 60_000) return 1_000;
+  if (age < 5 * 60_000) return 3_000;
+  return 10_000;
 }
 
 export function formatTime(iso) {

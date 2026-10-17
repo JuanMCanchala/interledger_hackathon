@@ -20,6 +20,7 @@ import {
   renderSplit,
   renderSteps,
   requireSession,
+  salePace,
   showMessage,
   statusBadge,
   toNumber,
@@ -50,7 +51,11 @@ const STAGE_INDEX = {
   processing: 2,
   paid: SALE_STAGES.length,
 };
-const RESUME_WINDOW_MS = 30 * 60 * 1000;
+/** A sale older than this is not brought back after a reload: the customer is gone. */
+const RESUME_WINDOW_MS = 10 * 60 * 1000;
+/** The panel refreshes often only while something is moving; at rest, twice a minute. */
+const BUSY_REFRESH_MS = 5_000;
+const IDLE_REFRESH_MS = 30_000;
 const QUICK_AMOUNTS = [5000, 10000, 20000, 50000];
 /** On a phone the QR for the customer is on this very screen; on a computer it goes to the phone. */
 const ON_PHONE = window.matchMedia("(max-width: 700px)").matches;
@@ -122,7 +127,21 @@ function showTab() {
     else link.removeAttribute("aria-current");
   }
   if (tab === "vender" && !current) $("sale-amount").focus({ preventScroll: true });
+  // A sale is only watched while its screen is open; coming back picks it up again.
+  if (tab === "vender") startSalePolling();
+  else stopSalePolling();
   window.scrollTo({ top: 0 });
+}
+
+/** Something is moving: a sale being paid, or money on its way to a creditor or to savings. */
+function isBusy() {
+  if (current && !isFinal(current.sale)) return true;
+  if (merchant?.payouts?.some((payout) => payout.status === "processing")) return true;
+  return Boolean(
+    merchant?.sales?.some((sale) =>
+      (sale.settlement?.items || []).some((item) => item.status === "processing"),
+    ),
+  );
 }
 
 window.addEventListener("hashchange", showTab);
@@ -928,11 +947,16 @@ function showSale(sale, payUrl) {
   startSalePolling();
 }
 
-function startSalePolling() {
+function stopSalePolling() {
   if (stopSalePoll) stopSalePoll();
   stopSalePoll = null;
-  if (!current || isFinal(current.sale)) return;
+}
+
+function startSalePolling() {
+  stopSalePolling();
+  if (!current || isFinal(current.sale) || currentTab() !== "vender") return;
   const saleId = current.sale.id;
+  const createdAt = current.sale.createdAt;
   stopSalePoll = poll(async () => {
     if (!current || current.sale.id !== saleId) return false;
     const sale = await api(`/api/sales/${encodeURIComponent(saleId)}`);
@@ -945,8 +969,7 @@ function startSalePolling() {
       return false;
     }
     return true;
-    // The next check starts when this one ends, so a fast cadence never piles requests up.
-  }, 1000);
+  }, () => salePace(createdAt));
 }
 
 function renderShowOn() {
@@ -1058,8 +1081,7 @@ $("sale-form").addEventListener("submit", async (event) => {
 });
 
 $("new-sale").addEventListener("click", () => {
-  if (stopSalePoll) stopSalePoll();
-  stopSalePoll = null;
+  stopSalePolling();
   current = null;
   $("sale-panel").hidden = true;
   $("sale-form").hidden = false;
@@ -1090,7 +1112,7 @@ if (requireSession()) {
   if (merchantId) {
     showTab();
     loadAccount();
-    poll(loadMerchant, 5000);
+    poll(loadMerchant, () => (isBusy() ? BUSY_REFRESH_MS : IDLE_REFRESH_MS));
   } else {
     // "/merchant" alone: the till of the signed-in account, or setting up its shop.
     homeOfSignedIn()
