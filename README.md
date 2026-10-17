@@ -210,9 +210,11 @@ problem → ideation → product brief → decisions → system design → integ
 
 ## Team
 
-| Name              | Role |
-| ----------------- | ---- |
-| _to be completed_ |      |
+- Juan Manuel Canchala
+- Brayan Zuluaga
+- Juan José Cuartas
+- Juan Esteban Saez
+- Isabella Pacheco
 
 ## License
 
