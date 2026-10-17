@@ -162,7 +162,9 @@ export class MemoryStore implements Store {
   }
 
   async saveMerchant(record: MerchantRecord) {
-    this.merchants.set(record.id, copy(record));
+    // Like PrismaStore: an existing shop keeps its stored rules (they change through updateRules).
+    const stored = this.merchants.get(record.id);
+    this.merchants.set(record.id, copy({ ...record, rules: stored?.rules ?? record.rules }));
     return record;
   }
 

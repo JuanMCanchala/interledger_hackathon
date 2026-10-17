@@ -148,13 +148,18 @@ export class PrismaStore implements Store {
       createdAt: new Date(record.createdAt),
       updatedAt: new Date(record.updatedAt),
     };
+    const exists = await this.prisma.merchant.findUnique({
+      where: { id: record.id },
+      select: { id: true },
+    });
+    if (exists) {
+      // An existing shop's rules change only through updateRules and recordRepayment: rewriting
+      // them from this snapshot would undo a repayment recorded while the caller was busy.
+      await this.prisma.merchant.update({ where: { id: record.id }, data });
+      return record;
+    }
     await this.prisma.$transaction([
-      this.prisma.merchant.upsert({
-        where: { id: record.id },
-        create: { id: record.id, ...data },
-        update: data,
-      }),
-      this.prisma.rule.deleteMany({ where: { merchantId: record.id } }),
+      this.prisma.merchant.create({ data: { id: record.id, ...data } }),
       this.prisma.rule.createMany({
         data: record.rules.map((rule, position) => ({
           merchantId: record.id,

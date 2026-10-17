@@ -98,6 +98,20 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect((await store.getSale(saleId))!.settlement.items).toHaveLength(2);
   });
 
+  it("saving a shop's settings never undoes a repayment recorded meanwhile", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const snapshot = (await store.getMerchant(merchantId))!;
+    // A payout lands while, say, the cap change waits for the wallet.
+    await store.recordRepayment(merchantId, snapshot.rules[0]!.id, "150000", new Date().toISOString());
+
+    await store.saveMerchant({ ...snapshot, name: "La Esquina" });
+
+    const after = (await store.getMerchant(merchantId))!;
+    expect(after.name).toBe("La Esquina");
+    expect(after.rules[0]).toMatchObject({ repaid: cop("150000"), outstanding: cop("29850000") });
+  });
+
   it("finds nothing for an id that is not a UUID, instead of failing", async () => {
     expect(await store.getSale("not-a-real-id")).toBeUndefined();
     expect(await store.getMerchant("nope")).toBeUndefined();
