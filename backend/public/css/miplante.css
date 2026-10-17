@@ -1479,3 +1479,61 @@ fieldset {
   grid-column: 1 / -1;
   margin: 0;
 }
+
+/* Notifications ------------------------------------------------------------------------------ */
+
+.panel-header-actions {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.bell {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--text);
+}
+
+.bell svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bell-count {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--papel);
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+
+.review-banner {
+  display: block;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.notice.is-bad {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.notice-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}

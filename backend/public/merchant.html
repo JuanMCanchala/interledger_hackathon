@@ -44,7 +44,13 @@
             <small class="muted" id="merchant-wallet"></small>
           </span>
         </a>
-        <span id="merchant-status"></span>
+        <div class="row panel-header-actions">
+          <a class="bell" href="#avisos" id="bell" aria-label="Avisos">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg>
+            <span class="bell-count" id="bell-count" hidden></span>
+          </a>
+          <span id="merchant-status"></span>
+        </div>
       </header>
 
       <nav class="panel-nav" id="panel-nav" aria-label="Secciones del panel">
@@ -88,6 +94,7 @@
         <div id="app" class="stack" hidden>
           <!-- Inicio ------------------------------------------------------------------------ -->
           <section class="view stack" data-view="inicio" aria-labelledby="inicio-title">
+            <a class="banner banner-bad review-banner" id="review-banner" href="#avisos" hidden></a>
             <div class="card stack hero-card">
               <div class="row between">
                 <h1 class="h1-sm" id="inicio-title">Hoy</h1>
@@ -343,14 +350,31 @@
               <div class="stack-sm">
                 <h2 id="payouts-title">Pagos a proveedores y créditos</h2>
                 <p class="muted small">
-                  De cada venta se aparta su parte en tu billetera, y el día de
-                  pago se le envía todo junto en un solo pago.
+                  De cada venta se aparta su parte en tu billetera. El día de pago
+                  se le envía la cuota del mes en un solo pago: lo apartado y, si
+                  no alcanza, lo que falte de tus ganancias. "Pagar ahora" envía
+                  solo lo apartado.
                 </p>
               </div>
               <p id="payout-message" class="banner" role="status" hidden></p>
               <ul class="list" id="payouts"></ul>
               <p class="muted small" id="no-payouts">Todavía no hay pagos.</p>
             </section>
+          </section>
+
+          <!-- Avisos ------------------------------------------------------------------------ -->
+          <section class="view stack" data-view="avisos" aria-labelledby="avisos-title" hidden>
+            <div class="stack-sm">
+              <h1 class="h1-sm" id="avisos-title">Avisos</h1>
+              <p class="muted">
+                Lo que tienes que revisar, los pagos que vienen y los que ya
+                salieron. Un pago que falla no se vuelve a intentar solo: tú
+                decides, para no pagar dos veces.
+              </p>
+            </div>
+            <p id="notice-message" class="banner" role="status" hidden></p>
+            <ul class="list notices" id="notices"></ul>
+            <p class="muted small" id="no-notices">No tienes avisos por ahora.</p>
           </section>
 
           <!-- Ajustes ----------------------------------------------------------------------- -->
@@ -420,9 +444,10 @@
               <section class="card stack" aria-labelledby="simulate-title">
                 <h2 id="simulate-title">Simular fecha de pago</h2>
                 <p class="muted small">
-                  Para la demo: envía ya a cada proveedor y crédito lo que lleva
-                  apartado, como si hoy fuera su día de pago. Ese mes ya no se
-                  vuelve a pagar en su fecha.
+                  Para la demo: envía ya a cada proveedor y crédito su cuota del
+                  mes, como si hoy fuera su día de pago: lo apartado y, si no
+                  alcanza, lo que falte de tus ganancias. Ese mes ya no se vuelve
+                  a pagar en su fecha.
                 </p>
                 <p id="simulate-message" class="banner" role="status" hidden></p>
                 <button type="button" class="btn btn-secondary" id="simulate-due">

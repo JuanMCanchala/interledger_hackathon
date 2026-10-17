@@ -37,7 +37,9 @@ import { createRulesEditor } from "./rules-editor.js";
  * one page with a section per tab, built for a phone first.
  */
 
-const TABS = ["inicio", "vender", "metas", "repartos", "ajustes"];
+const TABS = ["inicio", "vender", "metas", "repartos", "ajustes", "avisos"];
+/** The notifications this device has already shown, so the bell only counts new ones. */
+const SEEN_KEY = "miplante.seenNotices";
 
 /** How the merchant sees a sale progress (the customer sees the four Open Payments steps). */
 const SALE_STAGES = [
@@ -123,6 +125,7 @@ function showTab() {
     else link.removeAttribute("aria-current");
   }
   if (tab === "vender" && !current) $("sale-amount").focus({ preventScroll: true });
+  if (tab === "avisos" && merchant) renderNotices(merchant.notifications ?? []);
   // A sale is only watched while its screen is open; coming back picks it up again.
   if (tab === "vender") startSalePolling();
   else stopSalePolling();
@@ -184,6 +187,7 @@ function render(m) {
   if (changed($("goals"), [m.rules, m.month, m.monthlySalesGoal])) renderGoals(m);
   if (changed($("rules"), m.rules)) renderRules(m.rules);
   if (changed($("payouts"), m.payouts)) renderPayouts(m.payouts);
+  renderNotices(m.notifications ?? []);
   // The quota line under each reserved share follows this month's totals.
   if (current?.sale.status === "paid") renderSaleSplit(current.sale);
   renderSettings(m);
@@ -624,10 +628,150 @@ function renderPayouts(payouts = []) {
           class: "small",
           text: `${formatAmount(payout.amount)} · ${payout.reason === "manual" ? "pagado antes de su fecha" : "pago de su fecha"} · ${new Date(payout.createdAt).toLocaleDateString("es-CO", { day: "numeric", month: "short" })} ${formatTime(payout.createdAt)}`,
         }),
+        payout.topUp
+          ? el("p", { class: "muted small", text: `${formatAmount(payout.topUp)} salieron de tus ganancias para completar la cuota.` })
+          : null,
         payout.error ? el("p", { class: "error-text small", text: payout.error }) : null,
+        payout.status === "failed" && !payout.resolution
+          ? el("a", { class: "btn btn-secondary", href: "#avisos", text: "Revisar en Avisos" })
+          : null,
+        payout.resolution === "marked-paid"
+          ? el("p", { class: "muted small", text: "Lo marcaste como pagado." })
+          : null,
       ),
     ),
   );
+}
+
+// Avisos ------------------------------------------------------------------------------------------
+
+function seenNotices() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Remembers the notifications on screen as seen (only those still current, so the list stays small). */
+function markNoticesSeen(notices) {
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(notices.map((n) => n.id)));
+  } catch {
+    // Without storage the bell just keeps counting: a convenience lost, nothing more.
+  }
+}
+
+const NOTICE_TONES = { bad: "badge-bad", wait: "badge-wait", info: "badge-info", ok: "badge-ok" };
+const NOTICE_LABEL = {
+  "payout-failed": "Revisar",
+  "payout-due": "Próximo pago",
+  "payout-sent": "Pagado",
+  consent: "Autorización",
+  "cap-pending": "Límite",
+};
+
+function renderNotices(notices) {
+  const onScreen = currentTab() === "avisos";
+  if (onScreen) markNoticesSeen(notices);
+  const seen = seenNotices();
+  const fresh = notices.filter((n) => !seen.has(n.id)).length;
+  $("bell-count").hidden = fresh === 0;
+  $("bell-count").textContent = fresh > 9 ? "9+" : String(fresh);
+  $("bell").setAttribute("aria-label", fresh ? `Avisos: ${fresh} nuevos` : "Avisos");
+
+  const toReview = notices.filter((n) => n.kind === "payout-failed").length;
+  $("review-banner").hidden = toReview === 0;
+  $("review-banner").textContent =
+    toReview === 1
+      ? "Tienes un pago por revisar: no salió o no pudimos confirmarlo. Toca para verlo →"
+      : `Tienes ${toReview} pagos por revisar: no salieron o no pudimos confirmarlos. Toca para verlos →`;
+
+  if (!changed($("notices"), notices)) return;
+  $("no-notices").hidden = notices.length > 0;
+  $("notices").replaceChildren(...notices.map(renderNotice));
+}
+
+function renderNotice(notice) {
+  const item = el(
+    "li",
+    { class: `list-item notice is-${notice.tone}` },
+    el(
+      "div",
+      { class: "row between" },
+      el("strong", { text: notice.title }),
+      el("span", { class: `badge ${NOTICE_TONES[notice.tone] || ""}`, text: NOTICE_LABEL[notice.kind] || "" }),
+    ),
+    el("p", { class: "small", text: notice.text }),
+    el("p", {
+      class: "muted small",
+      text: new Date(notice.createdAt).toLocaleString("es-CO", {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    }),
+  );
+  if (notice.actions?.length) item.append(noticeActions(notice));
+  if (notice.kind === "consent" || notice.kind === "cap-pending") {
+    item.append(el("a", { class: "btn btn-secondary", href: "#ajustes", text: "Ir a Ajustes" }));
+  }
+  return item;
+}
+
+/**
+ * The two ways out of a failed payout. Marking it paid asks once more, on the card itself: it means
+ * the shopkeeper saw the money in the creditor's wallet, and nothing will be sent.
+ */
+function noticeActions(notice) {
+  const box = el("div", { class: "row notice-actions" });
+  const retry = el("button", { type: "button", class: "btn btn-primary", text: "Reintentar el pago" });
+  const markPaid = el("button", { type: "button", class: "btn btn-secondary", text: "Ya llegó, marcar como pagado" });
+  retry.addEventListener("click", () =>
+    resolvePayout(retry, notice.payoutId, "retry", "Listo: enviamos el pago otra vez."),
+  );
+  markPaid.addEventListener("click", () => {
+    const confirm = el("button", {
+      type: "button",
+      class: "btn btn-primary",
+      text: "Sí, el dinero llegó",
+    });
+    const cancel = el("button", { type: "button", class: "btn btn-ghost", text: "Cancelar" });
+    confirm.addEventListener("click", () =>
+      resolvePayout(confirm, notice.payoutId, "mark-paid", "Listo: lo marcamos como pagado y no se envía nada más."),
+    );
+    cancel.addEventListener("click", () => box.replaceChildren(retry, markPaid));
+    box.replaceChildren(
+      el("p", { class: "small", text: "¿Viste el dinero en la billetera de quien recibe? No se enviará de nuevo." }),
+      confirm,
+      cancel,
+    );
+  });
+  box.append(retry, markPaid);
+  return box;
+}
+
+async function resolvePayout(button, payoutId, action, okText) {
+  showMessage($("notice-message"), "");
+  try {
+    await withBusy(button, "Un momento…", async () => {
+      const payout = await postJson(
+        `${merchantPath}/payouts/${encodeURIComponent(payoutId)}/${action}`,
+        {},
+      );
+      showMessage(
+        $("notice-message"),
+        payout.status === "failed"
+          ? "El pago volvió a fallar: revisa el saldo de tu billetera y el límite mensual."
+          : okText,
+        payout.status === "failed" ? "bad" : "ok",
+      );
+      await loadMerchant();
+    });
+  } catch (error) {
+    showMessage($("notice-message"), error.message);
+  }
 }
 
 /** Pays reserved debts now (one, or all as on their due day) and shows what was sent. */
