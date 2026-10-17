@@ -57,6 +57,29 @@ const PRESETS: readonly Preset[] = [
   { name: 'Arriendo', kind: 'debt', doodle: 'billetera', hint: 'El local o la casa', share: 5 },
 ];
 const DEFAULT_PICKS = ['Proveedores', 'Microcrédito', 'Ahorro'];
+/**
+ * The team's demo shop and wallets (docs/TEAM_WALLETS.md, as in backend/scripts/demo-merchant.ts):
+ * the onboarding starts with them so the demo is a few taps. Every field can still be changed.
+ */
+const DEMO_SHOP = { name: 'Tienda Billeticos', wallet: 'tienda-billeticos' };
+const DEMO_WALLETS: Record<string, Partial<WalletDraft>> = {
+  Proveedores: {
+    label: 'Distribuidora',
+    destination: 'proveedor-billeticos',
+    sharePercent: 10,
+    monthlyQuota: '200.000',
+    dueDay: 25,
+  },
+  Microcrédito: {
+    label: 'Microcrédito Anti-Gota',
+    destination: 'microcredito',
+    sharePercent: 15,
+    monthlyQuota: '100.000',
+    outstanding: '300.000',
+    dueDay: 15,
+  },
+  Ahorro: { label: 'Fondo de emergencia', destination: 'ahorro-billeticos', sharePercent: 5 },
+};
 const PREVIEW_SALE = 10000n * 100n;
 const DEFAULT_DUE_DAY = 28;
 const SLIDER_MAX = 40;
@@ -106,17 +129,18 @@ export default class OnboardPage implements OnInit {
   protected readonly busy = signal(false);
   protected readonly error = signal('');
 
-  protected businessName = '';
-  protected readonly businessWallet = signal('');
+  protected businessName = DEMO_SHOP.name;
+  protected readonly businessWallet = signal(DEMO_SHOP.wallet);
   protected readonly checkedWallet = signal<WalletInfo | null>(null);
   /** Destination wallets that failed to check, by wallet draft id. */
   protected readonly walletErrors = signal<Record<number, string>>({});
   protected readonly walletCheck = signal<{ text: string; ok: boolean } | null>(null);
 
   protected readonly pockets = signal<Pocket[]>(
-    PRESETS.filter((p) => DEFAULT_PICKS.includes(p.name)).map((p) =>
-      newPocket(p.name, p.kind, p.doodle, p.hint, p.share),
-    ),
+    PRESETS.filter((p) => DEFAULT_PICKS.includes(p.name)).map((p) => {
+      const pocket = newPocket(p.name, p.kind, p.doodle, p.hint, p.share);
+      return { ...pocket, wallets: pocket.wallets.map((w) => ({ ...w, ...DEMO_WALLETS[p.name] })) };
+    }),
   );
   protected customName = '';
   protected customKind: Kind = 'debt';
