@@ -12,6 +12,7 @@ import { describeError, isAuthError } from "./errors.js";
 import { verifyInteractHash } from "./hash.js";
 import { buildRepeatingInterval } from "./interval.js";
 import {
+  DEFAULT_INCOMING_EXPIRY_MS,
   toStoredToken,
   type OutgoingGrantLimits,
   type PaymentOperations,
@@ -291,9 +292,7 @@ export class PaymentFlows {
         error: outgoingFailed
           ? "El pago saliente falló en Interledger"
           : expired
-            ? nothingYet
-              ? "La solicitud de pago venció sin recibir el pago"
-              : `La solicitud de pago venció incompleta: llegaron ${fromMinorUnits(received.value, received.assetScale)} ${received.assetCode}`
+            ? expiredRequestError(received)
             : undefined,
         receivedAmount: received,
         incomingToken: accessToken,
@@ -302,12 +301,30 @@ export class PaymentFlows {
         await this.closeIncomingPayment(record, receiver);
       }
     } catch (error) {
-      // Polling must not break the UI; the next poll retries.
-      console.warn(
-        `[payments] no se pudo actualizar ${id}: ${describeError(error)}`,
-      );
+      if (record.kind === "payment-request" && this.requestTimeIsOver(record)) {
+        // An expired payment request can no longer be read (the wallet answers 401), so the check
+        // above never sees it expire. Its hour is over: it fails as that check would have failed
+        // it, instead of being asked about every few seconds for the rest of the day.
+        record = await this.updatePayment(record, {
+          status: "failed",
+          error: expiredRequestError(record.receivedAmount),
+        });
+      } else {
+        // Polling must not break the UI; the next poll retries.
+        console.warn(
+          `[payments] no se pudo actualizar ${id}: ${describeError(error)}`,
+        );
+      }
     }
     return toPublicPayment(record);
+  }
+
+  /** The payment request was created before this record, so its hour ends before this one. */
+  private requestTimeIsOver(record: PaymentRecord): boolean {
+    return (
+      Date.parse(record.createdAt) + DEFAULT_INCOMING_EXPIRY_MS <=
+      this.now().getTime()
+    );
   }
 
   async getPayment(id: string) {
@@ -814,6 +831,13 @@ function quoteFields(quote: Quote) {
     debitAmount: quote.debitAmount,
     receiveAmount: quote.receiveAmount,
   };
+}
+
+/** Why a payment request that expired before it was complete failed. */
+function expiredRequestError(received: Amount | undefined): string {
+  return !received || BigInt(received.value) === 0n
+    ? "La solicitud de pago venció sin recibir el pago"
+    : `La solicitud de pago venció incompleta: llegaron ${fromMinorUnits(received.value, received.assetScale)} ${received.assetCode}`;
 }
 
 /** API view: drops tokens and nonces, adds the four steps the demo has to show. */
