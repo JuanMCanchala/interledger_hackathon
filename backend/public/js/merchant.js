@@ -481,10 +481,11 @@ function startSalePolling() {
 
 function renderSale(sale) {
   $("sale-caption").textContent = `Venta · ${formatTime(sale.createdAt)}`;
-  // With the wallet address in the QR the customer types the amount on the provider's page.
+  // The QR opens the customer's wallet app with the shop as the receiver: they pick their wallet
+  // and type the amount there.
   const typesAmount = Boolean(sale.payUrl) && sale.payUrl !== sale.checkoutUrl;
   $("qr-caption").textContent = typesAmount
-    ? `Escanea con la cámara, escribe ${formatAmount(sale.amount)} y paga desde tu billetera`
+    ? `Escanea, entra a tu billetera y envía ${formatAmount(sale.amount)}`
     : "Escanea con la cámara del celular para pagar";
   $("sale-amount-view").textContent = formatAmount(sale.amount);
   $("sale-description-view").hidden = !sale.description;
