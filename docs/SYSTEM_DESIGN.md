@@ -287,7 +287,7 @@ the merchant keeps 8,000.00.
 | Forged consent callback                | GNAP interaction hash verified with a constant-time comparison; one-shot interactions                                          |
 | SSRF through user-supplied wallet URLs | Only hosts in `OP_ALLOWED_WALLET_HOSTS` are called (default `ilp.interledger-test.dev`); `https` only                          |
 | Token leakage                          | Tokens, nonces and continuation data are stripped from every API response and stay in PostgreSQL, which is never exposed publicly |
-| Over-collection                        | Wallet-enforced monthly cap (ADR 0004, 0013), debt ≤ monthly quota, total shares ≤ 50%                                                   |
+| Over-collection                        | Wallet-enforced monthly cap (ADR 0004, 0013), debt ≤ monthly quota, total shares ≤ 99%                                                   |
 | Malicious input                        | zod validation on every body and query; JSON limited to 20 kB; amounts validated against the asset scale                       |
 | Script injection in the UI             | Server data rendered with `textContent` only                                                                                   |
 | Secrets in a public repo               | `private.key`, `*.pem`, `.env*` git-ignored; the key can also come from `OP_PRIVATE_KEY`                                       |

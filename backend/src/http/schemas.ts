@@ -66,7 +66,7 @@ const rule = z.object({
   category: z.string().trim().min(1).max(40),
   kind: z.enum(["debt", "savings"]),
   destination: walletAddress,
-  sharePercent: z.number().gt(0).max(50),
+  sharePercent: z.number().gt(0).max(99),
   monthlyQuota: decimalAmount.optional(),
   outstanding: decimalAmount.optional(),
   savingsGoal: decimalAmount.optional(),

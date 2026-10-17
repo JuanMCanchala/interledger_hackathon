@@ -87,7 +87,7 @@ check("/me sin sesión → 401", (await call("GET", "/api/auth/me")).status === 
 
 // Server-side validation (R1) ---------------------------------------------------------------------
 const invalid = [
-  ["repartos que suman más de 50%", { ...SHOP, rules: [{ ...SHOP.rules[0], sharePercent: 40 }, { ...SHOP.rules[1], sharePercent: 40 }] }],
+  ["repartos que suman más de 99%", { ...SHOP, rules: [{ ...SHOP.rules[0], sharePercent: 80 }, { ...SHOP.rules[1], sharePercent: 20 }] }],
   ["límite menor que las cuotas", { ...SHOP, monthlyCap: "1000" }],
   ["nombre vacío", { ...SHOP, name: "" }],
   ["día de pago 31", { ...SHOP, rules: [{ ...SHOP.rules[0], dueDay: 31 }] }],

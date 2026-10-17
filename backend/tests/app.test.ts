@@ -242,7 +242,7 @@ describe("MiPlante API", () => {
   it("validates merchant rules at the edge", async () => {
     const res = await postJson(
       "/api/merchants",
-      { ...rosa, rules: [{ ...rosa.rules[1], sharePercent: 80 }] },
+      { ...rosa, rules: [{ ...rosa.rules[1], sharePercent: 100 }] },
       await signUp(),
     );
     expect(res.status).toBe(400);

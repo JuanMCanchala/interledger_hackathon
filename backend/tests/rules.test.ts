@@ -142,10 +142,10 @@ describe("editing the split rules", () => {
 
     await expect(
       env.merchants.updateRules(merchantId, [
-        { ...asInput(microcredit!), sharePercent: 40 },
+        { ...asInput(microcredit!), sharePercent: 90 },
         { ...asInput(savings!), sharePercent: 15 },
       ]),
-    ).rejects.toThrow("como máximo pueden tomar el 50%");
+    ).rejects.toThrow("como máximo pueden tomar el 99%");
     await expect(
       env.merchants.updateRules(merchantId, [
         { ...asInput(savings!), destination: BOB },

@@ -172,16 +172,16 @@ describe("monthly quotas", () => {
 });
 
 describe("validateRules", () => {
-  it("accepts rules that take up to 50% of a sale", () => {
+  it("accepts rules that take up to 99% of a sale, like a supplier taking 80%", () => {
     expect(() =>
-      validateRules([microcredit, { ...savings, shareBps: 3500 }], COP),
+      validateRules([{ ...microcredit, shareBps: 8000 }, { ...savings, shareBps: 1900 }], COP),
     ).not.toThrow();
   });
 
-  it("keeps the majority of every sale for the merchant", () => {
+  it("always leaves the merchant a part of every sale", () => {
     expect(() =>
-      validateRules([microcredit, { ...savings, shareBps: 3501 }], COP),
-    ).toThrow("50%");
+      validateRules([{ ...microcredit, shareBps: 8000 }, { ...savings, shareBps: 1901 }], COP),
+    ).toThrow("99%");
   });
 
   it("requires a monthly quota for debts, and a positive balance when one is given", () => {

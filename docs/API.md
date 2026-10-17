@@ -93,7 +93,7 @@ Registers the signed-in account's shop and starts the single consent MiPlante ne
 
 - 1–10 rules, applied in order (their priority when the monthly cap runs out). `category` is free
   text (1–40 characters) the shop uses to group its wallets; several rules can share one.
-- `sharePercent`: from 0.01 to 50, with at most two decimals. The rules together can take at most 50%
+- `sharePercent`: from 0.01 to 99, with at most two decimals. The rules together can take at most 99%
   of each sale.
 - A debt (an obligation: supplier, microcredit, rent…) needs a `monthlyQuota`. Each sale reserves
   its share, in the shop's wallet, until this calendar month's quota is covered; after that its
@@ -166,7 +166,7 @@ are applied by MiPlante (ADR 0004, ADR 0013).
   and missing ones are removed.
 - What each rule has repaid is always kept. A debt keeps its stored balance unless `outstanding`
   is sent, so an edit never undoes a repayment recorded meanwhile.
-- The same limits as onboarding apply: 1–10 rules, at most 50% in total, a quota for every debt,
+- The same limits as onboarding apply: 1–10 rules, at most 99% in total, a quota for every debt,
   quotas within the monthly cap, and never the shop's own wallet as a destination. Otherwise the
   answer is `400` and nothing changes.
 

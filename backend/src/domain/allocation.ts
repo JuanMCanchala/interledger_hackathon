@@ -41,8 +41,11 @@ export interface AllocationPlan {
 
 export const BPS_PER_WHOLE = 10_000;
 export const MAX_RULES = 10;
-/** The merchant always keeps at least half of every sale. */
-export const MAX_TOTAL_SHARE_BPS = 5_000;
+/**
+ * The rules can take up to 99% of a sale, so the shop always keeps something. A shop's supplier can
+ * well be most of what comes in: a corner shop's gross margin is around 15–25%.
+ */
+export const MAX_TOTAL_SHARE_BPS = 9_900;
 
 /** 15 → 1,500 bp. Rejects precision finer than a basis point (0.01%). */
 export function percentToBps(percent: number): number {
@@ -93,7 +96,7 @@ export function validateRules(
   }
   if (total > MAX_TOTAL_SHARE_BPS) {
     throw new AppError(
-      `Las reglas suman ${total / 100}%; como máximo pueden tomar el 50% de cada venta`,
+      `Las reglas suman ${total / 100}%; como máximo pueden tomar el ${MAX_TOTAL_SHARE_BPS / 100}% de cada venta, para que siempre te quede una parte`,
     );
   }
 }

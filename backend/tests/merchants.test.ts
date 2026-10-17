@@ -56,14 +56,14 @@ describe("merchant onboarding", () => {
     );
   });
 
-  it("keeps the majority of every sale for the merchant", async () => {
+  it("always leaves the merchant a part of every sale", async () => {
     const { merchants, ops } = setupMiPlante();
     const greedy = {
       ...ROSA,
-      rules: [{ ...ROSA.rules[0]!, sharePercent: 46 }, ROSA.rules[1]!],
+      rules: [{ ...ROSA.rules[0]!, sharePercent: 95 }, ROSA.rules[1]!],
     };
 
-    await expect(merchants.onboard(greedy)).rejects.toThrow("50%");
+    await expect(merchants.onboard(greedy)).rejects.toThrow("99%");
     expect(ops.requestOutgoingPaymentGrant).not.toHaveBeenCalled();
   });
 

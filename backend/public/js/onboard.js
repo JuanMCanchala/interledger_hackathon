@@ -424,7 +424,7 @@ function checkWallets() {
   const total = wallets.reduce((sum, w) => sum + w.sharePercent, 0);
   if (total > MAX_TOTAL_PERCENT)
     return fail(
-      `Entre todas suman ${total.toLocaleString("es-CO")}% de cada venta. Baja alguna: lo máximo es ${MAX_TOTAL_PERCENT}%, para que siempre te quede la mayor parte.`,
+      `Entre todas suman ${total.toLocaleString("es-CO")}% de cada venta. Baja alguna: lo máximo es ${MAX_TOTAL_PERCENT}%, para que siempre te quede una parte.`,
     );
   return true;
 }

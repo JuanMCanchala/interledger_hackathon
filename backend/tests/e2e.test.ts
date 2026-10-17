@@ -217,9 +217,9 @@ describe("the server checks everything itself (QA risk R1)", () => {
     const bad = (body: unknown) => call("POST", "/api/merchants", body, token);
 
     expect((await bad({ ...SHOP, name: "" })).status).toBe(400);
-    // Shares adding up to more than 50%, even if each one is valid.
+    // Shares adding up to more than 99%, even if each one is valid.
     expect(
-      (await bad({ ...SHOP, rules: [{ ...SHOP.rules[0], sharePercent: 40 }, { ...SHOP.rules[1], sharePercent: 40 }] })).status,
+      (await bad({ ...SHOP, rules: [{ ...SHOP.rules[0], sharePercent: 80 }, { ...SHOP.rules[1], sharePercent: 20 }] })).status,
     ).toBe(400);
     expect((await bad({ ...SHOP, rules: [{ ...SHOP.rules[0], sharePercent: 120 }] })).status).toBe(400);
     expect((await bad({ ...SHOP, rules: [{ ...SHOP.rules[0], sharePercent: -5 }] })).status).toBe(400);
@@ -234,7 +234,7 @@ describe("the server checks everything itself (QA risk R1)", () => {
       expect(res.status, `amount ${amount}`).toBe(400);
     }
     const put = (rules: unknown) => call("PUT", `/api/merchants/${shop.id}/rules`, { rules }, shop.token);
-    expect((await put([{ ...SHOP.rules[0], sharePercent: 30 }, { ...SHOP.rules[1], sharePercent: 30 }])).status).toBe(400);
+    expect((await put([{ ...SHOP.rules[0], sharePercent: 60 }, { ...SHOP.rules[1], sharePercent: 40 }])).status).toBe(400);
     expect((await call("PUT", `/api/merchants/${shop.id}/settings`, { name: "" }, shop.token)).status).toBe(400);
     expect((await call("POST", `/api/merchants/${shop.id}/cap`, { monthlyCap: "1000" }, shop.token)).status).toBe(400);
   });

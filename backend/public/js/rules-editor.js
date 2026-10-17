@@ -185,7 +185,7 @@ export function createRulesEditor({
     showMessage(
       preview.warning,
       overLimit
-        ? `Las reglas suman ${totalPercent.toLocaleString("es-CO")}%. El máximo es ${MAX_TOTAL_PERCENT}% para que siempre te quede la mayor parte de cada venta.`
+        ? `Las reglas suman ${totalPercent.toLocaleString("es-CO")}%. El máximo es ${MAX_TOTAL_PERCENT}% para que siempre te quede una parte de cada venta.`
         : "",
     );
 

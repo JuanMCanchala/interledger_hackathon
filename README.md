@@ -49,7 +49,8 @@ Details and sources: [`docs/product/PROBLEM.md`](docs/product/PROBLEM.md).
 
 - **No sales, no collection.** Shares are taken only from real sales.
 - **Never above the cap.** The merchant's wallet enforces the monthly cap.
-- **The merchant always keeps the majority.** Rules can take at most 50% of a sale.
+- **The merchant always keeps a part.** Rules can take up to 99% of a sale: a corner shop's
+  supplier can be most of what comes in, since its gross margin is around 15–25%.
 - **Revocable at any time** from the merchant's own wallet.
 
 ## Open Payments, end to end

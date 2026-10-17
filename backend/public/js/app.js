@@ -199,8 +199,8 @@ const FRIENDLY_ERRORS = [
     "El dinero de un pago automático no puede ir a la misma billetera de tu negocio.",
   ],
   [
-    /como máximo pueden tomar el 50%/i,
-    "Entre todos los pagos automáticos no puedes pasar de la mitad de cada venta.",
+    /como máximo pueden tomar el 99%/i,
+    "Entre todos los repartos no pueden pasar del 99% de cada venta: siempre te debe quedar una parte.",
   ],
   [
     /ya se está pagando o ya fue pagada/i,
@@ -278,7 +278,7 @@ export async function checkWallet(input) {
 
 /** The server's limits on a shop's split rules (src/domain/allocation.ts). */
 export const MAX_RULES = 10;
-export const MAX_TOTAL_PERCENT = 50;
+export const MAX_TOTAL_PERCENT = 99;
 
 /** Formats what the person types as whole pesos with thousands separators: 300000 → "300.000". */
 export function moneyInput(input) {
