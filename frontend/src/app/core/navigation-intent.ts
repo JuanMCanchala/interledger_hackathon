@@ -3,7 +3,9 @@
  * "avisos"), read on the device so moving around the till never depends on the model.
  */
 
-export type TillSection = 'inicio' | 'vender' | 'efectivo' | 'metas' | 'repartos' | 'ajustes' | 'avisos';
+export const SECTION_IDS = ['inicio', 'vender', 'efectivo', 'metas', 'repartos', 'ajustes', 'avisos'] as const;
+
+export type TillSection = (typeof SECTION_IDS)[number];
 
 export const SECTION_LABEL: Record<TillSection, string> = {
   inicio: 'Inicio',
@@ -14,6 +16,11 @@ export const SECTION_LABEL: Record<TillSection, string> = {
   ajustes: 'Ajustes',
   avisos: 'Avisos',
 };
+
+/** Network responses must name a real destination; unknown values never map to Inicio. */
+export function isTillSection(value: unknown): value is TillSection {
+  return typeof value === 'string' && SECTION_IDS.includes(value as TillSection);
+}
 
 const SECTION_WORDS: [RegExp, TillSection][] = [
   [/\b(inicio|principal|home|resumen|comienzo)\b/, 'inicio'],
