@@ -141,6 +141,41 @@ describe('GlorIA chat', () => {
     expect(fixture.componentInstance.deposits).toEqual([1200]);
   });
 
+  it('never charges again for an earlier message', async () => {
+    answers.set([
+      saleAnswer,
+      // The model wrongly acting again on the earlier charge, for a question with no amount.
+      saleAnswer,
+    ]);
+    const { fixture, root } = await openChat();
+    await type(fixture, root, 'necesito que le cobres al cliente lo del arroz, veinte mil');
+    root.querySelector<HTMLButtonElement>('.launcher')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await type(fixture, root, 'cómo van mis ventas el día de hoy');
+
+    expect(fixture.componentInstance.sales).toHaveLength(1);
+    // The model is told the first charge was done: a request with its answer.
+    const sent = (post.mock.calls[1] as unknown[])[1] as { messages: { role: string; content: string }[] };
+    expect(sent.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(sent.messages[1]!.content).toContain('Generé el cobro');
+    expect(root.textContent).toContain('necesito el monto');
+  });
+
+  it('tells the model what the till did on its own', async () => {
+    answers.set([{ reply: 'Vas muy bien.', actions: [] }]);
+    const { fixture, root } = await openChat();
+    await type(fixture, root, 'generame un cobro por $50,000');
+    expect(fixture.componentInstance.sales).toEqual([{ amount: 50000, description: '' }]);
+    root.querySelector<HTMLButtonElement>('.launcher')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await type(fixture, root, 'cómo van mis ventas el día de hoy');
+    const sent = (post.mock.calls[0] as unknown[])[1] as { messages: { role: string; content: string }[] };
+    expect(sent.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(fixture.componentInstance.sales).toHaveLength(1);
+  });
+
   it('says why when the till cannot charge', async () => {
     const { fixture, root } = await openChat();
     fixture.componentInstance.problem = 'primero autoriza tu billetera en Inicio para poder cobrar.';

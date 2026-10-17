@@ -14,7 +14,13 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiError, ApiService } from '../../core/api.service';
-import { parseCashSale, parseChargeRequest, parseDeposit, pesosInWords } from '../../core/spoken-amount';
+import {
+  parseCashSale,
+  parseChargeRequest,
+  parseDeposit,
+  parseSpokenSale,
+  pesosInWords,
+} from '../../core/spoken-amount';
 import { VoiceService } from '../../core/voice.service';
 import { afterWakeWord } from '../../core/wake-word';
 import { SECTION_LABEL, parseNavigation, wentTo } from '../../core/navigation-intent';
@@ -244,13 +250,13 @@ export class Gloria {
     // cash sale is never taken for a QR charge.
     const deposited = parseDeposit(content);
     if (deposited) {
-      this.turns.update((t) => [...t, { role: 'user', content, local: true }]);
+      this.turns.update((t) => [...t, { role: 'user', content }]);
       await this.depositNow(deposited, speakIt);
       return;
     }
     const cash = parseCashSale(content);
     if (cash) {
-      this.turns.update((t) => [...t, { role: 'user', content, local: true }]);
+      this.turns.update((t) => [...t, { role: 'user', content }]);
       await this.cashNow(cash, speakIt);
       return;
     }
@@ -259,14 +265,14 @@ export class Gloria {
     // charge never depends on how the model reads it.
     const request = parseChargeRequest(content);
     if (request) {
-      this.turns.update((t) => [...t, { role: 'user', content, local: true }]);
+      this.turns.update((t) => [...t, { role: 'user', content }]);
       await this.chargeNow(request, speakIt);
       return;
     }
     // "Llévame a inicio", "avisos": the same, for moving around the till.
     const place = parseNavigation(content);
     if (place) {
-      this.turns.update((t) => [...t, { role: 'user', content, local: true }]);
+      this.turns.update((t) => [...t, { role: 'user', content }]);
       this.goTo(place, true, speakIt);
       return;
     }
@@ -286,6 +292,15 @@ export class Gloria {
       );
       const cashSale = answer.actions.find((a) => a.type === 'cash-sale');
       const cashDeposit = answer.actions.find((a) => a.type === 'cash-deposit');
+      const charges = answer.actions.some((a) => a.type === 'sale') || cashSale || cashDeposit;
+      // Money is only recorded for a message that says how much: a charge the model takes from
+      // earlier in the conversation, or makes up, never runs.
+      if (charges && !parseSpokenSale(content)) {
+        const ask = 'Para eso necesito el monto. Dímelo así: «cobra 20.000» o «vendí 15 mil en efectivo».';
+        this.say(ask, false);
+        if (speakIt) void this.voice.speak(ask);
+        return;
+      }
       if (cashSale || cashDeposit) {
         if (cashSale) {
           await this.cashNow(
@@ -338,12 +353,12 @@ export class Gloria {
     }
     const amount = `$\u00a0${request.amount.toLocaleString('es-CO')}`;
     if (problem) {
-      this.say(`No pude generar el cobro de ${amount}: ${problem}`, true);
+      this.say(`No pude generar el cobro de ${amount}: ${problem}`, false);
       if (speakIt) void this.voice.speak(`No pude generar el cobro. ${problem}`);
       return;
     }
     const note = request.description ? ` por ${request.description}` : '';
-    this.say(`¡Listo! Generé el cobro de ${amount}${note}. El código QR ya está en pantalla para tu cliente.`, true);
+    this.say(`¡Listo! Generé el cobro de ${amount}${note}. El código QR ya está en pantalla para tu cliente.`, false);
     if (speakIt) void this.voice.speak(`Listo, el cobro de ${pesosInWords(request.amount)} está en pantalla.`);
     // The chat steps aside so the QR is what shows.
     this.hidePanel();
@@ -363,7 +378,7 @@ export class Gloria {
     }
     const amount = `$\u00a0${request.amount.toLocaleString('es-CO')}`;
     if (problem) {
-      this.say(`No pude registrar la venta en efectivo de ${amount}: ${problem}`, true);
+      this.say(`No pude registrar la venta en efectivo de ${amount}: ${problem}`, false);
       if (speakIt) void this.voice.speak(`No pude registrar la venta en efectivo. ${problem}`);
       return;
     }
@@ -386,7 +401,7 @@ export class Gloria {
     } finally {
       this.thinking.set(false);
     }
-    this.say(result.text, true);
+    this.say(result.text, false);
     if (speakIt) {
       void this.voice.speak(
         result.ok ? `Listo, registré la consignación de ${pesosInWords(amount)}.` : result.text,
@@ -403,7 +418,7 @@ export class Gloria {
     this.hidePanel();
     if (!announce) return;
     const text = `Listo, te llevé a ${SECTION_LABEL[section]}.`;
-    this.say(text, true);
+    this.say(text, false);
     this.showPeek(text);
     if (speakIt) void this.voice.speak(text);
   }
@@ -420,7 +435,11 @@ export class Gloria {
     this.peek.set('');
   }
 
-  /** A message from GlorIA that is not an answer of the model (an error, the greeting). */
+  /**
+   * A message from GlorIA written by the till. `local` ones (the greeting, the model being down) are
+   * never sent to the model; the rest are her answer to what was asked, so the model knows it is
+   * done and never does it again.
+   */
   private say(content: string, local: boolean): void {
     this.turns.update((t) => [...t, { role: 'assistant', content: money(content), local }]);
   }
