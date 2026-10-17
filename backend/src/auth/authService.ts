@@ -16,6 +16,8 @@ const scrypt = promisify(scryptCallback) as (
 ) => Promise<Buffer>;
 
 const KEY_LENGTH = 64;
+/** Checked against when the email has no account; no password matches it. */
+const unknownUserHash = hashPassword(randomBytes(32).toString("base64url"));
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export class UnauthorizedError extends AppError {
@@ -67,8 +69,13 @@ export class AuthService {
 
   async login(input: { email: string; password: string }) {
     const user = await this.store.getUserByEmail(normalizeEmail(input.email));
-    // Same message for an unknown email and a wrong password.
-    if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
+    // Same message, and the same scrypt work, for an unknown email and a wrong password, so neither
+    // the answer nor its timing tells which emails have an account.
+    const valid = await verifyPassword(
+      input.password,
+      user?.passwordHash ?? (await unknownUserHash),
+    );
+    if (!user || !valid) {
       throw new UnauthorizedError("Correo o contraseña incorrectos");
     }
     return this.startSession(user);
