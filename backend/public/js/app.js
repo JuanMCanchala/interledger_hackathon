@@ -137,8 +137,17 @@ export async function homeOfSignedIn() {
 
 /** A `next` page from the URL, only if it is a path on this site (never another domain). */
 export function safeNext(next) {
-  return next && /^\/(?!\/)/.test(next) && !next.startsWith("/login")
-    ? next
+  if (!next?.startsWith("/")) return "";
+  // Resolve it as the browser will: "/\\evil.com" or a tab in "//" also lead to another domain.
+  let url;
+  try {
+    url = new URL(next, window.location.origin);
+  } catch {
+    return "";
+  }
+  return url.origin === window.location.origin &&
+    !url.pathname.startsWith("/login")
+    ? `${url.pathname}${url.search}${url.hash}`
     : "";
 }
 
