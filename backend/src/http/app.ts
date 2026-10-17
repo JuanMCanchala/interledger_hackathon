@@ -13,7 +13,6 @@ import { salesController } from "./controllers/salesController.js";
 import { walletsController } from "./controllers/walletsController.js";
 import { cors } from "./middleware/cors.js";
 import { apiNotFound, errorHandler } from "./middleware/errors.js";
-import { servePages } from "./pages.js";
 
 export interface AppOptions {
   auth: AuthService;
@@ -24,20 +23,19 @@ export interface AppOptions {
   dashboard: DashboardService;
   /** Where the browser lands after the consent screen. */
   frontendUrl: string;
-  /** Origin allowed to call /api from another host (e.g. a Vite or Next.js dev server). */
+  /** Origin allowed to call /api from another host (e.g. an Angular dev server). */
   corsOrigin?: string;
 }
 
 /**
- * The HTTP app: the web client's pages, and the API under /api with one controller per resource
- * (docs/API.md). Errors from any controller end in `errorHandler`.
+ * The HTTP API app under /api with one controller per resource (docs/API.md).
+ * Errors from any controller end in `errorHandler`.
  */
 export function createApp(options: AppOptions) {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "20kb" }));
   if (options.corsOrigin) app.use("/api", cors(options.corsOrigin));
-  servePages(app);
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
