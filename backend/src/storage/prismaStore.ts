@@ -130,24 +130,7 @@ export class PrismaStore implements Store {
   }
 
   async saveMerchant(record: MerchantRecord) {
-    const data = {
-      ownerId: record.ownerId ?? null,
-      name: record.name,
-      wallet: record.wallet,
-      assetCode: record.asset.assetCode,
-      assetScale: record.asset.assetScale,
-      monthlyCap: BigInt(record.monthlyCap.value),
-      monthlySalesGoal: record.monthlySalesGoal
-        ? BigInt(record.monthlySalesGoal.value)
-        : null,
-      pendingCap: record.pendingCap
-        ? BigInt(record.pendingCap.monthlyCap.value)
-        : null,
-      pendingMandateId: record.pendingCap?.mandateId ?? null,
-      mandateId: record.mandateId,
-      createdAt: new Date(record.createdAt),
-      updatedAt: new Date(record.updatedAt),
-    };
+    const data = merchantColumns(record);
     await this.prisma.$transaction([
       this.prisma.merchant.upsert({
         where: { id: record.id },
@@ -176,6 +159,15 @@ export class PrismaStore implements Store {
       }),
     ]);
     return record;
+  }
+
+  async updateMerchant(record: MerchantRecord) {
+    const row = await this.prisma.merchant.update({
+      where: { id: record.id },
+      data: merchantColumns(record),
+      include: merchantInclude,
+    });
+    return toMerchant(row);
   }
 
   async recordRepayment(
@@ -538,6 +530,28 @@ function toMandate(row: MandateRow): MandateRecord {
     interaction: fromJson<Interaction>(row.interaction),
     token: fromJson<StoredToken>(row.token),
     continuation: fromJson<MandateRecord["continuation"]>(row.continuation),
+  };
+}
+
+/** The shop's own columns; its rules are stored apart. */
+function merchantColumns(record: MerchantRecord) {
+  return {
+    ownerId: record.ownerId ?? null,
+    name: record.name,
+    wallet: record.wallet,
+    assetCode: record.asset.assetCode,
+    assetScale: record.asset.assetScale,
+    monthlyCap: BigInt(record.monthlyCap.value),
+    monthlySalesGoal: record.monthlySalesGoal
+      ? BigInt(record.monthlySalesGoal.value)
+      : null,
+    pendingCap: record.pendingCap
+      ? BigInt(record.pendingCap.monthlyCap.value)
+      : null,
+    pendingMandateId: record.pendingCap?.mandateId ?? null,
+    mandateId: record.mandateId,
+    createdAt: new Date(record.createdAt),
+    updatedAt: new Date(record.updatedAt),
   };
 }
 

@@ -159,6 +159,21 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect(rule!.outstanding).toEqual(cop("0"));
   });
 
+  it("keeps a repayment recorded after the shop was read when the shop is saved", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const stale = (await store.getMerchant(merchantId))!;
+    const debt = stale.rules.find((rule) => rule.kind === "debt")!;
+
+    await store.recordRepayment(merchantId, debt.id, "150000", new Date().toISOString());
+    const saved = await store.updateMerchant({ ...stale, name: "Doña Rosa" });
+
+    const rule = saved.rules.find((r) => r.id === debt.id)!;
+    expect(saved.name).toBe("Doña Rosa");
+    expect(rule.repaid).toEqual(cop("150000"));
+    expect((await store.getMerchant(merchantId))!.rules).toEqual(saved.rules);
+  });
+
   it("stores the shop's goals", async () => {
     const env = setupMiPlante(store);
     const merchantId = await env.onboardRosa();

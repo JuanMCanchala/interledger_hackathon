@@ -42,7 +42,14 @@ export interface Store {
   savePayout(record: PayoutRecord): Promise<PayoutRecord>;
   /** Newest first. */
   listPayouts(merchantId: string): Promise<PayoutRecord[]>;
+
+  /** Stores a shop with its rules, replacing any stored before: for a new shop. */
   saveMerchant(record: MerchantRecord): Promise<MerchantRecord>;
+  /**
+   * Saves a shop's own fields (name, goal, cap, grant) and keeps its rules as they are stored, so a
+   * change made from an earlier read never undoes a repayment recorded meanwhile. Returns the shop.
+   */
+  updateMerchant(record: MerchantRecord): Promise<MerchantRecord>;
 
   getSale(id: string): Promise<SaleRecord | undefined>;
   saveSale(record: SaleRecord): Promise<SaleRecord>;
@@ -164,6 +171,13 @@ export class MemoryStore implements Store {
   async saveMerchant(record: MerchantRecord) {
     this.merchants.set(record.id, copy(record));
     return record;
+  }
+
+  async updateMerchant(record: MerchantRecord) {
+    const stored = this.merchants.get(record.id);
+    if (!stored) throw new Error(`No merchant ${record.id}`);
+    this.merchants.set(record.id, { ...copy(record), rules: stored.rules });
+    return copy(this.merchants.get(record.id))!;
   }
 
   async getSale(id: string) {

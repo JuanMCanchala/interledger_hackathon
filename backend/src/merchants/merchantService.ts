@@ -225,7 +225,7 @@ export class MerchantService {
       description: `MiPlante · ${merchant.name}`,
       returnTo: `/merchant?id=${merchant.id}`,
     });
-    const updated = await this.store.saveMerchant({
+    const updated = await this.store.updateMerchant({
       ...merchant,
       mandateId: mandate.id,
       updatedAt: this.now().toISOString(),
@@ -245,7 +245,7 @@ export class MerchantService {
     if (goal && BigInt(goal.value) <= 0n) {
       throw new AppError("La meta de ventas debe ser mayor que cero");
     }
-    const updated = await this.store.saveMerchant({
+    const updated = await this.store.updateMerchant({
       ...merchant,
       name: input.name ?? merchant.name,
       monthlySalesGoal: goal,
@@ -275,7 +275,7 @@ export class MerchantService {
       description: `MiPlante · ${merchant.name}`,
       returnTo: `/merchant?id=${merchant.id}#ajustes`,
     });
-    const updated = await this.store.saveMerchant(
+    const updated = await this.store.updateMerchant(
       current.status === "active"
         ? {
             ...merchant,
@@ -303,7 +303,7 @@ export class MerchantService {
     const { status } = await this.flows.findMandate(pending.mandateId);
     if (status === "awaiting-consent") return merchant;
     const approved = status === "active";
-    const updated = await this.store.saveMerchant({
+    const updated = await this.store.updateMerchant({
       ...merchant,
       ...(approved
         ? { mandateId: pending.mandateId, monthlyCap: pending.monthlyCap }
