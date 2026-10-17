@@ -169,11 +169,11 @@ const FRIENDLY_ERRORS = [
   ],
   [
     /no está permitido/i,
-    "Esa billetera no es de la red de prueba de Interledger. Escribe solo su nombre, por ejemplo tienda-billeticos.",
+    "Esa billetera no es de la red de prueba de Interledger. Escribe solo su nombre, por ejemplo mi-tienda.",
   ],
   [
     /debe usar https|query ni fragmento/i,
-    "Escribe solo el nombre de la billetera, por ejemplo tienda-billeticos.",
+    "Escribe solo el nombre de la billetera, por ejemplo mi-tienda.",
   ],
   [
     /misma wallet del negocio/i,
@@ -212,7 +212,7 @@ const WALLET_HOST = "ilp.interledger-test.dev";
 
 /**
  * What a person types → what the API accepts:
- * "tienda-billeticos" → "$ilp.interledger-test.dev/tienda-billeticos"; "$…" and "https://…" pass.
+ * "mi-tienda" → "$ilp.interledger-test.dev/mi-tienda"; "$…" and "https://…" pass.
  */
 export function normalizeWallet(input) {
   const text = String(input ?? "").replace(/\s+/g, "");
@@ -222,7 +222,7 @@ export function normalizeWallet(input) {
   return `$${WALLET_HOST}/${text.replace(/^@/, "")}`;
 }
 
-/** "https://ilp.interledger-test.dev/tienda-billeticos" → "tienda-billeticos" for display. */
+/** "https://ilp.interledger-test.dev/mi-tienda" → "mi-tienda" for display. */
 export function walletName(url) {
   try {
     const parsed = new URL(String(url).replace(/^\$/, "https://"));

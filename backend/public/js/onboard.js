@@ -29,7 +29,10 @@ import {
 /** The preview shows a 10,000 COP sale, like the demo. */
 const PREVIEW_SALE = 10000n * 100n;
 
-/** The categories a shop starts with, prefilled with the team's demo wallets. */
+/**
+ * The categories a shop starts with: a suggested share each, and examples (in grey) for what the
+ * shop types itself, since every shop has its own creditors and wallets.
+ */
 const DEFAULT_CATEGORIES = [
   {
     name: "Proveedores",
@@ -37,11 +40,12 @@ const DEFAULT_CATEGORIES = [
     icon: "📦",
     wallets: [
       {
-        label: "Distribuidora",
-        destination: "proveedor-billeticos",
         sharePercent: 10,
-        monthlyQuota: "200.000",
-        dueDay: 25,
+        examples: {
+          label: "Ej: Distribuidora Central",
+          destination: "Ej: distribuidora-central",
+          monthlyQuota: "Ej: 200.000",
+        },
       },
     ],
   },
@@ -51,12 +55,13 @@ const DEFAULT_CATEGORIES = [
     icon: "💳",
     wallets: [
       {
-        label: "Microcrédito",
-        destination: "microcredito",
         sharePercent: 15,
-        monthlyQuota: "100.000",
-        outstanding: "300.000",
-        dueDay: 15,
+        examples: {
+          label: "Ej: Cooperativa de crédito",
+          destination: "Ej: cooperativa-credito",
+          monthlyQuota: "Ej: 100.000",
+          outstanding: "Ej: 600.000",
+        },
       },
     ],
   },
@@ -66,9 +71,8 @@ const DEFAULT_CATEGORIES = [
     icon: "🐷",
     wallets: [
       {
-        label: "Fondo de emergencia",
-        destination: "ahorro-billeticos",
         sharePercent: 5,
+        examples: { label: "Ej: Fondo de emergencia", destination: "Ej: mi-ahorro" },
       },
     ],
   },
@@ -100,6 +104,9 @@ function addWallet(category, values = {}) {
   field(row, "monthlyQuota").value = values.monthlyQuota ?? "";
   field(row, "outstanding").value = values.outstanding ?? "";
   field(row, "dueDay").value = values.dueDay ?? (category.dataset.kind === "debt" ? 28 : "");
+  for (const [name, example] of Object.entries(values.examples ?? {})) {
+    field(row, name).placeholder = example;
+  }
   moneyInput(field(row, "monthlyQuota"));
   moneyInput(field(row, "outstanding"));
   for (const debtField of row.querySelectorAll(".debt-only")) {
