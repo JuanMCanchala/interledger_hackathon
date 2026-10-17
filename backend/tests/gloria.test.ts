@@ -181,6 +181,32 @@ describe("GlorIA", () => {
     }
   });
 
+  it("records cash sales and deposits through the till, and knows what is in cash", async () => {
+    const { env, id } = await shopWithSale();
+    await env.cash.recordSale(id, { amount: "20000" });
+    const model = new ScriptedModel([
+      {
+        content: "",
+        toolCalls: [
+          call("registrar_venta_efectivo", { monto: 15000, descripcion: "pan" }),
+          call("registrar_consignacion", { monto: 3000 }, "deposit"),
+        ],
+      },
+      { content: "Listo.", toolCalls: [] },
+    ]);
+    const answer = await new GloriaService(model, env.dashboard).chat(id, [
+      { role: "user", content: "vendí 15 mil de pan en efectivo y consigné 3 mil" },
+    ]);
+    expect(answer.actions).toEqual([
+      { type: "cash-sale", amount: "15000", description: "pan" },
+      { type: "cash-deposit", amount: "3000" },
+    ]);
+    // The till does it, not GlorIA: nothing was recorded yet.
+    expect((await env.store.listSales({ merchantId: id })).filter((s) => s.method === "cash")).toHaveLength(1);
+    const state = JSON.parse((model.seen[0]!.messages[1]!.content as string).split("(json): ")[1]!);
+    expect(state.efectivo).toMatchObject({ vendido_en_efectivo_hoy: "$ 20.000", por_consignar: "$ 3.000" });
+  });
+
   it("needs a question from the shopkeeper", async () => {
     const { env, id } = await shopWithSale();
     const gloria = new GloriaService(new ScriptedModel([]), env.dashboard);

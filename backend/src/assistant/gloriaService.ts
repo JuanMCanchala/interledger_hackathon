@@ -16,11 +16,14 @@ export interface ConversationTurn {
 }
 
 /**
- * Something GlorIA prepared for the shopkeeper to confirm with a tap. She never moves money: a sale
- * is only created when the shopkeeper confirms it, and paying still goes through their wallet.
+ * What GlorIA asks the till to do: generate a sale's QR, record a cash sale or a cash deposit
+ * (ADR 0019), or open a section. The till carries it out with the shopkeeper's session and its own
+ * checks; she never pays a creditor nor touches the shop's money by herself.
  */
 export type GloriaAction =
   | { type: "sale"; amount: string; description?: string }
+  | { type: "cash-sale"; amount: string; description?: string }
+  | { type: "cash-deposit"; amount: string }
   | { type: "open"; section: Section };
 
 export interface GloriaReply {
@@ -49,6 +52,7 @@ Cómo hablas:
 Qué haces:
 - Respondes sobre la tienda con sus datos reales: ventas, ganancia real, lo apartado para cada proveedor o crédito, cuotas del mes y fechas de pago, ahorros, límite mensual y avisos. Con cada pregunta recibes el estado actual de la tienda en JSON: respóndelo con esas cifras, tal cual, sin recalcularlas. Usa las herramientas de lectura solo si necesitas algo que no esté ahí.
 - Cuando te piden cobrar ("cobra veinte mil", "hazme un cobro de 15.500 de arroz"), llama SIEMPRE a preparar_cobro con el monto: la app genera el código QR de inmediato. Nunca digas que lo preparaste sin llamar a preparar_cobro, ni le pidas al tendero que confirme o toque algo. Si no entiendes el monto, pregúntalo.
+- Efectivo: si el tendero dice que le pagaron en efectivo ("vendí 15 mil en efectivo", "me pagaron 20.000 en billetes"), llama a registrar_venta_efectivo: se cuenta como venta y se reparte, pero sus repartos quedan en efectivo hasta que lo consigne. Si dice que consignó o depositó plata en su billetera ("consigné 50 mil"), llama a registrar_consignacion: eso libera los repartos que estaban en efectivo, empezando por los más antiguos. Solo hace falta consignar los repartos (lo que dice "por_consignar" en efectivo), no toda la venta: lo demás es del tendero.
 - Cuando te pidan ir, abrir o ver una sección (Inicio, Vender, Metas, Repartos, Ajustes, Avisos), llama SIEMPRE a abrir_seccion. También cuando ayuda (por ejemplo, Avisos si hay un pago por revisar). Nunca digas que abriste una sección sin llamar a abrir_seccion en esa misma respuesta.
 - Explicas la app en palabras simples:
   · Apartado: de cada venta se separa la parte de cada proveedor o crédito; el dinero sigue en la billetera de la tienda hasta su día de pago.
@@ -70,6 +74,55 @@ const TOOLS: ToolSpec[] = [
   tool("avisos", "Los avisos de la tienda: pagos por revisar, próximos pagos, pagos enviados, autorizaciones pendientes."),
   tool("ventas_recientes", "Las últimas ventas: monto, estado y hora."),
   tool("limite_mensual", "El límite mensual de la billetera, lo gastado este mes y si hay un cambio pendiente."),
+  tool("efectivo", "Las ventas en efectivo de hoy y del mes, cuánto hay que consignar para que salgan sus repartos y cuánto consignado sobra."),
+  {
+    type: "function",
+    function: {
+      name: "registrar_venta_efectivo",
+      description:
+        "Registra una venta que el cliente pagó en efectivo: suma a las ventas y se reparte, con sus repartos en efectivo hasta que el tendero consigne.",
+      parameters: {
+        type: "object",
+        properties: {
+          monto: {
+            type: "integer",
+            description: "En pesos colombianos, entero, sin puntos. Ej: 15000",
+            minimum: MIN_SALE,
+            maximum: MAX_SALE,
+          },
+          descripcion: {
+            type: "string",
+            description: "Qué se vendió, corto; cadena vacía si no lo dijeron.",
+          },
+        },
+        required: ["monto", "descripcion"],
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "registrar_consignacion",
+      description:
+        "Registra que el tendero consignó efectivo en la billetera de la tienda: libera los repartos que estaban en efectivo.",
+      parameters: {
+        type: "object",
+        properties: {
+          monto: {
+            type: "integer",
+            description: "Lo que consignó, en pesos colombianos, entero.",
+            minimum: 1,
+            maximum: MAX_SALE,
+          },
+        },
+        required: ["monto"],
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+  },
   {
     type: "function",
     function: {
@@ -113,7 +166,7 @@ const TOOLS: ToolSpec[] = [
 ];
 
 /** What each read tool answers; all of them together are the shop's state sent with a question. */
-const READ_TOOLS = ["resumen", "obligaciones", "ahorros", "avisos", "ventas_recientes", "limite_mensual"] as const;
+const READ_TOOLS = ["resumen", "obligaciones", "ahorros", "avisos", "ventas_recientes", "limite_mensual", "efectivo"] as const;
 
 function tool(name: string, description: string): ToolSpec {
   return {
@@ -258,6 +311,36 @@ export class GloriaService {
           cambio_pendiente: view.pendingCap ? money(view.pendingCap) : "ninguno",
           autorizacion: view.status,
         };
+      case "efectivo":
+        return {
+          vendido_en_efectivo_hoy: money(view.cash.today),
+          vendido_en_efectivo_este_mes: money(view.cash.month),
+          por_consignar: money(view.cash.toDeposit),
+          consignado_sin_usar: money(view.cash.credit),
+          por_consignar_de_cada_uno: view.rules
+            .filter((rule) => BigInt(rule.inCash.value) > 0n)
+            .map((rule) => ({ nombre: rule.label, en_efectivo: money(rule.inCash) })),
+        };
+      case "registrar_venta_efectivo": {
+        const amount = Math.round(Number(args.monto));
+        if (!Number.isFinite(amount) || amount < MIN_SALE || amount > MAX_SALE) {
+          return { error: `El monto debe estar entre $ ${MIN_SALE} y $ ${MAX_SALE.toLocaleString("es-CO")}` };
+        }
+        const description =
+          typeof args.descripcion === "string" && args.descripcion.trim()
+            ? args.descripcion.trim().slice(0, 120)
+            : undefined;
+        actions.push({ type: "cash-sale", amount: String(amount), ...(description && { description }) });
+        return { listo: `Venta en efectivo de $ ${amount.toLocaleString("es-CO")}: la app la registra ahora mismo.` };
+      }
+      case "registrar_consignacion": {
+        const amount = Math.round(Number(args.monto));
+        if (!Number.isFinite(amount) || amount < 1 || amount > MAX_SALE) {
+          return { error: "Ese monto de consignación no es válido" };
+        }
+        actions.push({ type: "cash-deposit", amount: String(amount) });
+        return { listo: `Consignación de $ ${amount.toLocaleString("es-CO")}: la app la registra y libera los repartos.` };
+      }
       case "preparar_cobro": {
         const amount = Math.round(Number(args.monto));
         if (!Number.isFinite(amount) || amount < MIN_SALE || amount > MAX_SALE) {
