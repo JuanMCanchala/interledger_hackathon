@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AuthService } from "../src/auth/authService.js";
 import { createApp } from "../src/http/app.js";
 import { PayoutService } from "../src/merchants/payoutService.js";
+import { CashService } from "../src/merchants/cashService.js";
 import { DashboardService } from "../src/merchants/dashboardService.js";
 import { MerchantService } from "../src/merchants/merchantService.js";
 import { SalesService } from "../src/merchants/salesService.js";
@@ -34,12 +35,14 @@ beforeAll(async () => {
   const sales = new SalesService(flows, merchants, store, {
     frontendUrl: FRONTEND_URL,
   });
+  const payouts = new PayoutService(flows, merchants, store);
   server = createApp({
     auth: new AuthService(store),
-    payouts: new PayoutService(flows, merchants, store),
+    payouts,
     flows,
     merchants,
     sales,
+    cash: new CashService(flows, merchants, sales, payouts, store),
     dashboard: new DashboardService(flows, merchants, sales, store),
     frontendUrl: FRONTEND_URL,
     corsOrigin: FRONTEND_URL,

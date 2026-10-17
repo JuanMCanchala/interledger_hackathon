@@ -2,6 +2,7 @@ import {
   MerchantService,
   type OnboardInput,
 } from "../src/merchants/merchantService.js";
+import { CashService } from "../src/merchants/cashService.js";
 import { DashboardService } from "../src/merchants/dashboardService.js";
 import { PayoutService } from "../src/merchants/payoutService.js";
 import { SalesService } from "../src/merchants/salesService.js";
@@ -65,9 +66,11 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     now,
   });
   const payouts = new PayoutService(flows, merchants, store, { now });
+  const cash = new CashService(flows, merchants, sales, payouts, store, { now });
   const dashboard = new DashboardService(flows, merchants, sales, store, {
     now,
     payouts,
+    cash,
   });
 
   /** What the wallet appends to the finish URL when its owner approves. */
@@ -136,6 +139,7 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     merchants,
     sales,
     payouts,
+    cash,
     dashboard,
     approve,
     approveMandate,

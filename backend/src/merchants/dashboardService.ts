@@ -7,6 +7,7 @@ import {
 import type { PaymentFlows } from "../openPayments/flows.js";
 import type { Amount, Asset } from "../shared/money.js";
 import type { Store } from "../storage/store.js";
+import type { CashService } from "./cashService.js";
 import type { MerchantService } from "./merchantService.js";
 import { buildNotifications } from "./notifications.js";
 import { reservedBalances, type PayoutService } from "./payoutService.js";
@@ -28,7 +29,7 @@ export class DashboardService {
     private readonly merchants: MerchantService,
     private readonly sales: SalesService,
     private readonly store: Store,
-    private readonly options: { now?: () => Date; payouts?: PayoutService } = {},
+    private readonly options: { now?: () => Date; payouts?: PayoutService; cash?: CashService } = {},
   ) {
     this.now = options.now ?? (() => new Date());
   }
@@ -46,6 +47,7 @@ export class DashboardService {
       this.store.listPayouts(merchantId),
     ]);
     const reserved = await reservedBalances(this.store, merchantId);
+    const inCash = (await this.options.cash?.inCash(merchantId)) ?? { total: 0n, byRule: {} };
     const month = bogotaDay(this.now()).slice(0, 7);
     const paid = sales.filter((sale) => sale.status === "paid" && sale.paidAt);
     const now = this.now();
@@ -74,6 +76,8 @@ export class DashboardService {
       rules: merchant.rules.map((rule) => ({
         ...rule,
         paidThisMonth: paidThisMonth[rule.id] ?? money(0n),
+        /** Of what it took, the part of cash sales not deposited yet (ADR 0019). */
+        inCash: money(inCash.byRule[rule.id] ?? 0n),
         ...(rule.kind === "debt" && {
           reserved: money((reserved[rule.id] ?? 0n) > 0n ? reserved[rule.id]! : 0n),
           paidOutThisMonth: money(
@@ -111,6 +115,22 @@ export class DashboardService {
         allocated: money(allocated),
       },
       month: this.month(paid, payouts, reserved, now, money),
+      /**
+       * Cash sales (ADR 0019): what came in cash today and this month, the shares still waiting
+       * for the shopkeeper to deposit them, and deposited money not yet matched to a share.
+       */
+      cash: {
+        today: money(sum(today.filter((s) => s.method === "cash").map((s) => s.amount))),
+        month: money(
+          sum(
+            paid
+              .filter((s) => s.method === "cash" && Date.parse(s.paidAt!) >= startOfBogotaMonth(now).getTime())
+              .map((s) => s.amount),
+          ),
+        ),
+        toDeposit: money(inCash.total),
+        credit: merchant.cashCredit ?? money(0n),
+      },
       /** What the shopkeeper should know or do now, things to act on first (notifications.ts). */
       notifications: buildNotifications({
         merchant,
@@ -159,7 +179,12 @@ export class DashboardService {
       sum(list.flatMap((p) => (p.topUp ? [p.topUp] : [])));
     const fromProfit = topUpOf(monthPayouts);
     const kindOf = (kind: string) =>
-      sum(thisMonth.flatMap(sentItems).filter((i) => i.kind === kind && i.status !== "reserved").map((i) => i.amount));
+      sum(
+        thisMonth
+          .flatMap(sentItems)
+          .filter((i) => i.kind === kind && i.status !== "reserved" && i.status !== "cash")
+          .map((i) => i.amount),
+      );
     const reservedNow = Object.values(reserved).reduce((t, v) => t + (v > 0n ? v : 0n), 0n);
     return {
       dayOfMonth: day,

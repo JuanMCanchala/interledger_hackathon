@@ -32,6 +32,8 @@ model Merchant {
   emergencyRuleId    String?  @map("emergency_rule_id") @db.Uuid
   /// The counter display's key: a phone with it shows each new sale's QR (ADR 0018).
   displayKey         String?  @unique @map("display_key")
+  /// Cash deposited and not yet matched to a cash sale's share, in minor units (ADR 0019).
+  cashCredit         BigInt   @default(0) @map("cash_credit")
   createdAt          DateTime @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime @map("updated_at") @db.Timestamptz(3)
 
@@ -82,6 +84,8 @@ model Sale {
   status           String
   customer         String?
   paymentId        String?   @map("payment_id") @db.Uuid
+  /// "qr" (Open Payments) or "cash" (ADR 0019).
+  method           String    @default("qr")
   error            String?
   /// pending → running → done | skipped; moved to running atomically before any money moves.
   settlementStatus String    @map("settlement_status")

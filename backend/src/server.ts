@@ -3,6 +3,7 @@ import { GloriaService } from "./assistant/gloriaService.js";
 import { AuthService } from "./auth/authService.js";
 import { loadConfig } from "./config.js";
 import { createApp } from "./http/app.js";
+import { CashService } from "./merchants/cashService.js";
 import { DashboardService } from "./merchants/dashboardService.js";
 import { MerchantService } from "./merchants/merchantService.js";
 import { PayoutService } from "./merchants/payoutService.js";
@@ -33,7 +34,8 @@ try {
     walletSendUrl: config.walletSendUrl,
   });
   const payouts = new PayoutService(flows, merchants, store);
-  const dashboard = new DashboardService(flows, merchants, sales, store, { payouts });
+  const cash = new CashService(flows, merchants, sales, payouts, store);
+  const dashboard = new DashboardService(flows, merchants, sales, store, { payouts, cash });
   const gloria = config.assistant
     ? new GloriaService(new DeepSeekChatModel(config.assistant), dashboard)
     : undefined;
@@ -44,6 +46,7 @@ try {
     flows,
     merchants,
     sales,
+    cash,
     dashboard,
     gloria,
     frontendUrl: config.frontendUrl,

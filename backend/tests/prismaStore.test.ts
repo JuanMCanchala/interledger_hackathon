@@ -92,6 +92,19 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect(await store.getMerchantByDisplayKey(oldKey!)).toBeUndefined();
   });
 
+  it("stores a cash sale, its held shares and the deposited credit", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const { sale } = await env.cash.recordSale(merchantId, { amount: "20000" });
+    const stored = (await store.getSale(sale.id))!;
+    expect(stored.method).toBe("cash");
+    expect(stored.settlement.items.every((item) => item.status === "cash")).toBe(true);
+
+    await env.cash.deposit(merchantId, { amount: "100" });
+    expect((await store.getMerchant(merchantId))!.cashCredit).toMatchObject({ value: "10000" });
+    expect((await store.getSale(sale.id))!.settlement.items.map((i) => i.status)).toContain("cash");
+  });
+
   it("settles exactly once when many polls race", async () => {
     const env = setupMiPlante(store);
     const { saleId } = await paidSale(env);

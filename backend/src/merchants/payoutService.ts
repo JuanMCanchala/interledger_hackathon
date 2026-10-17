@@ -41,6 +41,28 @@ export async function reservedBalances(
 }
 
 /**
+ * What each rule has waiting to leave the wallet: reserved, plus shares still held in cash
+ * (ADR 0019), which will leave under the same grant once deposited. Both count against the cap
+ * and against what a debt still owes when a new sale is split.
+ */
+export async function committedBalances(
+  store: Store,
+  merchantId: string,
+): Promise<Record<string, bigint>> {
+  const [balances, sales] = await Promise.all([
+    reservedBalances(store, merchantId),
+    store.listSales({ merchantId }),
+  ]);
+  for (const sale of sales) {
+    for (const item of sale.settlement.items) {
+      if (item.status !== "cash") continue;
+      balances[item.ruleId] = (balances[item.ruleId] ?? 0n) + BigInt(item.amount.value);
+    }
+  }
+  return balances;
+}
+
+/**
  * Pays creditors the way they expect: one payment on the debt's due day of the month, instead of a
  * small transfer per sale (ADR 0014). That payment completes the month's quota: what was reserved,
  * and what is missing from the shop's profit (ADR 0015). The merchant can also pay a debt early, or
@@ -359,8 +381,10 @@ export class PayoutService {
       const covered = BigInt((await monthCoverage(this.store, merchant.id, now))[rule.id]?.value ?? "0");
       const missing = BigInt(rule.monthlyQuota.value) - covered;
       if (missing > 0n) {
-        // Room in the cap once every reserved share (this one included) has left.
-        const pending = Object.values(balances).reduce((sum, v) => sum + (v > 0n ? v : 0n), 0n);
+        // Room in the cap once every reserved share (this one included) has left, and the shares
+        // still in cash once they are deposited.
+        const committed = await committedBalances(this.store, merchant.id);
+        const pending = Object.values(committed).reduce((sum, v) => sum + (v > 0n ? v : 0n), 0n);
         const room = BigInt((await capRoom(this.flows, this.store, merchant, now)).value) - pending;
         topUp = missing < room ? missing : room > 0n ? room : 0n;
       }

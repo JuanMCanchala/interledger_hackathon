@@ -38,6 +38,7 @@ async function start(withGloria = false) {
     flows: env.flows,
     merchants: env.merchants,
     sales: env.sales,
+    cash: env.cash,
     dashboard: env.dashboard,
     frontendUrl: FRONTEND,
     corsOrigin: FRONTEND,
@@ -413,5 +414,63 @@ describe("one sale at a time", () => {
 
     const view = await call("GET", `/api/merchants/${id}`, undefined, token);
     expect(view.body.sales.filter((s: { status: string }) => s.status === "open").map((s: { id: string }) => s.id)).toEqual([current]);
+  });
+});
+
+describe("cash sales over HTTP", () => {
+  it("counts cash, holds its shares, and releases them as the shopkeeper deposits", async () => {
+    const { env, call, activeShop } = await start();
+    const { token, id } = await activeShop();
+    const charges = () => env.ops.createOutgoingPayment.mock.calls.length;
+    const before = charges();
+
+    // $20.000 in cash: 15% for the microcredit and 5% for savings, all held in cash.
+    const sold = await call("POST", `/api/merchants/${id}/cash-sales`, { amount: "20000", description: "Mercado" }, token);
+    expect(sold.status).toBe(201);
+    expect(sold.body.sale).toMatchObject({ method: "cash", status: "paid", description: "Mercado" });
+    expect(sold.body.sale.settlement.items.map((i: { status: string }) => i.status)).toEqual(["cash", "cash"]);
+    expect(charges()).toBe(before);
+
+    let view = (await call("GET", `/api/merchants/${id}`, undefined, token)).body;
+    expect(view.today.gross).toEqual(cop("2000000"));
+    expect(view.cash).toMatchObject({ today: cop("2000000"), toDeposit: cop("400000"), credit: cop("0") });
+    const microcredit = view.rules.find((r: { label: string }) => r.label === "Microcrédito");
+    // It counts toward the quota, but nothing is set aside in the wallet yet.
+    expect(microcredit).toMatchObject({ paidThisMonth: cop("300000"), inCash: cop("300000"), reserved: cop("0") });
+
+    // A deposit short of the oldest share releases nothing and is kept as credit.
+    const short = await call("POST", `/api/merchants/${id}/cash-deposits`, { amount: "500" }, token);
+    expect(short.body).toMatchObject({ sent: cop("0"), reserved: cop("0"), credit: cop("50000"), stillInCash: cop("400000") });
+
+    // With the rest it releases both: the savings share leaves now, the debt's waits for its day.
+    const rest = await call("POST", `/api/merchants/${id}/cash-deposits`, { amount: "4000" }, token);
+    expect(rest.status).toBe(201);
+    expect(rest.body).toMatchObject({
+      sent: cop("100000"),
+      reserved: cop("300000"),
+      stillInCash: cop("0"),
+      credit: cop("50000"),
+      failed: [],
+    });
+    expect(charges()).toBe(before + 1);
+    view = (await call("GET", `/api/merchants/${id}`, undefined, token)).body;
+    expect(view.cash.toDeposit).toEqual(cop("0"));
+    expect(view.rules.find((r: { label: string }) => r.label === "Microcrédito")).toMatchObject({
+      inCash: cop("0"),
+      reserved: cop("300000"),
+    });
+
+    // A cash sale has no QR: the counter display never shows it.
+    const key = (await call("POST", `/api/merchants/${id}/display`, undefined, token)).body.displayKey;
+    expect((await call("GET", `/api/displays/${key}`)).body.sale).toBeNull();
+  });
+
+  it("only for the shop's owner, and with a valid amount", async () => {
+    const { call, signUp, activeShop } = await start();
+    const { token, id } = await activeShop();
+    expect((await call("POST", `/api/merchants/${id}/cash-sales`, { amount: "1000" })).status).toBe(401);
+    expect((await call("POST", `/api/merchants/${id}/cash-sales`, { amount: "1000" }, await signUp())).status).toBe(404);
+    expect((await call("POST", `/api/merchants/${id}/cash-sales`, { amount: "-5" }, token)).status).toBe(400);
+    expect((await call("POST", `/api/merchants/${id}/cash-deposits`, { amount: "abc" }, token)).status).toBe(400);
   });
 });

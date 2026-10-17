@@ -268,6 +268,7 @@ export class PrismaStore implements Store {
       status: record.status,
       customer: record.customer ?? null,
       paymentId: record.paymentId ?? null,
+      method: record.method ?? "qr",
       error: record.error ?? null,
       settlementStatus: settlement.status,
       settlementReason: settlement.reason ?? null,
@@ -587,6 +588,7 @@ function merchantColumns(record: MerchantRecord) {
     emergencyMandateId: record.emergency?.mandateId ?? null,
     emergencyRuleId: record.emergency?.ruleId ?? null,
     displayKey: record.displayKey ?? null,
+    cashCredit: BigInt(record.cashCredit?.value ?? "0"),
     mandateId: record.mandateId,
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt),
@@ -637,6 +639,7 @@ function toMerchant(row: MerchantRow): MerchantRecord {
         ? undefined
         : { mandateId: row.emergencyMandateId, ruleId: row.emergencyRuleId },
     displayKey: opt(row.displayKey),
+    cashCredit: row.cashCredit > 0n ? amount(row.cashCredit, asset) : undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -652,6 +655,7 @@ function toSale(row: SaleRow): SaleRecord {
     status: row.status as SaleRecord["status"],
     customer: opt(row.customer),
     paymentId: opt(row.paymentId),
+    method: row.method as SaleRecord["method"],
     error: opt(row.error),
     settlement: {
       status: row.settlementStatus as SaleRecord["settlement"]["status"],

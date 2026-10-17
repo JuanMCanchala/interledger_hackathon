@@ -129,6 +129,10 @@ export const updateRules = z.object({
 
 export const createSale = z.object({ amount: decimalAmount, description });
 
+/** A sale paid in cash, and cash deposited into the wallet (ADR 0019). */
+export const cashSale = z.object({ amount: decimalAmount, description });
+export const cashDeposit = z.object({ amount: decimalAmount });
+
 export const paySale = z.object({ customerWallet: walletAddress });
 
 // Accounts ---------------------------------------------------------------------------------------

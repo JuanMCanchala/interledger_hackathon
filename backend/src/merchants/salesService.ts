@@ -12,7 +12,7 @@ import {
 import type { SalePaymentChanges, Store } from "../storage/store.js";
 import type { MerchantService } from "./merchantService.js";
 import { capRoom, monthCoverage } from "./monthly.js";
-import { reservedBalances } from "./payoutService.js";
+import { committedBalances } from "./payoutService.js";
 import type {
   MerchantRecord,
   SaleRecord,
@@ -263,7 +263,7 @@ export class SalesService {
       const [cap, paidThisMonth, reserved] = await Promise.all([
         capRoom(this.flows, this.store, merchant, this.now()),
         this.paidThisMonth(merchant.id, saleId),
-        reservedBalances(this.store, merchant.id),
+        committedBalances(this.store, merchant.id),
       ]);
       // What is reserved will leave under the same grant on the due day: it already uses the cap,
       // and it already counts against each debt's balance.
@@ -322,6 +322,12 @@ export class SalesService {
         };
         if (allocation.amount.value === "0") {
           items[index] = { ...base, status: "skipped" };
+          return;
+        }
+        if (sale.method === "cash") {
+          // The money is in the drawer: the share waits for the shopkeeper to deposit it (ADR 0019).
+          items[index] = { ...base, status: "cash" };
+          await persistProgress();
           return;
         }
         if (rule.kind === "debt") {
@@ -433,10 +439,13 @@ export class SalesService {
       throw new NotFoundError("Esta pantalla ya no está enlazada a una tienda");
     }
     const now = this.now().getTime();
-    const [latest] = await this.store.listSales({
-      merchantId: merchant.id,
-      createdSince: new Date(now - DISPLAY_SALE_MS).toISOString(),
-    });
+    // A cash sale has no QR: the display shows the newest sale the customer pays by QR.
+    const [latest] = (
+      await this.store.listSales({
+        merchantId: merchant.id,
+        createdSince: new Date(now - DISPLAY_SALE_MS).toISOString(),
+      })
+    ).filter((sale) => sale.method !== "cash");
     let sale: ReturnType<typeof toPublicSale> | null = null;
     if (latest && latest.status !== "failed" && latest.status !== "cancelled") {
       const view = await this.refresh(latest.id);
@@ -474,6 +483,7 @@ export class SalesService {
       merchantName: merchant?.name,
       amount: sale.amount,
       description: sale.description,
+      method: sale.method ?? "qr",
       status: sale.status,
       customer: sale.customer,
       error: sale.error,

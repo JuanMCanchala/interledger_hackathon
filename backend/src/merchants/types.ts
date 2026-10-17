@@ -49,6 +49,8 @@ export interface MerchantRecord {
    * keeps showing the newest sale's QR. Changing it unlinks the phones that had the old one.
    */
   displayKey?: string;
+  /** Cash deposited into the wallet not yet matched to a cash sale's share (ADR 0019). */
+  cashCredit?: Amount;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,8 +60,12 @@ export type SaleStatus =
   "open" | "awaiting-consent" | "processing" | "paid" | "failed" | "cancelled";
 
 /** `reserved`: a debt's share set aside in the merchant's wallet until its due day (ADR 0014). */
+/**
+ * `reserved`: a debt's share set aside in the merchant's wallet until its due day (ADR 0014).
+ * `cash`: a share of a cash sale, still in the drawer until the shopkeeper deposits it (ADR 0019).
+ */
 export type SettlementItemStatus =
-  "processing" | "completed" | "failed" | "skipped" | "reserved";
+  "processing" | "completed" | "failed" | "skipped" | "reserved" | "cash";
 
 /**
  * One rule's share of a sale: sent from the merchant's wallet under the monthly-capped grant
@@ -143,6 +149,8 @@ export interface SaleRecord {
   customer?: string;
   /** One-off Open Payments payment from the customer to the merchant. */
   paymentId?: string;
+  /** How the customer paid: by QR through Open Payments (the default), or in cash (ADR 0019). */
+  method?: "qr" | "cash";
   error?: string;
   settlement: Settlement;
   paidAt?: string;

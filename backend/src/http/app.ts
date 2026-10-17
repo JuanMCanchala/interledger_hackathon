@@ -1,6 +1,7 @@
 import express from "express";
 import type { GloriaService } from "../assistant/gloriaService.js";
 import type { AuthService } from "../auth/authService.js";
+import type { CashService } from "../merchants/cashService.js";
 import type { DashboardService } from "../merchants/dashboardService.js";
 import type { MerchantService } from "../merchants/merchantService.js";
 import type { PayoutService } from "../merchants/payoutService.js";
@@ -22,6 +23,7 @@ export interface AppOptions {
   flows: PaymentFlows;
   merchants: MerchantService;
   sales: SalesService;
+  cash: CashService;
   dashboard: DashboardService;
   /** Where the browser lands after the consent screen. */
   frontendUrl: string;

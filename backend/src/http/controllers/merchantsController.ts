@@ -1,6 +1,7 @@
 import { Router, type Request } from "express";
 import type { GloriaService } from "../../assistant/gloriaService.js";
 import type { AuthService } from "../../auth/authService.js";
+import type { CashService } from "../../merchants/cashService.js";
 import type { DashboardService } from "../../merchants/dashboardService.js";
 import type { MerchantService } from "../../merchants/merchantService.js";
 import type { PayoutService } from "../../merchants/payoutService.js";
@@ -22,6 +23,7 @@ export function merchantsController({
   dashboard,
   payouts,
   sales,
+  cash,
   gloria,
 }: {
   auth: AuthService;
@@ -29,6 +31,7 @@ export function merchantsController({
   dashboard: DashboardService;
   payouts: PayoutService;
   sales: SalesService;
+  cash: CashService;
   gloria?: GloriaService;
 }): Router {
   const router = Router();
@@ -130,6 +133,18 @@ export function merchantsController({
   router.post("/:id/sales", async (req, res) => {
     const merchant = await ownedMerchant(req);
     res.status(201).json(await sales.createSale(merchant.id, schemas.createSale.parse(req.body)));
+  });
+
+  /** A sale paid in cash: counted and split, its shares held until the cash is deposited. */
+  router.post("/:id/cash-sales", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res.status(201).json(await cash.recordSale(merchant.id, schemas.cashSale.parse(req.body)));
+  });
+
+  /** Cash deposited into the wallet: it releases the oldest shares held in cash. */
+  router.post("/:id/cash-deposits", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res.status(201).json(await cash.deposit(merchant.id, schemas.cashDeposit.parse(req.body)));
   });
 
   return router;
