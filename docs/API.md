@@ -135,7 +135,10 @@ The till and dashboard.
   "today": { "salesCount", "gross": Amount, "kept": Amount, "allocated": Amount },
   "month": { "dayOfMonth": 16, "daysInMonth": 31, "salesCount", "gross": Amount, "kept": Amount,
              "allocated": Amount,
-             "days": [{ "date", "salesCount", "gross": Amount, "allocated": Amount }] },  // 1st to today
+             "realProfit": Amount,   // kept minus what due-day payouts took from profit; can be < 0
+             "breakdown": { "sentToSavings", "paidToCreditors", "fromProfit", "reservedPending" },
+             "days": [{ "date", "salesCount", "gross": Amount, "allocated": Amount,
+                        "realProfit": Amount }] },  // 1st to today
   "sales": [Sale],                      // newest first, at most 20
   "createdAt": "…"
 }
