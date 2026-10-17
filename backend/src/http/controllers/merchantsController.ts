@@ -88,6 +88,12 @@ export function merchantsController({
     res.status(201).json(await merchants.authorizeEmergency(merchant.id, ruleId));
   });
 
+  /** The last resort on a failed payout: take its amount from the emergency fund, then send it. */
+  router.post("/:id/payouts/:payoutId/use-emergency", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res.status(201).json(await payouts.useEmergency(merchant.id, req.params.payoutId));
+  });
+
   router.post("/:id/consent", async (req, res) => {
     const merchant = await ownedMerchant(req);
     res.status(201).json(await merchants.renewConsent(merchant.id));

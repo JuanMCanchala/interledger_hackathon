@@ -206,26 +206,32 @@ model Session {
 
 /// One payment to a creditor: everything reserved for a debt rule, sent on its due day or early.
 model Payout {
-  id          String    @id @db.Uuid
-  merchantId  String    @map("merchant_id") @db.Uuid
-  ruleId      String    @map("rule_id") @db.Uuid
-  label       String
-  destination String
-  amount      BigInt
-  assetCode   String    @map("asset_code")
-  assetScale  Int       @map("asset_scale")
-  reason      String
-  month       String
-  status      String
-  paymentId   String?   @map("payment_id") @db.Uuid
-  error       String?
+  id                 String    @id @db.Uuid
+  merchantId         String    @map("merchant_id") @db.Uuid
+  ruleId             String    @map("rule_id") @db.Uuid
+  label              String
+  destination        String
+  amount             BigInt
+  assetCode          String    @map("asset_code")
+  assetScale         Int       @map("asset_scale")
+  reason             String
+  month              String
+  status             String
+  paymentId          String?   @map("payment_id") @db.Uuid
+  error              String?
   /// Due-day payouts: the part taken from the shop\'s profit to complete the quota.
-  topUp       BigInt?   @map("top_up")
+  topUp              BigInt?   @map("top_up")
   /// How a failed payout was resolved by the shopkeeper: "retried" or "marked-paid".
-  resolution  String?
-  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz(3)
-  createdAt   DateTime  @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime  @map("updated_at") @db.Timestamptz(3)
+  resolution         String?
+  resolvedAt         DateTime? @map("resolved_at") @db.Timestamptz(3)
+  /// The move from the emergency fund to the shop for this failed payout (ADR 0016).
+  emergencyPaymentId String?   @map("emergency_payment_id") @db.Uuid
+  emergencyAmount    BigInt?   @map("emergency_amount")
+  emergencyStatus    String?   @map("emergency_status")
+  emergencyError     String?   @map("emergency_error")
+  emergencyCounted   Boolean   @default(false) @map("emergency_counted")
+  createdAt          DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @map("updated_at") @db.Timestamptz(3)
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 

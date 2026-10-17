@@ -18,12 +18,14 @@ export interface Notification {
   createdAt: string;
   /** For a failed payout: what the shopkeeper can do about it. */
   payoutId?: string;
-  actions?: ("retry" | "mark-paid")[];
+  actions?: ("retry" | "mark-paid" | "use-emergency")[];
 }
 
 export interface NotificationInput {
   merchant: MerchantRecord;
   consent: string;
+  /** Whether the emergency fund's grant is approved, so it can be offered on a failed payout. */
+  emergencyActive: boolean;
   /** Per debt rule: what is reserved now and how much of this month's quota is covered. */
   reserved: Record<string, Amount>;
   covered: Record<string, Amount>;
@@ -42,6 +44,7 @@ const TONE_ORDER = { bad: 0, wait: 1, info: 2, ok: 3 } as const;
 export function buildNotifications({
   merchant,
   consent,
+  emergencyActive,
   reserved,
   covered,
   payouts,
@@ -75,7 +78,18 @@ export function buildNotifications({
   }
 
   for (const payout of payouts) {
-    if (payout.status === "failed" && !payout.resolvedAt) {
+    if (payout.status === "failed" && !payout.resolvedAt && payout.emergencyDraw?.status !== "failed" && payout.emergencyDraw) {
+      list.push({
+        id: `payout-emergency:${payout.id}:${payout.emergencyDraw.status}`,
+        kind: "payout-failed",
+        tone: "wait",
+        title: `Usando tu fondo de emergencia para pagar a ${payout.label}`,
+        text: `Estamos pasando ${formatAmount(payout.emergencyDraw.amount)} de tu fondo de emergencia a tu tienda. Cuando llegue, le enviamos el pago completo.`,
+        createdAt: payout.updatedAt,
+        payoutId: payout.id,
+      });
+    } else if (payout.status === "failed" && !payout.resolvedAt) {
+      const drawFailed = payout.emergencyDraw?.status === "failed";
       list.push({
         id: `payout-failed:${payout.id}`,
         kind: "payout-failed",
@@ -84,10 +98,15 @@ export function buildNotifications({
         text:
           `${formatAmount(payout.amount)}${payout.error ? ` · ${payout.error}` : ""}. ` +
           `Revisa la billetera ${walletName(payout.destination)}: si el dinero llegó, márcalo como pagado; ` +
-          "si no, reintenta el pago. No lo volvemos a intentar solos, para no pagar dos veces.",
+          "si no, reintenta el pago. No lo volvemos a intentar solos, para no pagar dos veces." +
+          (drawFailed
+            ? ` No se pudo sacar de tu fondo de emergencia: ${payout.emergencyDraw!.error ?? "la billetera no lo aceptó"}.`
+            : emergencyActive
+              ? " Si en tu tienda no hay plata, puedes usar tu fondo de emergencia como último recurso."
+              : ""),
         createdAt: payout.updatedAt,
         payoutId: payout.id,
-        actions: ["retry", "mark-paid"],
+        actions: emergencyActive ? ["retry", "mark-paid", "use-emergency"] : ["retry", "mark-paid"],
       });
     } else if (
       payout.status === "completed" &&

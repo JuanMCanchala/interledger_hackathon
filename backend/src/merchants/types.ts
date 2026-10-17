@@ -110,6 +110,18 @@ export interface PayoutRecord {
    */
   resolution?: "retried" | "marked-paid";
   resolvedAt?: string;
+  /**
+   * The shopkeeper chose the emergency fund for this failed payout: the move of its amount from the
+   * savings wallet to the shop. Once it arrives, the payout is sent again (ADR 0016).
+   */
+  emergencyDraw?: {
+    paymentId?: string;
+    amount: Amount;
+    status: "processing" | "completed" | "failed";
+    error?: string;
+    /** Its amount was already taken off the savings rule's progress. */
+    counted?: boolean;
+  };
   createdAt: string;
   updatedAt: string;
 }

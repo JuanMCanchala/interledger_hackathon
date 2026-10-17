@@ -98,6 +98,8 @@ export class DashboardService {
         error: p.error,
         /** A failed payout waits for the shopkeeper until this is set. */
         resolution: p.resolution ?? null,
+        /** How the move from the emergency fund for it is going, if one was asked for. */
+        emergency: p.emergencyDraw?.status ?? null,
         createdAt: p.createdAt,
       })),
       today: {
@@ -111,6 +113,9 @@ export class DashboardService {
       notifications: buildNotifications({
         merchant,
         consent: mandate.status,
+        emergencyActive: merchant.emergency
+          ? (await this.flows.findMandate(merchant.emergency.mandateId)).status === "active"
+          : false,
         reserved: Object.fromEntries(
           Object.entries(reserved).map(([ruleId, value]) => [ruleId, money(value > 0n ? value : 0n)]),
         ),

@@ -98,6 +98,40 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect((await store.getSale(saleId))!.settlement.items).toHaveLength(2);
   });
 
+  it("stores a payout's top-up, its review and its move from the emergency fund", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const ruleId = (await store.getMerchant(merchantId))!.rules[0]!.id;
+    const now = new Date().toISOString();
+    const payout = {
+      id: "00000000-0000-4000-8000-0000000000aa",
+      merchantId,
+      ruleId,
+      label: "Microcrédito",
+      destination: "https://ilp.interledger-test.dev/coop",
+      amount: cop("2000000"),
+      topUp: cop("1700000"),
+      reason: "due-date" as const,
+      month: "2026-10",
+      status: "failed" as const,
+      error: "timeout",
+      resolution: "retried" as const,
+      resolvedAt: now,
+      emergencyDraw: {
+        paymentId: "00000000-0000-4000-8000-0000000000bb",
+        amount: cop("2000000"),
+        status: "completed" as const,
+        counted: true,
+      },
+      createdAt: now,
+      updatedAt: now,
+    };
+    await store.savePayout(payout);
+    await store.savePayout(payout);
+
+    expect(await store.listPayouts(merchantId)).toEqual([payout]);
+  });
+
   it("finds nothing for an id that is not a UUID, instead of failing", async () => {
     expect(await store.getSale("not-a-real-id")).toBeUndefined();
     expect(await store.getMerchant("nope")).toBeUndefined();

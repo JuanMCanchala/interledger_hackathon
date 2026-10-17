@@ -435,6 +435,11 @@ export class PrismaStore implements Store {
       topUp: record.topUp ? BigInt(record.topUp.value) : null,
       resolution: record.resolution ?? null,
       resolvedAt: record.resolvedAt ? new Date(record.resolvedAt) : null,
+      emergencyPaymentId: record.emergencyDraw?.paymentId ?? null,
+      emergencyAmount: record.emergencyDraw ? BigInt(record.emergencyDraw.amount.value) : null,
+      emergencyStatus: record.emergencyDraw?.status ?? null,
+      emergencyError: record.emergencyDraw?.error ?? null,
+      emergencyCounted: record.emergencyDraw?.counted ?? false,
       createdAt: new Date(record.createdAt),
       updatedAt: new Date(record.updatedAt),
     };
@@ -470,6 +475,16 @@ export class PrismaStore implements Store {
             : amount(row.topUp, { assetCode: row.assetCode, assetScale: row.assetScale }),
         resolution: (row.resolution ?? undefined) as PayoutRecord["resolution"],
         resolvedAt: row.resolvedAt?.toISOString(),
+        emergencyDraw:
+          row.emergencyAmount === null || row.emergencyStatus === null
+            ? undefined
+            : {
+                paymentId: opt(row.emergencyPaymentId),
+                amount: amount(row.emergencyAmount, { assetCode: row.assetCode, assetScale: row.assetScale }),
+                status: row.emergencyStatus as NonNullable<PayoutRecord["emergencyDraw"]>["status"],
+                error: opt(row.emergencyError),
+                counted: row.emergencyCounted,
+              },
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
       }),

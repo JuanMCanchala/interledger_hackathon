@@ -186,6 +186,73 @@ export class PayoutService {
     return paid;
   }
 
+  /**
+   * The last resort, chosen by the shopkeeper on a failed payout: move its amount from the emergency
+   * fund (the savings wallet authorized for it) to the shop, and once it arrives send the payout
+   * again (ADR 0016). The fund is never touched without this choice.
+   */
+  async useEmergency(merchantId: string, payoutId: string): Promise<PayoutRecord> {
+    const failed = await this.requireUnresolvedFailure(merchantId, payoutId);
+    const merchant = await this.merchants.require(merchantId);
+    if (!merchant.emergency) {
+      throw new AppError("Autoriza primero tu fondo de emergencia en Ajustes", 409);
+    }
+    if ((await this.flows.findMandate(merchant.emergency.mandateId)).status !== "active") {
+      throw new AppError("La autorización de tu fondo de emergencia no está activa", 409);
+    }
+    if (failed.emergencyDraw && failed.emergencyDraw.status !== "failed") {
+      throw new AppError("Ya estamos pasando dinero de tu fondo de emergencia para este pago", 409);
+    }
+    const draw = { amount: failed.amount, status: "processing" as const };
+    let payout = await this.save(failed, { emergencyDraw: draw });
+    try {
+      const payment = await this.flows.chargeMandate(merchant.emergency.mandateId, {
+        receiver: merchant.wallet,
+        amount: fromMinorUnits(failed.amount.value, failed.amount.assetScale),
+        amountType: "send",
+        description: `MiPlante · del fondo de emergencia para pagar a ${failed.label}`,
+      });
+      const status =
+        payment.status === "completed"
+          ? "completed"
+          : payment.status === "failed" || payment.status === "rejected"
+            ? "failed"
+            : "processing";
+      payout = await this.save(payout, {
+        emergencyDraw: { ...draw, paymentId: payment.id, status, error: payment.error },
+      });
+    } catch (error) {
+      return this.save(payout, {
+        emergencyDraw: { ...draw, status: "failed", error: describeError(error) },
+      });
+    }
+    if (payout.emergencyDraw?.status === "completed") return this.afterDraw(merchant, payout);
+    return payout;
+  }
+
+  /**
+   * The emergency money is in the shop: count it as taken from the fund (its savings progress goes
+   * down) and send the payout again. If that cannot run now, the next refresh tries.
+   */
+  private async afterDraw(merchant: MerchantRecord, payout: PayoutRecord): Promise<PayoutRecord> {
+    if (!payout.emergencyDraw?.counted) {
+      await this.merchants.recordRepayment(
+        merchant.id,
+        merchant.emergency!.ruleId,
+        { ...payout.emergencyDraw!.amount, value: (-BigInt(payout.emergencyDraw!.amount.value)).toString() },
+      );
+      payout = await this.save(payout, {
+        emergencyDraw: { ...payout.emergencyDraw!, status: "completed", counted: true },
+      });
+    }
+    try {
+      return await this.retry(merchant.id, payout.id);
+    } catch (error) {
+      console.warn(`[payouts] pago ${payout.id} con el fondo de emergencia: ${describeError(error)}`);
+      return payout;
+    }
+  }
+
   private async requireUnresolvedFailure(merchantId: string, payoutId: string) {
     const payout = (await this.store.listPayouts(merchantId)).find((p) => p.id === payoutId);
     if (!payout) throw new NotFoundError(`No existe el pago ${payoutId}`);
@@ -211,6 +278,7 @@ export class PayoutService {
         });
       }
     }
+    await this.followEmergencyDraws(merchantId, all);
     const processing = all.filter((payout) => payout.status === "processing" && payout.paymentId);
     for (const payout of processing) {
       if (this.refreshing.has(payout.id)) continue;
@@ -229,6 +297,31 @@ export class PayoutService {
       } finally {
         this.refreshing.delete(payout.id);
       }
+    }
+  }
+
+  /** Follows the moves from the emergency fund; once one arrives its payout is sent again. */
+  private async followEmergencyDraws(merchantId: string, all: PayoutRecord[]) {
+    const waiting = all.filter(
+      (p) => p.status === "failed" && !p.resolvedAt && p.emergencyDraw && p.emergencyDraw.status !== "failed",
+    );
+    if (waiting.length === 0) return;
+    const merchant = await this.merchants.require(merchantId);
+    if (!merchant.emergency) return;
+    for (let payout of waiting) {
+      const draw = payout.emergencyDraw!;
+      if (draw.status === "processing" && draw.paymentId) {
+        const payment = await this.flows.refreshPayment(draw.paymentId);
+        if (payment.status === "failed" || payment.status === "rejected") {
+          await this.save(payout, {
+            emergencyDraw: { ...draw, status: "failed", error: payment.error ?? "No llegó" },
+          });
+          continue;
+        }
+        if (payment.status !== "completed") continue;
+        payout = await this.save(payout, { emergencyDraw: { ...draw, status: "completed" } });
+      }
+      if (payout.emergencyDraw!.status === "completed") await this.afterDraw(merchant, payout);
     }
   }
 
