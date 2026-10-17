@@ -18,7 +18,7 @@ import { parseCashSale, parseChargeRequest, parseDeposit, pesosInWords } from '.
 import { VoiceService } from '../../core/voice.service';
 import { afterWakeWord } from '../../core/wake-word';
 import { SECTION_LABEL, parseNavigation, wentTo } from '../../core/navigation-intent';
-import { Doodle } from '../../shared/brand/doodle';
+import { GloriaIcon } from '../../shared/brand/gloria-icon';
 
 /** What GlorIA prepared for the shopkeeper to confirm (backend/src/assistant/gloriaService.ts). */
 export type GloriaAction =
@@ -64,7 +64,7 @@ const SUGGESTIONS = [
 @Component({
   selector: 'app-gloria',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, Doodle],
+  imports: [FormsModule, GloriaIcon],
   templateUrl: './gloria.html',
   styleUrl: './gloria.scss',
 })

@@ -2,7 +2,7 @@
   @if (peek()) {
     <div class="peek" role="status">
       <button type="button" class="peek-body" (click)="openPanel()" aria-label="Abrir el chat con GlorIA">
-        <span class="peek-avatar" aria-hidden="true"><app-doodle name="planta" /></span>
+        <span class="peek-avatar" aria-hidden="true"><app-gloria-icon /></span>
         <span class="peek-text">{{ peek() }}</span>
       </button>
       <button type="button" class="peek-close" aria-label="Ocultar" (click)="dismissPeek()">
@@ -20,10 +20,12 @@
     aria-haspopup="dialog"
     aria-label="Hablar con GlorIA, tu asistente"
   >
-    <span class="launcher-avatar" aria-hidden="true"><app-doodle name="planta" /></span>
+    <span class="launcher-avatar" aria-hidden="true">
+      <app-gloria-icon [awake]="voice.handsFree()" [listening]="awake()" />
+    </span>
     <span class="launcher-copy">
       <strong>GlorIA</strong>
-      <small>{{ voice.handsFree() ? (awake() ? 'Te escucho…' : 'Di «Gloria»') : 'Tu asistente' }}</small>
+      <small>{{ voice.handsFree() ? (awake() ? 'Te escucho…' : 'Di «Gloria»') : 'Agente IA' }}</small>
     </span>
   </button>
 } @else {
@@ -37,7 +39,7 @@
   >
     <header class="head">
       <span class="avatar" [class.is-awake]="awake() || voice.listening()" aria-hidden="true">
-        <app-doodle name="planta" />
+        <app-gloria-icon [awake]="voice.handsFree()" [listening]="awake() || voice.listening()" />
       </span>
       <div class="who">
         <h2 id="gloria-title">GlorIA</h2>
@@ -97,14 +99,14 @@
       @for (turn of turns(); track $index) {
         <li class="msg" [class.from-user]="turn.role === 'user'">
           @if (turn.role === 'assistant') {
-            <span class="msg-avatar" aria-hidden="true"><app-doodle name="planta" /></span>
+            <span class="msg-avatar" aria-hidden="true"><app-gloria-icon /></span>
           }
           <p class="bubble">{{ turn.content }}</p>
         </li>
       }
       @if (thinking()) {
         <li class="msg">
-          <span class="msg-avatar" aria-hidden="true"><app-doodle name="planta" /></span>
+          <span class="msg-avatar" aria-hidden="true"><app-gloria-icon [listening]="true" /></span>
           <p class="bubble typing" aria-label="GlorIA está escribiendo">
             <span></span><span></span><span></span>
           </p>
