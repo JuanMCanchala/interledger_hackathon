@@ -16,7 +16,6 @@ import { ApiError, ApiService } from '../../core/api.service';
 import { SaleView } from '../../core/miplante.models';
 import {
   CUSTOMER_STATUS,
-  PAYMENT_STEPS,
   STORAGE_KEYS,
   badgeClass,
   formatAmount,
@@ -26,17 +25,15 @@ import {
   statusInfo,
   walletName,
 } from '../../core/miplante.utils';
-import { Doodle } from '../../shared/brand/doodle';
 import { SiteFooter, SiteHeader } from '../../shared/ui/site-layout';
 import { SplitList } from '../../shared/ui/split-list';
-import { StepsIndicator } from '../../shared/ui/steps-indicator';
 
 const POLL_MS = 1500;
 const MAX_POLLS = 400;
 
 @Component({
   selector: 'app-pay',
-  imports: [FormsModule, RouterLink, SiteHeader, SiteFooter, SplitList, StepsIndicator, Doodle],
+  imports: [FormsModule, RouterLink, SiteHeader, SiteFooter, SplitList],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'miplante-page' },
   template: `
@@ -46,18 +43,13 @@ const MAX_POLLS = 400;
       <main class="narrow stack">
         @if (missing()) {
           <section class="card stack">
-            <div class="row between">
-              <div class="stack-sm">
-                <p class="eyebrow">Enlace no encontrado</p>
-                <h1 class="h1-sm">No encontramos este cobro</h1>
-                <p class="muted">
-                  Revisa el enlace o pide al negocio que te muestre el código QR
-                  de nuevo.
-                </p>
-              </div>
-              <span class="doodle-badge doodle-badge-lg" aria-hidden="true">
-                <app-doodle name="duda" />
-              </span>
+            <div class="stack-sm">
+              <p class="eyebrow">Enlace no encontrado</p>
+              <h1 class="h1-sm">No encontramos este cobro</h1>
+              <p class="muted">
+                Revisa el enlace o pide al negocio que te muestre el código QR
+                de nuevo.
+              </p>
             </div>
             <div class="row">
               <a class="btn btn-lima" routerLink="/">Ir al inicio</a>
@@ -77,8 +69,16 @@ const MAX_POLLS = 400;
                 <p class="eyebrow">Vas a pagar a</p>
                 <h1 class="h1-sm">{{ s.merchantName || 'Comercio MiPlante' }}</h1>
               </div>
-              <span class="doodle-badge doodle-badge-lg" aria-hidden="true">
-                <app-doodle name="pago" />
+              <span
+                [class]="statusBadgeClass(s.status)"
+                [class.badge-live]="s.status !== 'paid' && s.status !== 'failed' && s.status !== 'cancelled'"
+              >
+                @if (s.status !== 'paid' && s.status !== 'failed' && s.status !== 'cancelled') {
+                  <span class="live-status-pulse" aria-hidden="true">
+                    <span class="live-status-core"></span>
+                  </span>
+                }
+                <span>{{ statusText(s.status) }}</span>
               </span>
             </div>
 
@@ -87,21 +87,7 @@ const MAX_POLLS = 400;
               @if (s.description) {
                 <p class="muted">{{ s.description }}</p>
               }
-              <div>
-                <span [class]="statusBadgeClass(s.status)">
-                  {{ statusText(s.status) }}
-                </span>
-              </div>
             </div>
-
-            @if (s.payment?.steps) {
-              <app-steps-indicator
-                [labels]="stepLabels"
-                [doneFlags]="stepFlags(s)"
-                [active]="s.status !== 'failed' && s.status !== 'paid' && s.status !== 'cancelled'"
-                ariaLabel="Pasos del pago"
-              />
-            }
 
             @if (displayError()) {
               <p class="banner banner-bad" role="alert">{{ displayError() }}</p>
@@ -178,7 +164,6 @@ export default class PayPage implements OnInit {
   private readonly walletInput = viewChild<ElementRef<HTMLInputElement>>('walletInput');
 
   protected readonly formatAmount = formatAmount;
-  protected readonly stepLabels = PAYMENT_STEPS.map(([, label]) => label);
 
   protected readonly sale = signal<SaleView | null>(null);
   protected readonly missing = signal(false);
@@ -218,11 +203,6 @@ export default class PayPage implements OnInit {
 
   protected statusBadgeClass(status: string): string {
     return badgeClass(statusInfo(CUSTOMER_STATUS, status).tone);
-  }
-
-  protected stepFlags(s: SaleView): boolean[] {
-    const steps = (s.payment?.steps ?? {}) as Record<string, boolean | undefined>;
-    return PAYMENT_STEPS.map(([key]) => Boolean(steps[key]));
   }
 
   protected splitNote(s: SaleView): string {

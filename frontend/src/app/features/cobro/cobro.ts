@@ -107,7 +107,17 @@ interface WakeLockLike {
               <p class="eyebrow">Cobro en mostrador</p>
               <h2>{{ s.merchantName || shopName() || 'MiPlante' }}</h2>
             </div>
-            <span [class]="statusBadgeClass(s.status)">{{ statusText(s.status) }}</span>
+            <span
+              [class]="statusBadgeClass(s.status)"
+              [class.badge-live]="s.status !== 'paid' && s.status !== 'failed' && s.status !== 'cancelled'"
+            >
+              @if (s.status !== 'paid' && s.status !== 'failed' && s.status !== 'cancelled') {
+                <span class="live-status-pulse" aria-hidden="true">
+                  <span class="live-status-core"></span>
+                </span>
+              }
+              <span>{{ statusText(s.status) }}</span>
+            </span>
           </header>
 
           <div class="cobro-amount stack-sm">
