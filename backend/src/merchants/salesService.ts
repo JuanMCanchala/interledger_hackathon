@@ -20,7 +20,7 @@ export interface SalesOptions {
   frontendUrl: string;
   /**
    * The wallet app's send screen (the Interledger test wallet's /send). Given an incoming payment
-   * as `merchantWA`, it fills in and locks its amount and description, and lets the signed-in
+   * as `merchantWA`, it fills in what is left of its amount and locks its description, and lets the signed-in
    * customer pick their own account and wallet address. Without it, the QR is the incoming payment
    * URL itself.
    */
@@ -53,7 +53,7 @@ export class SalesService {
   /**
    * The merchant types the amount and the till shows `payUrl` as a QR code. Each sale is an Open
    * Payments payment request: an incoming payment on the merchant's wallet for exactly that amount.
-   * The QR opens the customer's wallet app on it (the amount and the shop come filled in and locked,
+   * The QR opens the customer's wallet app on it (the shop fixed and the amount filled in,
    * and the signed-in customer only confirms), and MiPlante settles the sale once it completes.
    * `checkoutUrl` is MiPlante's checkout, the full consent flow, which pays the same request.
    */
@@ -299,7 +299,8 @@ export class SalesService {
 
   /**
    * The wallet app's send screen on the sale's incoming payment: it reads the amount and the
-   * description from it and locks them, and preselects the signed-in customer's wallet. Without
+   * description from it (the amount stays editable; a smaller payment leaves the sale pending),
+   * and preselects the signed-in customer's wallet. Without
    * `walletSendUrl`, the incoming payment URL itself, which any Open Payments wallet can pay.
    */
   private qrUrl(incomingPaymentUrl: string): string {

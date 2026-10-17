@@ -19,7 +19,8 @@ wallet's source and the live test network:
 - **Learn the wallet with GNAP `subject`.** It only verifies an address the client already sent.
 
 What does exist: the test wallet's send screen (`/send?merchantWA=`) accepts an incoming payment
-URL. It reads the amount and description from it, locks them, and preselects the signed-in user's
+URL. It fills in what is left of its amount, locks the description and the receive mode, and
+preselects the signed-in user's
 wallet.
 
 ## Decision
@@ -27,7 +28,8 @@ wallet.
 - **Each sale creates a payment request:** an incoming payment on the shop's wallet with
   `incomingAmount` equal to the sale. This is the incoming payment of the Open Payments one-time
   payment flow.
-- **The QR opens the customer's wallet app on it.** The amount and the shop are fixed, and the
+- **The QR opens the customer's wallet app on it.** The shop is fixed and the amount comes filled
+  in, and the
   customer only confirms. Without a wallet app configured, the QR is the incoming payment URL, which
   any Open Payments wallet can pay.
 - **MiPlante's checkout stays.** It runs the one-time payment guide's full flow (quote, interactive
@@ -38,7 +40,9 @@ wallet.
 
 ## Consequences
 
-- **The amount comes from the protocol, not from the customer.** An incoming payment completes once,
+- **The amount comes from the protocol, not from the customer.** The wallet fills it in. If the
+  customer sends less, the incoming payment stays incomplete: nothing is split, the till shows
+  what is missing and the same QR asks for it. An incoming payment completes once,
   so a sale is paid once whichever way it is paid. No payment has to be matched to a sale by amount.
 - **The customer's phone does not need to reach MiPlante** to pay by QR, and the customer never types
   a wallet address.

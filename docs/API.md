@@ -120,7 +120,8 @@ both pay that same incoming payment, so a sale can only be paid once:
 
 - **QR, in the customer's wallet app.** `payUrl` opens the wallet's send screen on the incoming
   payment (`OP_WALLET_SEND_URL`, the Interledger test wallet's `/send?merchantWA=`). The screen
-  reads the amount and the description from the incoming payment and locks them, and it preselects
+  fills in what is left of the incoming payment's amount (the customer can still change it), locks
+  the description and the receive mode, and preselects
   the customer's wallet. A customer without a session logs in and comes back to it. They only
   confirm. With `OP_WALLET_SEND_URL` empty, `payUrl` is the incoming payment URL itself, which any
   Open Payments wallet can pay. The customer's phone never needs to reach MiPlante.
@@ -130,7 +131,8 @@ both pay that same incoming payment, so a sale can only be paid once:
   their wallet and MiPlante creates the outgoing payment (`POST /api/sales/:id/pay`). It needs the
   customer's phone to reach MiPlante.
 
-The sale stays `open` until the money arrives. MiPlante polls the incoming payment (the till and the
+The sale stays `open` until the money arrives. If the customer sends less, it is `processing`
+with `pending` set to what is missing, it is not split, and the same QR asks for the rest. MiPlante polls the incoming payment (the till and the
 background sweeper), marks the sale `paid` when it completes and then splits it. A request that
 expires unpaid (after one hour) fails the sale, and its `payUrl` falls back to the checkout.
 
