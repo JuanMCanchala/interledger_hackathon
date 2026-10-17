@@ -68,7 +68,8 @@ Registers the signed-in account's shop and starts the single consent MiPlante ne
       "kind": "debt",
       "destination": "$ilp.interledger-test.dev/proveedor-billeticos",
       "sharePercent": 10,
-      "monthlyQuota": "200000"
+      "monthlyQuota": "200000",
+      "dueDay": 25
     },
     {
       "label": "Microcrédito",
@@ -94,10 +95,11 @@ Registers the signed-in account's shop and starts the single consent MiPlante ne
   text (1–40 characters) the shop uses to group its wallets; several rules can share one.
 - `sharePercent`: from 0.01 to 50, with at most two decimals. The rules together can take at most 50%
   of each sale.
-- A debt (an obligation: supplier, microcredit, rent…) needs a `monthlyQuota`. It takes its share of
-  each sale until this calendar month's quota is paid; after that its share stays with the shop
-  until the 1st of next month. `outstanding`, the total balance, is optional: when set, the debt
-  also stops once it is paid off.
+- A debt (an obligation: supplier, microcredit, rent…) needs a `monthlyQuota`. Each sale reserves
+  its share, in the shop's wallet, until this calendar month's quota is covered; after that its
+  share stays with the shop until the 1st of next month. On its `dueDay` (1–28, the 28th if not
+  given) the creditor gets everything reserved in one payment (ADR 0014). `outstanding`, the total
+  balance, is optional: when set, the debt also stops once it is paid off.
 - Savings have no quota and always take their share, within the monthly cap. A savings rule can
   carry an optional `savingsGoal`, the amount the shop wants to reach; it is only shown as a goal.
 - `monthlyCap` must be at least the sum of the quotas; what is left is room for savings.
@@ -121,7 +123,11 @@ The till and dashboard.
   "spentThisMonth": Amount | null,      // spent from the grant in its current interval (this month)
   "rules": [{ "id", "label", "category", "kind", "destination", "shareBps",
               "monthlyQuota"?: Amount, "outstanding"?: Amount, "savingsGoal"?: Amount,
-              "repaid": Amount, "paidThisMonth": Amount }],
+              "dueDay"?: number, "repaid": Amount, "paidThisMonth": Amount,
+              // debts only: reserved and not paid yet, and paid to the creditor this month
+              "reserved"?: Amount, "paidOutThisMonth"?: Amount }],
+  "payouts": [{ "id", "ruleId", "label", "amount": Amount, "reason": "due-date" | "manual",
+                "status": "processing" | "completed" | "failed", "error"?, "createdAt" }],
   "today": { "salesCount", "gross": Amount, "kept": Amount, "allocated": Amount,
              "byRule": [{ "ruleId", "label", "amount": Amount }] },
   "history": [{ "date": "2026-10-16", "salesCount", "gross": Amount }],   // 7 Bogotá days, oldest first
@@ -174,6 +180,15 @@ be raised, so this asks for a new grant: send the browser to `redirectUrl`. The 
 paying the splits (`pendingCap` shows the new one) until the merchant approves; then the new grant
 replaces it and the old one is revoked. If the merchant rejects, the current cap stays. The cap must
 still cover the month's quotas, and a shop without an active grant switches at once.
+
+### `POST /api/merchants/:id/payouts`
+
+`{ "ruleId"?: "<debt rule>", "reason"?: "manual" | "due-date" }` → `201 { "payouts": [Payout] }`.
+Sends what a debt has reserved now: one debt (`ruleId`) or all of them. `manual` (the default) is
+paying early; `due-date` runs them as if their due day had come, which is how the demo shows the
+monthly payment without waiting for it, and that debt is not paid again on its day that month.
+`409` when nothing is reserved or the shop's authorization is not active. The debt counts as repaid
+once the money arrives; a payout that fails leaves the money reserved.
 
 ### `POST /api/merchants/:id/consent`
 
