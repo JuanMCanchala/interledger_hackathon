@@ -168,16 +168,18 @@ script: [`docs/DEMO.md`](docs/DEMO.md).
 ```
 backend/
   src/
+    auth/          shopkeeper accounts: scrypt passwords, session tokens
     domain/        allocation engine and Bogotá calendar (pure functions)
-    merchants/     onboarding, split rules, sales, settlement, dashboard
+    merchants/     onboarding, split rules, sales, settlement, payouts, dashboard
     openPayments/  adapter over the SDK: grants, quotes, payments, hash, tokens
     storage/       Store port: PostgreSQL through Prisma, in memory for tests
     shared/        money (BigInt minor units) and errors
-    http/          Express routes and zod validation
+    http/          app.ts composes the app: controllers/ (one router per resource),
+                   middleware/ (CORS, errors, session token), pages.ts, schemas.ts (zod)
   prisma/          schema and migrations
   public/          Spanish, mobile-first web client (no build step)
   tests/           Vitest: domain, flows against an Open Payments fake, HTTP, PostgreSQL
-  scripts/         check-wallet diagnostic, demo-merchant setup
+  scripts/         check-wallet diagnostic, demo-merchant setup, e2e-smoke
 frontend/          Angular PWA landing + the proxy (nginx / ng serve) to the backend
 docs/              problem, ideation, product brief, ADRs, system design, API, demo
 ```
