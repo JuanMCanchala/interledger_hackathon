@@ -479,9 +479,19 @@ function renderSale(sale) {
   // The QR opens the customer's wallet on the sale's payment request: the amount and the shop come
   // filled in, so the customer only confirms.
   const inWallet = Boolean(sale.payUrl) && sale.payUrl !== sale.checkoutUrl;
-  $("qr-caption").textContent = inWallet
-    ? `Escanea y confirma ${formatAmount(sale.amount)} en tu billetera`
-    : "Escanea con la cámara del celular para pagar";
+  $("qr-caption").textContent = sale.pending
+    ? `Escanea de nuevo y confirma los ${formatAmount(sale.pending)} que faltan`
+    : inWallet
+      ? `Escanea y confirma ${formatAmount(sale.amount)} en tu billetera`
+      : "Escanea con la cámara del celular para pagar";
+  // The customer sent less than the sale: the same QR asks for exactly what is left.
+  showMessage(
+    $("sale-partial"),
+    sale.pending
+      ? `Llegaron ${formatAmount(sale.payment?.receivedAmount)} de ${formatAmount(sale.amount)}. Faltan ${formatAmount(sale.pending)}: el cliente puede volver a escanear el QR para completar.`
+      : "",
+    "wait",
+  );
   $("sale-amount-view").textContent = formatAmount(sale.amount);
   $("sale-description-view").hidden = !sale.description;
   $("sale-description-view").textContent = sale.description || "";
@@ -495,9 +505,9 @@ function renderSale(sale) {
     { active: sale.status !== "failed" },
   );
 
-  const waitingForCustomer = ["open", "awaiting-consent", "failed"].includes(
-    sale.status,
-  );
+  const waitingForCustomer =
+    ["open", "awaiting-consent", "failed"].includes(sale.status) ||
+    Boolean(sale.pending);
   $("qr-block").hidden = !waitingForCustomer;
   if (waitingForCustomer) renderQr(current.payUrl);
 
