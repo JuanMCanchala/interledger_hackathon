@@ -527,8 +527,10 @@ export default class OnboardPage implements OnInit {
   protected readonly stepBusy = signal(false);
   protected readonly formError = signal('');
 
-  protected readonly businessName = signal('');
-  protected readonly businessWallet = signal('');
+  // The team's demo shop and wallets (docs/TEAM_WALLETS.md, as in backend/scripts/demo-merchant.ts),
+  // so the demo's onboarding is a few taps; every field can be changed.
+  protected readonly businessName = signal('Tienda Billeticos');
+  protected readonly businessWallet = signal('tienda-billeticos');
   protected readonly checkedWallet = signal<WalletInfo | null>(null);
   protected readonly walletCheckText = signal('');
   protected readonly walletCheckClass = signal('');
@@ -633,12 +635,12 @@ export default class OnboardPage implements OnInit {
         wallets: [
           {
             id: nextDraftId++,
-            label: '',
-            destination: '',
+            label: 'Distribuidora',
+            destination: 'proveedor-billeticos',
             sharePercent: 10,
-            monthlyQuota: '',
+            monthlyQuota: '200.000',
             outstanding: '',
-            dueDay: 28,
+            dueDay: 25,
             examples: {
               label: 'Ej: Distribuidora Central',
               destination: 'Ej: distribuidora-central',
@@ -655,12 +657,12 @@ export default class OnboardPage implements OnInit {
         wallets: [
           {
             id: nextDraftId++,
-            label: '',
-            destination: '',
+            label: 'Microcrédito Anti-Gota',
+            destination: 'microcredito',
             sharePercent: 15,
-            monthlyQuota: '',
-            outstanding: '',
-            dueDay: 28,
+            monthlyQuota: '100.000',
+            outstanding: '300.000',
+            dueDay: 15,
             examples: {
               label: 'Ej: Cooperativa de crédito',
               destination: 'Ej: cooperativa-credito',
@@ -678,8 +680,8 @@ export default class OnboardPage implements OnInit {
         wallets: [
           {
             id: nextDraftId++,
-            label: '',
-            destination: '',
+            label: 'Fondo de emergencia',
+            destination: 'ahorro-billeticos',
             sharePercent: 5,
             monthlyQuota: '',
             outstanding: '',
@@ -704,10 +706,8 @@ export default class OnboardPage implements OnInit {
       return;
     }
     const savedWallet = remember.get(STORAGE_KEYS.merchantWallet);
-    if (savedWallet) {
-      this.businessWallet.set(walletName(savedWallet));
-      await this.verifyWallet();
-    }
+    if (savedWallet) this.businessWallet.set(walletName(savedWallet));
+    if (this.businessWallet()) await this.verifyWallet();
   }
 
   protected kindText(kind: 'debt' | 'savings'): string {
