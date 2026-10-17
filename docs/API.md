@@ -250,6 +250,9 @@ consent is already active.
 
 ### `POST /api/merchants/:id/sales`
 
+A new sale closes the shop's older sales that nobody started paying (ADR 0018): their QR takes no
+more money and they read `cancelled`. One the customer is authorizing or paying is left alone.
+
 `{ "amount": "10000", "description": "Mercado" }` →
 `201 { "sale": Sale, "payUrl": "https://wallet.interledger-test.dev/send?merchantWA=<incoming payment>", "checkoutUrl": "…/pay?sale=<id>" }`.
 
@@ -285,7 +288,7 @@ Polls the customer's payment and settles the sale once it is paid. It is safe to
 ```jsonc
 {
   "id", "merchantId", "merchantName", "amount": Amount, "description"?,
-  "status": "open" | "awaiting-consent" | "processing" | "paid" | "failed",
+  "status": "open" | "awaiting-consent" | "processing" | "paid" | "failed" | "cancelled",
   "payUrl": "https://wallet.interledger-test.dev/send?merchantWA=…" | "…/pay?sale=<id>",
   "checkoutUrl": "…/pay?sale=<id>",
   "customer"?: "https://…", "error"?: "…", "paidAt"?: "…",

@@ -26,11 +26,16 @@ the point: the shopkeeper says "sí" and still has to pick up the phone.
   phone needs it. Linking again makes a new key and unlinks the phones that had the old one.
 - **The display stays awake** with the Screen Wake Lock API where the browser supports it, chimes
   when a payment lands, and has no way back into the till.
+- **One sale at a time.** Making a sale closes the shop's older sales that nobody started paying:
+  their payment requests are completed at the wallet, so their QR takes no more money, and they
+  read `cancelled` ("Reemplazado"). The payment record of a closed request is marked failed, never
+  completed, so it can never read as paid. A sale the customer is authorizing or paying, or that
+  received part of its money, is left as it is. This runs in the background, after the new QR.
 
 ## Consequences
 
-- One scan sets up the counter for the day; GlorIA's "¿Genero el cobro…?" plus a "sí" puts the QR
-  in front of the customer with no hands.
+- One scan sets up the counter for the day; "Gloria, cobra veinte mil" puts the QR in front of the
+  customer with no hands, and the list of sales never piles up QR codes waiting for nobody.
 - Anyone with the link sees the shop's sale in progress (amount and note), as with a sale's own
   link. Changing the link is the remedy if a phone is lost.
 - The display polls even when idle; at one request every 2.5 seconds per phone that is negligible
