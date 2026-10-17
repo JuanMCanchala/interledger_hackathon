@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSpokenSale, pesosInWords } from './spoken-amount';
+import { parseSpokenSale, pesosInWords, parseChargeRequest } from './spoken-amount';
 
 describe('parseSpokenSale', () => {
   it('reads amounts the way people say them', () => {
@@ -38,5 +38,35 @@ describe('pesosInWords', () => {
     expect(pesosInWords(1000000)).toBe('un millón de pesos');
     expect(pesosInWords(1250000)).toBe('un millón doscientos cincuenta mil pesos');
     expect(pesosInWords(345678)).toBe('trescientos cuarenta y cinco mil seiscientos setenta y ocho pesos');
+  });
+});
+
+describe('parseChargeRequest', () => {
+  it('reads the charges people ask for, however they write the amount', () => {
+    expect(parseChargeRequest('Por favor haz un cobre $50,000')).toEqual({ amount: 50000, description: '' });
+    expect(parseChargeRequest('cobra 50.000')).toEqual({ amount: 50000, description: '' });
+    expect(parseChargeRequest('Necesito hacer un cobro por $30000')).toEqual({ amount: 30000, description: '' });
+    expect(parseChargeRequest('cobra veinte mil de arroz')).toEqual({ amount: 20000, description: 'arroz' });
+    expect(parseChargeRequest('hazme un cobro de 15 lucas')).toEqual({ amount: 15000, description: '' });
+    expect(parseChargeRequest('cóbrale cinco mil quinientos a don José')).toEqual({
+      amount: 5500,
+      description: 'don José',
+    });
+    expect(parseChargeRequest('genera un qr de 12.500')).toEqual({ amount: 12500, description: '' });
+  });
+
+  it('leaves questions and talk about charges to the model', () => {
+    expect(parseChargeRequest('¿cuánto cobré hoy?')).toBeNull();
+    expect(parseChargeRequest('cuántos cobros llevo')).toBeNull();
+    expect(parseChargeRequest('la distribuidora me cobra 200 mil')).toBeNull();
+    expect(parseChargeRequest('ayer cobré 50 mil')).toBeNull();
+    expect(parseChargeRequest('haz un cobro')).toBeNull();
+    expect(parseChargeRequest('¿Cómo voy este mes?')).toBeNull();
+  });
+});
+
+describe('parseSpokenSale articles', () => {
+  it('does not take "un" in "un cobro de" for one peso', () => {
+    expect(parseSpokenSale('un cobro de veinte mil')).toEqual({ amount: 20000, description: '' });
   });
 });

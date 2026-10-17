@@ -29,8 +29,8 @@ function plain(text: string): string {
  */
 export function parseSpokenSale(text: string): { amount: number; description: string } | null {
   const words = plain(text)
-    // "20.000", "20 000", "$20.000" → "20000"; "1,5 millones" stays a decimal.
-    .replace(/(\d)[.\s](?=\d{3}\b)/g, '$1')
+    // "20.000", "20 000", "$20.000", "$50,000" → "20000"; "1,5 millones" stays a decimal.
+    .replace(/(\d)[.,\s](?=\d{3}\b)/g, '$1')
     .replace(/(\d),(\d)/g, '$1.$2')
     .replace(/[$¡!¿?]/g, ' ')
     .split(/\s+/)
@@ -65,6 +65,13 @@ export function parseSpokenSale(text: string): { amount: number; description: st
         end = i;
         continue;
       }
+      // "un cobro de veinte mil": that "un" was an article, not one peso. Keep looking.
+      if (total === 0 && group === 1 && ['un', 'una', 'uno'].includes(words[i - 1]!)) {
+        group = 0;
+        seen = false;
+        end = -1;
+        continue;
+      }
       break;
     } else {
       continue;
@@ -81,6 +88,34 @@ export function parseSpokenSale(text: string): { amount: number; description: st
     .replace(/^(de|del|por|en)\s+/i, '')
     .trim();
   return { amount, description: rest };
+}
+
+/** Words that ask to charge now: "cobra", "cóbrale", "haz un cobro", "genera el QR"… */
+const CHARGE_WORDS = new Set([
+  'cobra', 'cobrale', 'cobrales', 'cobrame', 'cobrar', 'cobrarle', 'cobro', 'cobre', 'cobrale',
+  'qr', 'factura', 'facturale',
+]);
+/** "¿Cuánto cobré?", "me cobra 200 mil": talk about charges, not a request to charge. */
+const NOT_A_REQUEST = /^(cuanto|cuantos|cuantas|que|como|cuando|donde|por que|cual)\b|\b(me|le|nos|les|te) cobra\b|\b(cobre|cobro|cobraron|cobramos|cobraste)\b.*\b(ayer|hoy|semana|mes)\b/;
+
+/**
+ * A request to charge an amount ("cobra 50.000", "haz un cobro de $50,000 de arroz"), read here so
+ * it never depends on the model. Null for questions about charges or phrases without an amount.
+ */
+export function parseChargeRequest(text: string): { amount: number; description: string } | null {
+  const raw = text.toLowerCase().trim();
+  // Past tense written with its accent ("cobré", "cobró") is talk about what was charged.
+  if (/cobr[éó](?![a-záéíóúñ])/.test(raw) || raw.includes('¿') || raw.endsWith('?')) return null;
+  const words = plain(raw).split(/\s+/);
+  const at = words.findIndex((w) => CHARGE_WORDS.has(w.replace(/[^a-z]/g, '')));
+  if (at < 0 || NOT_A_REQUEST.test(plain(raw).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim())) {
+    return null;
+  }
+  // The amount is what follows the word that asks to charge.
+  const rest = text.trim().split(/\s+/).slice(at + 1).join(' ');
+  const sale = parseSpokenSale(rest);
+  if (!sale || sale.amount < 100) return null;
+  return { amount: sale.amount, description: sale.description.replace(/^(a|al|para)\s+/i, '') };
 }
 
 const ONES = ['', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
