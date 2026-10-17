@@ -182,44 +182,56 @@ export class SalesService {
    */
   async settle(saleId: string): Promise<void> {
     if (!(await this.store.claimSettlement(saleId, this.timestamp()))) return;
-    let sale = await this.require(saleId);
+    await this.split(saleId);
+  }
 
-    const merchant = await this.merchants.require(sale.merchantId);
-    if ((await this.flows.findMandate(merchant.mandateId)).status !== "active") {
-      await this.update(sale, {
-        settlement: {
-          status: "skipped",
-          reason: "La autorización mensual del comercio no está activa",
-          items: [],
-          kept: sale.amount,
-          settledAt: this.timestamp(),
-        },
+  private async split(saleId: string): Promise<void> {
+    let sale = await this.require(saleId);
+    let merchant: MerchantRecord;
+    let plan: ReturnType<typeof planAllocations>;
+    try {
+      merchant = await this.merchants.require(sale.merchantId);
+      if ((await this.flows.findMandate(merchant.mandateId)).status !== "active") {
+        await this.update(sale, {
+          settlement: {
+            status: "skipped",
+            reason: "La autorización mensual del comercio no está activa",
+            items: [],
+            kept: sale.amount,
+            settledAt: this.timestamp(),
+          },
+        });
+        return;
+      }
+      const [cap, paidThisMonth, reserved] = await Promise.all([
+        this.remainingCap(merchant),
+        this.paidThisMonth(merchant.id, saleId),
+        reservedBalances(this.store, merchant.id),
+      ]);
+      // What is reserved will leave under the same grant on the due day: it already uses the cap,
+      // and it already counts against each debt's balance.
+      const pending = Object.values(reserved).reduce(
+        (sum, value) => sum + (value > 0n ? value : 0n),
+        0n,
+      );
+      const remainingCap = cap && {
+        ...cap,
+        value: (BigInt(cap.value) > pending ? BigInt(cap.value) - pending : 0n).toString(),
+      };
+      const rules = merchant.rules.map((rule) => {
+        const held = reserved[rule.id] ?? 0n;
+        if (!rule.outstanding || held <= 0n) return rule;
+        const left = BigInt(rule.outstanding.value) - held;
+        return { ...rule, outstanding: { ...rule.outstanding, value: (left > 0n ? left : 0n).toString() } };
       });
+      plan = planAllocations(sale.amount, rules, remainingCap, paidThisMonth);
+    } catch (error) {
+      // Nothing has moved yet: give the claim back so the next poll or the sweeper tries again,
+      // instead of leaving the sale "running" for good.
+      await this.update(sale, { settlement: { status: "pending", items: [] } });
+      console.warn(`[settle] venta ${saleId}: ${describeError(error)}`);
       return;
     }
-
-    const [cap, paidThisMonth, reserved] = await Promise.all([
-      this.remainingCap(merchant),
-      this.paidThisMonth(merchant.id, saleId),
-      reservedBalances(this.store, merchant.id),
-    ]);
-    // What is reserved will leave under the same grant on the due day: it already uses the cap,
-    // and it already counts against each debt's balance.
-    const pending = Object.values(reserved).reduce(
-      (sum, value) => sum + (value > 0n ? value : 0n),
-      0n,
-    );
-    const remainingCap = cap && {
-      ...cap,
-      value: (BigInt(cap.value) > pending ? BigInt(cap.value) - pending : 0n).toString(),
-    };
-    const rules = merchant.rules.map((rule) => {
-      const held = reserved[rule.id] ?? 0n;
-      if (!rule.outstanding || held <= 0n) return rule;
-      const left = BigInt(rule.outstanding.value) - held;
-      return { ...rule, outstanding: { ...rule.outstanding, value: (left > 0n ? left : 0n).toString() } };
-    });
-    const plan = planAllocations(sale.amount, rules, remainingCap, paidThisMonth);
     // The rules are charged in parallel: their amounts already fit the remaining monthly cap
     // (and the wallet rejects any excess anyway), so the split takes one charge, not one per rule.
     const items: (SettlementItem | undefined)[] = plan.allocations.map(
