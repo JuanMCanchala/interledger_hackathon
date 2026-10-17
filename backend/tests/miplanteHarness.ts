@@ -114,9 +114,19 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     return sent;
   };
 
+  /** Has every share a sale sent (its savings) arrive, and follows them, so they count as saved. */
+  const deliverShares = async (saleId: string) => {
+    for (const item of (await store.getSale(saleId))!.settlement.items) {
+      if (!item.paymentId) continue;
+      deliver((await store.getPayment(item.paymentId))!.incomingPaymentUrl, cop("5000000"));
+    }
+    return sales.refresh(saleId);
+  };
+
   return {
     clock,
     payOutDebts,
+    deliverShares,
     now,
     ops,
     deliver,

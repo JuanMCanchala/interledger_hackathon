@@ -60,7 +60,10 @@ describe("settlement", () => {
       repaid: cop("0"),
       outstanding: cop("30000000"),
     });
-    expect(savings).toMatchObject({ repaid: cop("50000") });
+    // Savings count once their share arrives, not when it is sent.
+    expect(savings).toMatchObject({ repaid: cop("0") });
+    await env.deliverShares(saleId);
+    expect((await env.merchants.require(merchantId)).rules[1]).toMatchObject({ repaid: cop("50000") });
   });
 
   it("settles exactly once, even when several screens poll at the same time", async () => {
@@ -184,6 +187,22 @@ describe("settlement", () => {
       "reserved",
       "completed",
     ]);
+  });
+
+  it("gives a savings share that fails on its way back to the merchant", async () => {
+    const env = setupMiPlante();
+    const merchantId = await env.onboardRosa();
+    const saleId = await paidSale(env, merchantId);
+    await env.sales.refresh(saleId);
+    const share = (await env.store.getSale(saleId))!.settlement.items[1]!;
+    const payment = (await env.store.getPayment(share.paymentId!))!;
+    await env.store.savePayment({ ...payment, status: "failed", error: "rechazado" });
+
+    const sale = await env.sales.refresh(saleId);
+
+    expect(sale.settlement.items[1]).toMatchObject({ status: "failed" });
+    expect(sale.settlement.kept).toEqual(cop("850000")); // 8,000 + the 500 that never left
+    expect((await env.merchants.require(merchantId)).rules[1]).toMatchObject({ repaid: cop("0") });
   });
 
   it("the background sweeper settles sales nobody is watching", async () => {

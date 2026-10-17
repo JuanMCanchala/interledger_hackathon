@@ -209,6 +209,7 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     const env = setupMiPlante(store);
     const { merchantId, saleId } = await paidSale(env);
     await env.sales.refresh(saleId);
+    await env.deliverShares(saleId);
     await env.payOutDebts(merchantId);
     const [microcredit, savings] = (await store.getMerchant(merchantId))!
       .rules;

@@ -65,7 +65,8 @@ describe("editing the split rules", () => {
   it("keeps what each rule has repaid and the debt balance", async () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();
-    await sell(env, merchantId);
+    const sale = await sell(env, merchantId);
+    await env.deliverShares(sale.id);
     await env.payOutDebts(merchantId);
     const [microcredit, savings] = (await env.merchants.require(merchantId))
       .rules;

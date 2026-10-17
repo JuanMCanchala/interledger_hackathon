@@ -54,6 +54,8 @@ const SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
 export class SalesService {
   private readonly now: () => Date;
   private sweeping = false;
+  /** Sales whose shares are being followed right now (see refreshSettlement). */
+  private readonly refreshing = new Set<string>();
 
   constructor(
     private readonly flows: PaymentFlows,
@@ -276,13 +278,12 @@ export class SalesService {
             status: itemStatus(payment.status),
             paymentId: payment.id,
           };
-          await this.merchants.recordRepayment(
-            merchant.id,
-            rule.id,
-            allocation.amount,
-          );
+          // A share counts as saved once it arrives; most arrive later (refreshSettlement).
+          if (payment.status === "completed") {
+            await this.merchants.recordRepayment(merchant.id, rule.id, allocation.amount);
+          }
         } catch (error) {
-          // The debt balance stays untouched when the repayment could not be sent.
+          // Nothing left the wallet: nothing counts as saved.
           items[index] = {
             ...base,
             status: "failed",
@@ -486,22 +487,41 @@ export class SalesService {
     return paid;
   }
 
+  /**
+   * Follows the shares on their way. One that arrives counts as saved; one that fails goes back to
+   * what the merchant kept. One pass per sale at a time, so a share is never counted twice.
+   */
   private async refreshSettlement(saleId: string): Promise<void> {
-    const sale = await this.require(saleId);
-    const items = await Promise.all(
-      sale.settlement.items.map(async (item) => {
-        if (item.status !== "processing" || !item.paymentId) return item;
-        const payment = await this.flows.refreshPayment(item.paymentId);
-        return {
-          ...item,
-          status: itemStatus(payment.status),
-          error: payment.error,
-        };
-      }),
-    );
-    await this.update(await this.require(saleId), {
-      settlement: { ...sale.settlement, items },
-    });
+    if (this.refreshing.has(saleId)) return;
+    this.refreshing.add(saleId);
+    try {
+      const sale = await this.require(saleId);
+      const arrived: SettlementItem[] = [];
+      const items = await Promise.all(
+        sale.settlement.items.map(async (item) => {
+          if (item.status !== "processing" || !item.paymentId) return item;
+          const payment = await this.flows.refreshPayment(item.paymentId);
+          const next = { ...item, status: itemStatus(payment.status), error: payment.error };
+          if (next.status === "completed") arrived.push(next);
+          return next;
+        }),
+      );
+      const moved = items
+        .filter((item) => item.status !== "failed" && item.status !== "skipped")
+        .reduce((total, item) => total + BigInt(item.amount.value), 0n);
+      await this.update(await this.require(saleId), {
+        settlement: {
+          ...sale.settlement,
+          items,
+          kept: { ...sale.amount, value: (BigInt(sale.amount.value) - moved).toString() },
+        },
+      });
+      for (const item of arrived) {
+        await this.merchants.recordRepayment(sale.merchantId, item.ruleId, item.amount);
+      }
+    } finally {
+      this.refreshing.delete(saleId);
+    }
   }
 
   private statusFrom(payment: PublicPayment): SalePaymentChanges {
