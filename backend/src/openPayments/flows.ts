@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Quote, WalletAddress } from "@interledger/open-payments";
 import { AppError, NotFoundError } from "../shared/errors.js";
-import { compareAmounts, toAmount, type Amount } from "../shared/money.js";
+import {
+  compareAmounts,
+  fromMinorUnits,
+  toAmount,
+  type Amount,
+} from "../shared/money.js";
 import type { Store } from "../storage/store.js";
 import { describeError, isAuthError } from "./errors.js";
 import { verifyInteractHash } from "./hash.js";
@@ -264,12 +269,11 @@ export class PaymentFlows {
         incomingPayment.completed ||
         (record.receiveAmount !== undefined &&
           BigInt(received.value) >= BigInt(record.receiveAmount.value));
-      // A payment request waits until the payer's money starts arriving, and fails if its
-      // incoming payment expires first.
+      // A payment request waits until the payer's money starts arriving. A payer who sends less
+      // can pay the rest to the same request; if it expires before it is complete, it fails.
       const nothingYet = BigInt(received.value) === 0n;
       const expired =
-        waitingForPayer &&
-        nothingYet &&
+        record.kind === "payment-request" &&
         !fullyReceived &&
         incomingPayment.expiresAt !== undefined &&
         Date.parse(incomingPayment.expiresAt) <= this.now().getTime();
@@ -285,7 +289,9 @@ export class PaymentFlows {
         error: outgoingFailed
           ? "El pago saliente falló en Interledger"
           : expired
-            ? "La solicitud de pago venció sin recibir el pago"
+            ? nothingYet
+              ? "La solicitud de pago venció sin recibir el pago"
+              : `La solicitud de pago venció incompleta: llegaron ${fromMinorUnits(received.value, received.assetScale)} ${received.assetCode}`
             : undefined,
         receivedAmount: received,
         incomingToken: accessToken,

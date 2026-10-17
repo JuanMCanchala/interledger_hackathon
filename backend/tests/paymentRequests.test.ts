@@ -90,4 +90,43 @@ describe("sales paid through their payment request", () => {
     expect(sale.error).toContain("venció");
     expect(sale.payUrl).toBe(sale.checkoutUrl);
   });
+
+  it("shows what is missing after a partial payment and completes with the rest", async () => {
+    const { sales, deliver, saleId, incoming } = await openSale();
+
+    // The customer changed the amount and sent 6,000 of the 10,000.
+    deliver(incoming, cop("600000"), { completed: false });
+    const partial = await sales.refresh(saleId);
+
+    expect(partial.status).toBe("processing");
+    expect(partial.pending).toEqual(cop("400000"));
+    expect(partial.settlement.status).toBe("pending"); // nothing is split yet
+    // The same QR stays usable: the wallet asks for exactly what is left.
+    expect(partial.payUrl).not.toBe(partial.checkoutUrl);
+
+    deliver(incoming, cop("1000000"));
+    const paid = await sales.refresh(saleId);
+    expect(paid.status).toBe("paid");
+    expect(paid.pending).toBeUndefined();
+    expect(paid.settlement.status).toBe("done");
+  });
+
+  it("fails a partially paid sale when its request expires, saying how much arrived", async () => {
+    const { sales, ops, deliver, clock, saleId, incoming } = await openSale();
+    deliver(incoming, cop("600000"), { completed: false });
+    await sales.refresh(saleId);
+    const read = ops.readIncomingPayment.getMockImplementation()!;
+    const expiresAt = new Date(clock.now.getTime() + 60_000).toISOString();
+    ops.readIncomingPayment.mockImplementation(async (url, receiver) => {
+      const result = await read(url, receiver);
+      return { ...result, incomingPayment: { ...result.incomingPayment, expiresAt } };
+    });
+
+    clock.now = new Date(clock.now.getTime() + 2 * 60_000);
+    const sale = await sales.refresh(saleId);
+
+    expect(sale.status).toBe("failed");
+    expect(sale.error).toContain("llegaron 6000.00 COP");
+    expect(sale.settlement.status).toBe("pending"); // a partial payment is never split
+  });
 });

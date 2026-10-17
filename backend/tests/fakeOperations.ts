@@ -195,9 +195,16 @@ export function createFakeOperations() {
     cancelGrant: vi.fn(async () => {}),
   } satisfies PaymentOperations;
 
-  /** Simulates Interledger delivering the money to an incoming payment. */
-  const deliver = (incomingPaymentUrl: string, received: Amount) => {
-    incoming.set(incomingPaymentUrl, { completed: true, received });
+  /**
+   * Simulates Interledger delivering money to an incoming payment: all of it by default, or part
+   * of it (`completed: false`) when the payer sent less.
+   */
+  const deliver = (
+    incomingPaymentUrl: string,
+    received: Amount,
+    { completed = true }: { completed?: boolean } = {},
+  ) => {
+    incoming.set(incomingPaymentUrl, { completed, received });
   };
 
   return { ops, deliver };

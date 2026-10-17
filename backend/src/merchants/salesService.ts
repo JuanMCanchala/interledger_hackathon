@@ -340,11 +340,14 @@ export class SalesService {
         debitAmount: payment.debitAmount,
         receivedAmount: payment.receivedAmount,
       },
-      // The QR: the wallet app on the sale's incoming payment while it can still be paid.
+      // The QR: the wallet app on the sale's incoming payment while it can still be paid. After a
+      // partial payment it asks for exactly what is left.
       payUrl:
         payment && sale.status !== "failed"
           ? this.qrUrl(payment.incomingPaymentUrl)
           : this.payUrl(sale.id),
+      /** What is still missing after a partial payment; absent until money arrives or once paid. */
+      pending: pendingAmount(sale, payment?.receivedAmount),
       checkoutUrl: this.payUrl(sale.id),
       settlement: sale.settlement,
       createdAt: sale.createdAt,
@@ -444,4 +447,21 @@ function needsWork(sale: SaleRecord): boolean {
 
 function saleDescription(merchantName: string, description?: string): string {
   return description ? `${merchantName} · ${description}` : merchantName;
+}
+
+/** A payer who sent less than the sale left this much to pay. */
+function pendingAmount(
+  sale: SaleRecord,
+  received: Amount | undefined,
+): Amount | undefined {
+  if (sale.status !== "processing" || !received) return undefined;
+  if (
+    received.assetCode !== sale.amount.assetCode ||
+    received.assetScale !== sale.amount.assetScale
+  ) {
+    return undefined;
+  }
+  const left = BigInt(sale.amount.value) - BigInt(received.value);
+  if (BigInt(received.value) <= 0n || left <= 0n) return undefined;
+  return { ...sale.amount, value: left.toString() };
 }
