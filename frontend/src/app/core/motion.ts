@@ -8,7 +8,6 @@ import { SplitText } from 'gsap/SplitText';
 gsap.registerPlugin(ScrollTrigger, ScrollSmoother, SplitText, DrawSVGPlugin);
 
 export const MOTION = '(prefers-reduced-motion: no-preference)';
-export const WIDE = '(min-width: 900px)';
 const NAV_OFFSET_PX = 72;
 export const FINE_POINTER = '(pointer: fine) and (prefers-reduced-motion: no-preference)';
 
