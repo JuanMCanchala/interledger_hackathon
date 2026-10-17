@@ -468,6 +468,7 @@ export class PrismaStore implements Store {
   }
 
   async isMerchantMandate(mandateId: string) {
+    if (!isUuid(mandateId)) return false;
     const count = await this.prisma.merchant.count({
       where: { OR: [{ mandateId }, { pendingMandateId: mandateId }] },
     });

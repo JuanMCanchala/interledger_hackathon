@@ -102,6 +102,7 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect(await store.getSale("not-a-real-id")).toBeUndefined();
     expect(await store.getMerchant("nope")).toBeUndefined();
     expect(await store.getPayment("123")).toBeUndefined();
+    expect(await store.isMerchantMandate("abc")).toBe(false);
   });
 
   it("lets only one claim win", async () => {
