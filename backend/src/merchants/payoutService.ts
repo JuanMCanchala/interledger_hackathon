@@ -80,7 +80,7 @@ export class PayoutService {
     }
     const payouts: PayoutRecord[] = [];
     for (const rule of due) {
-      const payout = await this.payRule(merchant, rule, balances[rule.id]!, input.reason);
+      const payout = await this.payRule(merchant, rule, input.reason);
       if (payout) payouts.push(payout);
     }
     return payouts;
@@ -118,7 +118,7 @@ export class PayoutService {
           const balances = await reservedBalances(this.store, merchant.id);
           for (const rule of dueToday) {
             const balance = balances[rule.id] ?? 0n;
-            if (balance > 0n) await this.payRule(merchant, rule, balance, "due-date");
+            if (balance > 0n) await this.payRule(merchant, rule, "due-date");
           }
         } catch (error) {
           console.warn(`[payouts] comercio ${merchant.id}: ${describeError(error)}`);
@@ -164,12 +164,14 @@ export class PayoutService {
   private async payRule(
     merchant: MerchantRecord,
     rule: MerchantRule,
-    balance: bigint,
     reason: PayoutRecord["reason"],
   ): Promise<PayoutRecord | undefined> {
     if (this.paying.has(rule.id)) return undefined;
     this.paying.add(rule.id);
     try {
+      // Read once the rule is ours: a balance read before could already have been paid meanwhile.
+      const balance = (await reservedBalances(this.store, merchant.id))[rule.id] ?? 0n;
+      if (balance <= 0n) return undefined;
       const timestamp = this.now().toISOString();
       const month = bogotaDay(this.now()).slice(0, 7);
       const amount: Amount = { ...merchant.asset, value: balance.toString() };
