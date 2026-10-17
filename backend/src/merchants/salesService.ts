@@ -54,6 +54,8 @@ const SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
 export class SalesService {
   private readonly now: () => Date;
   private sweeping = false;
+  /** The settlement each shop is running; the next one of that shop waits for it. */
+  private readonly settling = new Map<string, Promise<void>>();
 
   constructor(
     private readonly flows: PaymentFlows,
@@ -182,7 +184,19 @@ export class SalesService {
    */
   async settle(saleId: string): Promise<void> {
     if (!(await this.store.claimSettlement(saleId, this.timestamp()))) return;
-    await this.split(saleId);
+    const { merchantId } = await this.require(saleId);
+    // One settlement at a time per shop: each one reads what this month's quotas have already
+    // received, so two at once would both pay the same part of a quota. One server instance runs
+    // the settlements (docs/DEPLOY.md), so waiting in memory is enough.
+    const previous = this.settling.get(merchantId) ?? Promise.resolve();
+    const current = previous.then(() => this.split(saleId));
+    const done = current.catch(() => {});
+    this.settling.set(merchantId, done);
+    try {
+      await current;
+    } finally {
+      if (this.settling.get(merchantId) === done) this.settling.delete(merchantId);
+    }
   }
 
   private async split(saleId: string): Promise<void> {

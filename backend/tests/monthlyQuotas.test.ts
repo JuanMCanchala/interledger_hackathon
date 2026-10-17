@@ -58,6 +58,37 @@ describe("monthly quotas", () => {
     expect(dashboard.month.days[0]!.date).toBe("2026-10-01");
   });
 
+  it("never pays a quota twice when two sales of the shop settle at once", async () => {
+    const env = setupMiPlante();
+    const merchantId = await env.onboardRosa({
+      rules: [
+        {
+          label: "Microcrédito",
+          category: "Microcréditos",
+          kind: "debt",
+          destination: "$ilp.interledger-test.dev/coop",
+          sharePercent: 15,
+          monthlyQuota: "2000",
+        },
+      ],
+    });
+    const saleIds: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const { sale } = await env.sales.createSale(merchantId, { amount: "10000" });
+      const request = (await env.store.getPayment((await env.store.getSale(sale.id))!.paymentId!))!;
+      env.deliver(request.incomingPaymentUrl, cop("1000000"));
+      saleIds.push(sale.id);
+    }
+
+    // The till, the checkout and the sweeper can all poll at the same moment.
+    const sales = await Promise.all(saleIds.map((id) => env.sales.refresh(id)));
+
+    const allocated = sales
+      .flatMap((sale) => sale.settlement.items)
+      .reduce((total, item) => total + BigInt(item.amount.value), 0n);
+    expect(allocated).toBe(200000n); // 1,500 + the 500 left, never 1,500 twice
+  });
+
   it("starts each calendar month with the whole quota again", async () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa({
