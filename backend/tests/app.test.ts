@@ -207,7 +207,8 @@ describe("MiPlante API", () => {
       wallet: BOB,
       status: "awaiting-consent",
     });
-    expect(dashboard.month.days).toHaveLength(16);
+    // This test runs on the real clock: one entry per day from the 1st to today.
+    expect(dashboard.month.days).toHaveLength(dashboard.month.dayOfMonth);
     expect(dashboard.sales).toHaveLength(1);
   });
 

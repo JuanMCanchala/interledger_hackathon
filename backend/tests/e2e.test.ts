@@ -162,20 +162,26 @@ describe("end to end over HTTP", () => {
     await env.payouts.runDue();
     expect(await env.store.listPayouts(id)).toEqual([]);
 
-    // The demo's "Simular que llegó la fecha de pago": one payment with everything reserved.
+    // The demo's "Simular que llegó la fecha de pago": one payment of the 100,000 quota, the 4,500
+    // reserved and 95,500 from profit.
     const simulated = await call("POST", `/api/merchants/${id}/payouts`, { reason: "due-date" }, token);
     expect(simulated.status).toBe(201);
     expect(simulated.body.payouts).toHaveLength(1);
-    expect(simulated.body.payouts[0]).toMatchObject({ amount: cop("450000"), destination: COOP, reason: "due-date" });
+    expect(simulated.body.payouts[0]).toMatchObject({
+      amount: cop("10000000"),
+      topUp: cop("9550000"),
+      destination: COOP,
+      reason: "due-date",
+    });
     const payout = simulated.body.payouts[0];
     env.deliver((await env.store.getPayment(payout.paymentId))!.incomingPaymentUrl, cop("5000000"));
 
     dashboard = (await call("GET", `/api/merchants/${id}`, undefined, token)).body;
     expect(dashboard.rules[0]).toMatchObject({
       reserved: cop("0"),
-      paidOutThisMonth: cop("450000"),
-      repaid: cop("450000"),
-      outstanding: cop("29550000"),
+      paidOutThisMonth: cop("10000000"),
+      repaid: cop("10000000"),
+      outstanding: cop("20000000"),
     });
     expect(dashboard.payouts.map((p: { status: string }) => p.status)).toEqual(["completed"]);
 

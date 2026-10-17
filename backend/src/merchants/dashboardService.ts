@@ -8,6 +8,7 @@ import type { PaymentFlows } from "../openPayments/flows.js";
 import type { Amount, Asset } from "../shared/money.js";
 import type { Store } from "../storage/store.js";
 import type { MerchantService } from "./merchantService.js";
+import { buildNotifications } from "./notifications.js";
 import { reservedBalances, type PayoutService } from "./payoutService.js";
 import type { SalesService } from "./salesService.js";
 import type { SaleRecord, SettlementItem } from "./types.js";
@@ -90,9 +91,13 @@ export class DashboardService {
         ruleId: p.ruleId,
         label: p.label,
         amount: p.amount,
+        /** The part that came from the shop's profit to complete the quota. */
+        topUp: p.topUp ?? null,
         reason: p.reason,
         status: p.status,
         error: p.error,
+        /** A failed payout waits for the shopkeeper until this is set. */
+        resolution: p.resolution ?? null,
         createdAt: p.createdAt,
       })),
       today: {
@@ -102,6 +107,17 @@ export class DashboardService {
         allocated: money(allocated),
       },
       month: this.month(paid, now, money),
+      /** What the shopkeeper should know or do now, things to act on first (notifications.ts). */
+      notifications: buildNotifications({
+        merchant,
+        consent: mandate.status,
+        reserved: Object.fromEntries(
+          Object.entries(reserved).map(([ruleId, value]) => [ruleId, money(value > 0n ? value : 0n)]),
+        ),
+        covered: paidThisMonth,
+        payouts,
+        now,
+      }),
       sales: await Promise.all(
         sales.slice(0, RECENT_SALES).map((sale) => this.sales.view(sale)),
       ),

@@ -19,6 +19,7 @@ earlier one instead of editing it.
 | [0011](0011-angular-landing-behind-one-domain-with-an-express-backend.md) | Angular landing behind one domain, with an Express backend | Accepted |
 | [0012](0012-each-sale-is-an-open-payments-payment-request.md) | Each sale is an Open Payments payment request | Accepted |
 | [0013](0013-monthly-quotas-and-shopkeeper-accounts.md) | Monthly quotas under a monthly cap, and shopkeeper accounts | Accepted, amended by 0014 |
-| [0014](0014-pay-creditors-once-on-their-due-day.md) | Pay creditors once, on their due day | Accepted |
+| [0014](0014-pay-creditors-once-on-their-due-day.md) | Pay creditors once, on their due day | Accepted, amended by 0015 |
+| [0015](0015-due-day-completes-the-quota-and-failed-payouts-wait-for-review.md) | The due day completes the quota, and a failed payout waits for review | Accepted |
 
 To add one, copy the structure of an existing ADR, take the next number and add it to this table.

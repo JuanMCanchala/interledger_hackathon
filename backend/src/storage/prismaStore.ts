@@ -432,6 +432,9 @@ export class PrismaStore implements Store {
       status: record.status,
       paymentId: record.paymentId ?? null,
       error: record.error ?? null,
+      topUp: record.topUp ? BigInt(record.topUp.value) : null,
+      resolution: record.resolution ?? null,
+      resolvedAt: record.resolvedAt ? new Date(record.resolvedAt) : null,
       createdAt: new Date(record.createdAt),
       updatedAt: new Date(record.updatedAt),
     };
@@ -461,6 +464,12 @@ export class PrismaStore implements Store {
         status: row.status as PayoutRecord["status"],
         paymentId: opt(row.paymentId),
         error: opt(row.error),
+        topUp:
+          row.topUp === null
+            ? undefined
+            : amount(row.topUp, { assetCode: row.assetCode, assetScale: row.assetScale }),
+        resolution: (row.resolution ?? undefined) as PayoutRecord["resolution"],
+        resolvedAt: row.resolvedAt?.toISOString(),
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
       }),

@@ -126,8 +126,12 @@ The till and dashboard.
               "dueDay"?: number, "repaid": Amount, "paidThisMonth": Amount,
               // debts only: reserved and not paid yet, and paid to the creditor this month
               "reserved"?: Amount, "paidOutThisMonth"?: Amount }],
-  "payouts": [{ "id", "ruleId", "label", "amount": Amount, "reason": "due-date" | "manual",
-                "status": "processing" | "completed" | "failed", "error"?, "createdAt" }],
+  "payouts": [{ "id", "ruleId", "label", "amount": Amount, "topUp": Amount | null,  // from profit
+                "reason": "due-date" | "manual", "status": "processing" | "completed" | "failed",
+                "error"?, "resolution": "retried" | "marked-paid" | null, "createdAt" }],
+  "notifications": [{ "id", "kind": "payout-failed" | "payout-due" | "payout-sent" | "consent"
+                      | "cap-pending", "tone": "bad" | "wait" | "info" | "ok", "title", "text",
+                      "createdAt", "payoutId"?, "actions"?: ["retry", "mark-paid"] }],  // act-on first
   "today": { "salesCount", "gross": Amount, "kept": Amount, "allocated": Amount },
   "month": { "dayOfMonth": 16, "daysInMonth": 31, "salesCount", "gross": Amount, "kept": Amount,
              "allocated": Amount,
@@ -182,11 +186,21 @@ still cover the month's quotas, and a shop without an active grant switches at o
 ### `POST /api/merchants/:id/payouts`
 
 `{ "ruleId"?: "<debt rule>", "reason"?: "manual" | "due-date" }` → `201 { "payouts": [Payout] }`.
-Sends what a debt has reserved now: one debt (`ruleId`) or all of them. `manual` (the default) is
-paying early; `due-date` runs them as if their due day had come, which is how the demo shows the
-monthly payment without waiting for it, and that debt is not paid again on its day that month.
-`409` when nothing is reserved or the shop's authorization is not active. The debt counts as repaid
-once the money arrives; a payout that fails leaves the money reserved.
+Pays one debt (`ruleId`) or all of them now. `manual` (the default) is paying early: it sends what is
+reserved. `due-date` runs them as if their due day had come, which is how the demo shows the monthly
+payment without waiting for it: it sends the month's quota, what is reserved plus the rest from the
+shop's profit (`topUp`), within what is owed and the monthly cap (ADR 0015); that debt is not paid
+again on its day that month. `409` when there is nothing to pay or the shop's authorization is not
+active. The debt counts as repaid once the money arrives.
+
+A payout that fails is never retried on its own (a timeout may have let it through). It shows in
+`notifications` until the shopkeeper resolves it:
+
+- `POST /api/merchants/:id/payouts/:payoutId/retry` → `201` with the new payout, worked out again.
+- `POST /api/merchants/:id/payouts/:payoutId/mark-paid` → `200`: the money did arrive; it counts as
+  paid and nothing is sent.
+
+Both answer `409` for a payout that is not a failure waiting for review.
 
 ### `POST /api/merchants/:id/consent`
 

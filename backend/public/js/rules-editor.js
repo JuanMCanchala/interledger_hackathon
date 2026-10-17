@@ -253,7 +253,7 @@ export function createRulesEditor({
         label: rule.label,
         category: rule.category,
         kind: rule.kind,
-        // "proveedor-billeticos" → "$ilp.interledger-test.dev/proveedor-billeticos", like onboarding.
+        // "distribuidora-central" → "$ilp.interledger-test.dev/distribuidora-central", like onboarding.
         destination: normalizeWallet(rule.destination),
         sharePercent: rule.sharePercent,
       };

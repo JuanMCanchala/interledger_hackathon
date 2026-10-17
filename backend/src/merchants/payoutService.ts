@@ -2,15 +2,20 @@ import { randomUUID } from "node:crypto";
 import { bogotaDay } from "../domain/calendar.js";
 import { describeError } from "../openPayments/errors.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
-import { AppError } from "../shared/errors.js";
+import { AppError, NotFoundError } from "../shared/errors.js";
 import { fromMinorUnits, type Amount } from "../shared/money.js";
 import type { Store } from "../storage/store.js";
 import type { MerchantService } from "./merchantService.js";
+import { capRoom, monthCoverage } from "./monthly.js";
 import type { MerchantRecord, MerchantRule, PayoutRecord } from "./types.js";
 
+/** A payout with no answer from the wallet for this long may or may not have gone through. */
+const UNCONFIRMED_AFTER_MS = 10 * 60 * 1000;
+
 /**
- * What each debt rule has reserved and not paid yet: the shares sales set aside, minus the payouts
- * already sent or on their way. The money is still in the merchant's wallet (ADR 0014).
+ * What each debt rule has reserved and not paid yet: the shares sales set aside, minus the reserved
+ * part of the payouts already sent or on their way (not what they took from profit). The money is
+ * still in the merchant's wallet (ADR 0014).
  */
 export async function reservedBalances(
   store: Store,
@@ -29,15 +34,20 @@ export async function reservedBalances(
   }
   for (const payout of payouts) {
     if (payout.status === "failed") continue;
-    balances[payout.ruleId] = (balances[payout.ruleId] ?? 0n) - BigInt(payout.amount.value);
+    const fromReserve = BigInt(payout.amount.value) - BigInt(payout.topUp?.value ?? "0");
+    balances[payout.ruleId] = (balances[payout.ruleId] ?? 0n) - fromReserve;
   }
   return balances;
 }
 
 /**
- * Pays creditors the way they expect: one payment for everything reserved, on the debt's due day
- * of the month, instead of a small transfer per sale (ADR 0014). The merchant can also pay a debt
- * early, or run every due payment now, which is how the demo shows the due day without waiting.
+ * Pays creditors the way they expect: one payment on the debt's due day of the month, instead of a
+ * small transfer per sale (ADR 0014). That payment completes the month's quota: what was reserved,
+ * and what is missing from the shop's profit (ADR 0015). The merchant can also pay a debt early, or
+ * run every due payment now, which is how the demo shows the due day without waiting.
+ *
+ * A payout that fails is never retried on its own: after a timeout the money may have arrived
+ * anyway. It waits for the shopkeeper, who checks and retries it or marks it paid.
  */
 export class PayoutService {
   private readonly now: () => Date;
@@ -95,7 +105,8 @@ export class PayoutService {
 
   /**
    * The scheduler's pass: for every shop, follow the payouts on their way and pay each debt whose
-   * due day has come this month and that has not had its due-day payment yet.
+   * due day has come this month and that has not had its due-day payment yet. A due-day payment
+   * that failed counts as had: it waits for the shopkeeper (retry or mark paid), never a new try.
    */
   async runDue(): Promise<void> {
     if (this.running) return;
@@ -113,11 +124,7 @@ export class PayoutService {
               rule.kind === "debt" &&
               (rule.dueDay ?? 28) <= day &&
               !payouts.some(
-                (p) =>
-                  p.ruleId === rule.id &&
-                  p.month === month &&
-                  p.reason === "due-date" &&
-                  p.status !== "failed",
+                (p) => p.ruleId === rule.id && p.month === month && p.reason === "due-date",
               ),
           );
           if (dueToday.length === 0) continue;
@@ -142,11 +149,69 @@ export class PayoutService {
     return () => clearInterval(timer);
   }
 
-  /** Follows the payouts on their way; a completed one counts as repaid on its debt. */
+  /**
+   * Retries a failed payout once the shopkeeper checked it did not go through: a new payout for the
+   * same debt and reason, worked out again from what is reserved now.
+   */
+  async retry(merchantId: string, payoutId: string): Promise<PayoutRecord> {
+    const failed = await this.requireUnresolvedFailure(merchantId, payoutId);
+    const merchant = await this.merchants.require(merchantId);
+    if ((await this.flows.findMandate(merchant.mandateId)).status !== "active") {
+      throw new AppError("Tu autorización mensual no está activa: autorízala para poder pagar", 409);
+    }
+    const rule = merchant.rules.find((r) => r.id === failed.ruleId && r.kind === "debt");
+    if (!rule) throw new AppError("Esa obligación ya no existe", 409);
+    const result = await this.exclusive(merchant.id, async () => {
+      await this.save(failed, { resolution: "retried", resolvedAt: this.now().toISOString() });
+      return this.payRule(merchant, rule, failed.reason);
+    });
+    if (result === undefined) {
+      throw new AppError("No quedó nada por pagar a esa obligación", 409);
+    }
+    return result;
+  }
+
+  /**
+   * The shopkeeper checked the creditor's wallet and the money of a failed payout did arrive (for
+   * example after a timeout): it counts as paid, and nothing is sent again.
+   */
+  async markPaid(merchantId: string, payoutId: string): Promise<PayoutRecord> {
+    const failed = await this.requireUnresolvedFailure(merchantId, payoutId);
+    const paid = await this.save(failed, {
+      status: "completed",
+      resolution: "marked-paid",
+      resolvedAt: this.now().toISOString(),
+    });
+    await this.merchants.recordRepayment(merchantId, paid.ruleId, paid.amount);
+    return paid;
+  }
+
+  private async requireUnresolvedFailure(merchantId: string, payoutId: string) {
+    const payout = (await this.store.listPayouts(merchantId)).find((p) => p.id === payoutId);
+    if (!payout) throw new NotFoundError(`No existe el pago ${payoutId}`);
+    if (payout.status !== "failed" || payout.resolvedAt) {
+      throw new AppError("Ese pago no está esperando revisión", 409);
+    }
+    return payout;
+  }
+
+  /**
+   * Follows the payouts on their way; a completed one counts as repaid on its debt. One the wallet
+   * never confirmed (the process stopped mid-charge, or the charge never answered) turns into a
+   * failure to review, because only the shopkeeper can tell whether its money arrived.
+   */
   async refresh(merchantId: string): Promise<void> {
-    const processing = (await this.store.listPayouts(merchantId)).filter(
-      (payout) => payout.status === "processing" && payout.paymentId,
-    );
+    const all = await this.store.listPayouts(merchantId);
+    const cutoff = this.now().getTime() - UNCONFIRMED_AFTER_MS;
+    for (const payout of all) {
+      if (payout.status === "processing" && !payout.paymentId && Date.parse(payout.updatedAt) < cutoff) {
+        await this.save(payout, {
+          status: "failed",
+          error: "No pudimos confirmar si el pago salió",
+        });
+      }
+    }
+    const processing = all.filter((payout) => payout.status === "processing" && payout.paymentId);
     for (const payout of processing) {
       if (this.refreshing.has(payout.id)) continue;
       this.refreshing.add(payout.id);
@@ -179,23 +244,46 @@ export class PayoutService {
   }
 
   /**
-   * Pays a debt everything it has reserved, never more than what is still owed. Called inside
-   * `exclusive`, so the balance read here is the one being paid. The payout is written before the
-   * charge: if the process dies mid-charge, the money counts as on its way rather than reserved, so
-   * it is never sent twice.
+   * Pays a debt in one payout. Early (`manual`) it sends what is reserved. On its due day it sends
+   * the month's quota: what is reserved and, if that is short, the rest from the shop's profit, as
+   * far as the monthly cap allows (ADR 0015). Never more than what is still owed. Called inside
+   * `exclusive`, so the balances read here are the ones being paid. The payout is written before
+   * the charge: if the process dies mid-charge, the money counts as on its way rather than
+   * reserved, so it is never sent twice.
    */
   private async payRule(
     merchant: MerchantRecord,
     rule: MerchantRule,
     reason: PayoutRecord["reason"],
   ): Promise<PayoutRecord | undefined> {
-    let value = (await reservedBalances(this.store, merchant.id))[rule.id] ?? 0n;
+    const now = this.now();
+    const balances = await reservedBalances(this.store, merchant.id);
+    let reserved = balances[rule.id] ?? 0n;
+    if (reserved < 0n) reserved = 0n;
+
+    let topUp = 0n;
+    if (reason === "due-date" && rule.monthlyQuota) {
+      const covered = BigInt((await monthCoverage(this.store, merchant.id, now))[rule.id]?.value ?? "0");
+      const missing = BigInt(rule.monthlyQuota.value) - covered;
+      if (missing > 0n) {
+        // Room in the cap once every reserved share (this one included) has left.
+        const pending = Object.values(balances).reduce((sum, v) => sum + (v > 0n ? v : 0n), 0n);
+        const room = BigInt((await capRoom(this.flows, this.store, merchant, now)).value) - pending;
+        topUp = missing < room ? missing : room > 0n ? room : 0n;
+      }
+    }
+
     const owed = (await this.store.getMerchant(merchant.id))?.rules.find((r) => r.id === rule.id)
       ?.outstanding;
-    if (owed && BigInt(owed.value) < value) value = BigInt(owed.value);
+    if (owed) {
+      const left = BigInt(owed.value);
+      if (reserved > left) reserved = left;
+      if (reserved + topUp > left) topUp = left - reserved;
+    }
+    const value = reserved + topUp;
     if (value <= 0n) return undefined;
 
-    const timestamp = this.now().toISOString();
+    const timestamp = now.toISOString();
     const amount: Amount = { ...merchant.asset, value: value.toString() };
     let payout = await this.store.savePayout({
       id: randomUUID(),
@@ -205,8 +293,9 @@ export class PayoutService {
       destination: rule.destination,
       amount,
       reason,
-      month: bogotaDay(this.now()).slice(0, 7),
+      month: bogotaDay(now).slice(0, 7),
       status: "processing",
+      ...(topUp > 0n && { topUp: { ...merchant.asset, value: topUp.toString() } }),
       createdAt: timestamp,
       updatedAt: timestamp,
     });
@@ -219,7 +308,7 @@ export class PayoutService {
         description: `MiPlante · ${rule.label} · pago del mes`,
       });
     } catch (error) {
-      // Nothing left the wallet: the balance stays reserved for the next try.
+      // The wallet refused it, or did not answer: it waits for the shopkeeper to review it.
       return this.save(payout, { status: "failed", error: describeError(error) });
     }
     payout = await this.save(payout, {

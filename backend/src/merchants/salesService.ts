@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { planAllocations } from "../domain/allocation.js";
-import { startOfBogotaMonth } from "../domain/calendar.js";
 import { describeError } from "../openPayments/errors.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
@@ -12,6 +11,7 @@ import {
 } from "../shared/money.js";
 import type { SalePaymentChanges, Store } from "../storage/store.js";
 import type { MerchantService } from "./merchantService.js";
+import { capRoom, monthCoverage } from "./monthly.js";
 import { reservedBalances } from "./payoutService.js";
 import type {
   MerchantRecord,
@@ -220,7 +220,7 @@ export class SalesService {
         return;
       }
       const [cap, paidThisMonth, reserved] = await Promise.all([
-        this.remainingCap(merchant),
+        capRoom(this.flows, this.store, merchant, this.now()),
         this.paidThisMonth(merchant.id, saleId),
         reservedBalances(this.store, merchant.id),
       ]);
@@ -446,71 +446,9 @@ export class SalesService {
     return this.now().toISOString();
   }
 
-  /**
-   * What is left of this month's cap. The wallet's count of what the grant spent wins; a grant that
-   * spent nothing yet reports none, which is zero. If the wallet cannot say (it did not answer, or
-   * answers in another asset), MiPlante's own charges under the grant this month stand in, so the
-   * cap is never just ignored.
-   */
-  private async remainingCap(merchant: MerchantRecord): Promise<Amount> {
-    const cap = merchant.monthlyCap;
-    const spent = (await this.flows.getMandate(merchant.mandateId)).spent;
-    let used: bigint;
-    if (spent && spent.debitAmount === null) {
-      used = 0n;
-    } else if (
-      spent?.debitAmount &&
-      spent.debitAmount.assetCode === cap.assetCode &&
-      spent.debitAmount.assetScale === cap.assetScale
-    ) {
-      used = BigInt(spent.debitAmount.value);
-    } else {
-      used = await this.chargedThisMonth(merchant);
-    }
-    const left = BigInt(cap.value) - used;
-    return { ...cap, value: (left > 0n ? left : 0n).toString() };
-  }
-
-  /** What MiPlante charged under the shop's grant since the 1st (Bogotá), failed charges aside. */
-  private async chargedThisMonth(merchant: MerchantRecord): Promise<bigint> {
-    const since = startOfBogotaMonth(this.now()).getTime();
-    const charges = await this.store.listPayments({ mandateId: merchant.mandateId });
-    return charges
-      .filter(
-        (p) =>
-          Date.parse(p.createdAt) >= since &&
-          p.status !== "failed" &&
-          p.status !== "rejected" &&
-          p.debitAmount?.assetCode === merchant.monthlyCap.assetCode,
-      )
-      .reduce((sum, p) => sum + BigInt(p.debitAmount!.value), 0n);
-  }
-
-  /**
-   * What each rule already received from the sales paid this calendar month (Bogotá), so a debt
-   * stops taking its share once its monthly quota is paid. Failed or skipped shares do not count.
-   */
-  async paidThisMonth(
-    merchantId: string,
-    exceptSaleId?: string,
-  ): Promise<Record<string, Amount>> {
-    const monthStart = startOfBogotaMonth(this.now()).getTime();
-    // A sale created late last month can be paid this month: look a little further back.
-    const sales = await this.store.listSales({
-      merchantId,
-      createdSince: new Date(monthStart - SWEEP_WINDOW_MS).toISOString(),
-    });
-    const paid: Record<string, Amount> = {};
-    for (const sale of sales) {
-      if (sale.id === exceptSaleId || !sale.paidAt) continue;
-      if (Date.parse(sale.paidAt) < monthStart) continue;
-      for (const item of sale.settlement.items) {
-        if (item.status === "failed" || item.status === "skipped") continue;
-        const sum = BigInt(paid[item.ruleId]?.value ?? "0") + BigInt(item.amount.value);
-        paid[item.ruleId] = { ...item.amount, value: sum.toString() };
-      }
-    }
-    return paid;
+  /** How much of each rule's month is covered (see monthCoverage). */
+  paidThisMonth(merchantId: string, exceptSaleId?: string): Promise<Record<string, Amount>> {
+    return monthCoverage(this.store, merchantId, this.now(), exceptSaleId);
   }
 
   /**

@@ -41,7 +41,8 @@ const ITEM_STATUS = {
   completed: { text: "Enviado", tone: "ok" },
   failed: { text: "Falló", tone: "bad" },
   skipped: { text: "Límite mensual alcanzado", tone: "neutral" },
-  reserved: { text: "Apartado para su día de pago", tone: "info" },
+  // Set aside in the shop's wallet: it is not paid yet, and its quota may not be complete either.
+  reserved: { text: "Apartado", tone: "info" },
 };
 
 export const RULE_KIND = {
@@ -139,6 +140,25 @@ export async function homeOfSignedIn() {
 }
 
 /**
+ * Where to go after signing in or up: the page the shopkeeper was opening, unless it is a till that
+ * is not this account's (a link from another account, or from before signing up). A new account,
+ * or a till link of someone else's shop, goes to its own place: its till, or setting up its shop.
+ */
+export async function destinationAfterSignIn(next) {
+  const home = await homeOfSignedIn();
+  if (!next) return home;
+  const wanted = new URL(next, window.location.origin);
+  if (wanted.pathname.replace(/\/$/, "") !== "/merchant") return next;
+  const ownId = new URL(home, window.location.origin).searchParams.get("id");
+  const wantedId = wanted.searchParams.get("id");
+  // "/merchant" without an id, or with this account's own: keep the tab it asked for.
+  if (ownId && (!wantedId || wantedId === ownId)) {
+    return `/merchant?id=${encodeURIComponent(ownId)}${wanted.hash}`;
+  }
+  return home;
+}
+
+/**
  * A `next` page from the URL, only if it is on this site. It is resolved as a URL rather than
  * matched as text: browsers read "/\evil.com" as "//evil.com", another site.
  */
@@ -168,11 +188,11 @@ const FRIENDLY_ERRORS = [
   ],
   [
     /no está permitido/i,
-    "Esa billetera no es de la red de prueba de Interledger. Escribe solo su nombre, por ejemplo tienda-billeticos.",
+    "Esa billetera no es de la red de prueba de Interledger. Escribe solo su nombre, por ejemplo mi-tienda.",
   ],
   [
     /debe usar https|query ni fragmento/i,
-    "Escribe solo el nombre de la billetera, por ejemplo tienda-billeticos.",
+    "Escribe solo el nombre de la billetera, por ejemplo mi-tienda.",
   ],
   [
     /misma wallet del negocio/i,
@@ -211,7 +231,7 @@ const WALLET_HOST = "ilp.interledger-test.dev";
 
 /**
  * What a person types → what the API accepts:
- * "tienda-billeticos" → "$ilp.interledger-test.dev/tienda-billeticos"; "$…" and "https://…" pass.
+ * "mi-tienda" → "$ilp.interledger-test.dev/mi-tienda"; "$…" and "https://…" pass.
  */
 export function normalizeWallet(input) {
   const text = String(input ?? "").replace(/\s+/g, "");
@@ -221,7 +241,7 @@ export function normalizeWallet(input) {
   return `$${WALLET_HOST}/${text.replace(/^@/, "")}`;
 }
 
-/** "https://ilp.interledger-test.dev/tienda-billeticos" → "tienda-billeticos" for display. */
+/** "https://ilp.interledger-test.dev/mi-tienda" → "mi-tienda" for display. */
 export function walletName(url) {
   try {
     const parsed = new URL(String(url).replace(/^\$/, "https://"));
@@ -444,15 +464,17 @@ export function renderSteps(
 
 /**
  * Renders how a sale was split. Re-renders only when something changed and animates rows
- * only the first time, so polling does not make the list flicker.
+ * only the first time, so polling does not make the list flicker. `detail(item)` can add a line
+ * under a share (the till uses it for how far a debt's monthly quota has got).
  */
 export function renderSplit(
   container,
   settlement,
-  { keptLabel = "Tú te quedas" } = {},
+  { keptLabel = "Tú te quedas", detail = () => "" } = {},
 ) {
   const items = settlement?.items || [];
-  const signature = JSON.stringify([settlement?.kept, items]);
+  const details = items.map((item) => detail(item) || "");
+  const signature = JSON.stringify([settlement?.kept, items, details]);
   if (container.dataset.signature === signature) return;
   const animate = container.childElementCount === 0;
   container.dataset.signature = signature;
@@ -472,7 +494,7 @@ export function renderSplit(
       ),
     );
   }
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     rows.push(
       el(
         "li",
@@ -491,6 +513,9 @@ export function renderSplit(
             ? el("span", { class: "error-text", text: item.error })
             : null,
         ),
+        details[index]
+          ? el("p", { class: "split-detail small muted", text: details[index] })
+          : null,
       ),
     );
   }

@@ -92,8 +92,19 @@ export interface PayoutRecord {
   /** Bogotá month the payout belongs to, "2026-10". */
   month: string;
   status: "processing" | "completed" | "failed";
+  /**
+   * Due-day payouts complete the debt's monthly quota: the part of `amount` that was not reserved
+   * and came from the shop's profit (ADR 0015).
+   */
+  topUp?: Amount;
   paymentId?: string;
   error?: string;
+  /**
+   * A failed payout is never retried on its own (it may have gone through after a timeout): the
+   * shopkeeper checks and either retries it or marks it paid.
+   */
+  resolution?: "retried" | "marked-paid";
+  resolvedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

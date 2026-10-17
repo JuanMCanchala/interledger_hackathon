@@ -99,11 +99,12 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
   };
 
   /**
-   * Runs every reserved debt as on its due day and has the money arrive at each creditor, so the
-   * debts count as repaid (ADR 0014).
+   * Pays every debt what it has reserved ("Pagar ahora") and has the money arrive at each creditor,
+   * so the debts count as repaid (ADR 0014). The due day itself also completes the quota from
+   * profit (ADR 0015); payouts.test.ts covers that.
    */
   const payOutDebts = async (merchantId: string) => {
-    const sent = await payouts.pay(merchantId, { reason: "due-date" });
+    const sent = await payouts.pay(merchantId, { reason: "manual" });
     for (const payout of sent) {
       deliver(
         (await store.getPayment(payout.paymentId!))!.incomingPaymentUrl,
