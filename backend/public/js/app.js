@@ -550,7 +550,9 @@ export function param(name) {
  * Calls `task` until it returns false or `stop()` is called, waiting `interval` ms between calls
  * (a number, or a function so the pace can slow down). The next call starts when the previous one
  * ends, so requests never pile up. While the page is hidden (another tab, the phone locked) it
- * makes no requests, and it checks again as soon as the page is visible.
+ * makes no requests, and it checks again as soon as the page is visible. A lost connection or a
+ * server error is tried again; an answer that will not change (the sale does not exist, the session
+ * ended) stops it.
  */
 export function poll(task, interval) {
   let timer;
@@ -564,8 +566,9 @@ export function poll(task, interval) {
     let again = true;
     try {
       again = (await task()) !== false;
-    } catch {
-      again = true;
+    } catch (error) {
+      const status = error?.status ?? 0;
+      again = status < 400 || status >= 500 || status === 408 || status === 429;
     }
     running = false;
     if (!again) stop();
