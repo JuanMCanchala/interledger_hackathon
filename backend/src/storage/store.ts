@@ -107,6 +107,8 @@ export interface Store {
   deleteSession(token: string): Promise<void>;
   /** The shop a user registered (the newest one if there are several). */
   getMerchantByOwner(ownerId: string): Promise<MerchantRecord | undefined>;
+  /** The shop whose counter display has this key. */
+  getMerchantByDisplayKey(key: string): Promise<MerchantRecord | undefined>;
   /**
    * Whether a shop pays its splits with this mandate, is waiting for it to approve a new cap, or
    * keeps it as its emergency fund's grant.
@@ -310,6 +312,10 @@ export class MemoryStore implements Store {
       .filter((m) => m.ownerId === ownerId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return copy(owned[0]);
+  }
+
+  async getMerchantByDisplayKey(key: string) {
+    return copy([...this.merchants.values()].find((m) => m.displayKey === key));
   }
 
   async isMerchantMandate(mandateId: string) {

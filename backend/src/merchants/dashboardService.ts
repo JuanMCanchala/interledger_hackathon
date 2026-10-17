@@ -62,6 +62,8 @@ export class DashboardService {
 
     return {
       ...(await this.merchants.view(merchant)),
+      /** What the till shows as a QR to link the phone that displays each sale (ADR 0018). */
+      displayUrl: merchant.displayKey ? this.sales.displayUrl(merchant.displayKey) : null,
       status: mandate.status,
       /** Spent from the monthly-capped grant in its current interval (this calendar month). */
       spentThisMonth: spent && sameAsset(spent, merchant.asset) ? spent : null,

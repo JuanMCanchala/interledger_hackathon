@@ -83,6 +83,15 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect(dashboard.map((s) => s.id)).toEqual([saleId]);
   });
 
+  it("finds a shop by its counter display's key, and only by the current one", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const { displayKey: oldKey } = await env.merchants.linkDisplay(merchantId);
+    const { displayKey } = await env.merchants.linkDisplay(merchantId);
+    expect((await store.getMerchantByDisplayKey(displayKey!))?.id).toBe(merchantId);
+    expect(await store.getMerchantByDisplayKey(oldKey!)).toBeUndefined();
+  });
+
   it("settles exactly once when many polls race", async () => {
     const env = setupMiPlante(store);
     const { saleId } = await paidSale(env);

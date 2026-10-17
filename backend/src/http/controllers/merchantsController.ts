@@ -116,6 +116,12 @@ export function merchantsController({
     res.json(await gloria.chat(merchant.id, messages));
   });
 
+  /** Links a phone as the counter display, or unlinks the old one with a new key (ADR 0018). */
+  router.post("/:id/display", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res.status(201).json(await merchants.linkDisplay(merchant.id));
+  });
+
   router.post("/:id/consent", async (req, res) => {
     const merchant = await ownedMerchant(req);
     res.status(201).json(await merchants.renewConsent(merchant.id));

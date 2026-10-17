@@ -413,6 +413,14 @@ export class PrismaStore implements Store {
     return row ? toMerchant(row) : undefined;
   }
 
+  async getMerchantByDisplayKey(key: string) {
+    const row = await this.prisma.merchant.findUnique({
+      where: { displayKey: key },
+      include: merchantInclude,
+    });
+    return row ? toMerchant(row) : undefined;
+  }
+
   async listMerchants() {
     const rows = await this.prisma.merchant.findMany({ include: merchantInclude });
     return rows.map(toMerchant);
@@ -578,6 +586,7 @@ function merchantColumns(record: MerchantRecord) {
     pendingMandateId: record.pendingCap?.mandateId ?? null,
     emergencyMandateId: record.emergency?.mandateId ?? null,
     emergencyRuleId: record.emergency?.ruleId ?? null,
+    displayKey: record.displayKey ?? null,
     mandateId: record.mandateId,
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt),
@@ -627,6 +636,7 @@ function toMerchant(row: MerchantRow): MerchantRecord {
       row.emergencyMandateId === null || row.emergencyRuleId === null
         ? undefined
         : { mandateId: row.emergencyMandateId, ruleId: row.emergencyRuleId },
+    displayKey: opt(row.displayKey),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

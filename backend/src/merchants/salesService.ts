@@ -381,6 +381,37 @@ export class SalesService {
   }
 
   /** MiPlante's own checkout, where the customer types their wallet name. */
+  /**
+   * What the counter display shows (ADR 0018): the shop's newest sale while it waits for the
+   * customer, or for a minute once paid, so the customer sees it arrive; otherwise nothing, and the
+   * phone waits for the next one. Reading it moves the sale forward, as /cobro does.
+   */
+  async display(key: string) {
+    const merchant = await this.store.getMerchantByDisplayKey(key);
+    if (!merchant) {
+      throw new NotFoundError("Esta pantalla ya no está enlazada a una tienda");
+    }
+    const now = this.now().getTime();
+    const [latest] = await this.store.listSales({
+      merchantId: merchant.id,
+      createdSince: new Date(now - DISPLAY_SALE_MS).toISOString(),
+    });
+    let sale: ReturnType<typeof toPublicSale> | null = null;
+    if (latest && latest.status !== "failed") {
+      const view = await this.refresh(latest.id);
+      const paidAgo = view.paidAt ? now - Date.parse(view.paidAt) : 0;
+      if (view.status !== "failed" && !(view.status === "paid" && paidAgo > DISPLAY_PAID_MS)) {
+        sale = toPublicSale(view);
+      }
+    }
+    return { shopName: merchant.name, sale };
+  }
+
+  /** The link a phone opens once to become the shop's counter display. */
+  displayUrl(key: string): string {
+    return `${this.options.frontendUrl}/cobro?pantalla=${encodeURIComponent(key)}`;
+  }
+
   payUrl(saleId: string): string {
     return `${this.options.frontendUrl}/pay?sale=${saleId}`;
   }
@@ -516,6 +547,11 @@ export type SaleView = Awaited<ReturnType<SalesService["view"]>>;
  * it was split, but not the wallets each share went to nor the payments that carried them, which
  * are the shop's own business.
  */
+/** A sale older than this is no longer the one at the counter. */
+const DISPLAY_SALE_MS = 30 * 60_000;
+/** How long the display celebrates a payment before waiting for the next sale. */
+const DISPLAY_PAID_MS = 60_000;
+
 export function toPublicSale(sale: SaleView) {
   return {
     ...sale,

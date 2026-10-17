@@ -30,6 +30,8 @@ model Merchant {
   /// The grant on a savings wallet used as the last resort to pay a creditor (ADR 0016).
   emergencyMandateId String?  @map("emergency_mandate_id") @db.Uuid
   emergencyRuleId    String?  @map("emergency_rule_id") @db.Uuid
+  /// The counter display's key: a phone with it shows each new sale's QR (ADR 0018).
+  displayKey         String?  @unique @map("display_key")
   createdAt          DateTime @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime @map("updated_at") @db.Timestamptz(3)
 

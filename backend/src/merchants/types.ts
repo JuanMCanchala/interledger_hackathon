@@ -44,6 +44,11 @@ export interface MerchantRecord {
    * one of the shop's savings rules, to move money from it back to the shop (ADR 0016).
    */
   emergency?: { mandateId: string; ruleId: string };
+  /**
+   * The key of the shop's counter display (ADR 0018): a phone that opens `/cobro?pantalla=<key>`
+   * keeps showing the newest sale's QR. Changing it unlinks the phones that had the old one.
+   */
+  displayKey?: string;
   createdAt: string;
   updatedAt: string;
 }

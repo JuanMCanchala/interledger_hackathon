@@ -7,6 +7,7 @@ import type { PayoutService } from "../merchants/payoutService.js";
 import type { SalesService } from "../merchants/salesService.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { authController } from "./controllers/authController.js";
+import { displaysController } from "./controllers/displaysController.js";
 import { mandatesController } from "./controllers/mandatesController.js";
 import { merchantsController } from "./controllers/merchantsController.js";
 import { paymentsController } from "./controllers/paymentsController.js";
@@ -49,6 +50,7 @@ export function createApp(options: AppOptions) {
   app.use("/api/auth", authController(options));
   app.use("/api/merchants", merchantsController(options));
   app.use("/api/sales", salesController(options));
+  app.use("/api/displays", displaysController(options));
 
   app.use("/api", apiNotFound);
   app.use(errorHandler);

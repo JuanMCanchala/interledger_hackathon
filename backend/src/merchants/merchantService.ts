@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   percentToBps,
   validateRules,
@@ -377,6 +377,20 @@ export class MerchantService {
     return merchant;
   }
 
+  /**
+   * Links a counter display (ADR 0018): a new key, so the phones that had the old one stop showing
+   * the shop's sales.
+   */
+  async linkDisplay(id: string) {
+    const merchant = await this.require(id);
+    const updated = await this.store.updateMerchant({
+      ...merchant,
+      displayKey: randomBytes(18).toString("base64url"),
+      updatedAt: this.now().toISOString(),
+    });
+    return this.view(updated);
+  }
+
   /** The shop the user registered, if any. */
   async findByOwner(userId: string) {
     const merchant = await this.store.getMerchantByOwner(userId);
@@ -430,6 +444,8 @@ export class MerchantService {
         : null,
       status: mandate.status,
       rules: merchant.rules,
+      /** Only the owner sees it: it is what links a phone as the counter display. */
+      displayKey: merchant.displayKey ?? null,
       createdAt: merchant.createdAt,
     };
   }

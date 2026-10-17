@@ -338,3 +338,42 @@ describe("GlorIA over HTTP", () => {
     expect(statuses[20]).toBe(429);
   });
 });
+
+describe("counter display over HTTP", () => {
+  it("shows each new sale to the linked phone, then waits for the next", async () => {
+    const { env, call, signUp, activeShop } = await start();
+    const { token, id } = await activeShop();
+
+    // Only the owner links it; a new link unlinks the old phone.
+    expect((await call("POST", `/api/merchants/${id}/display`, undefined, await signUp())).status).toBe(404);
+    const first = await call("POST", `/api/merchants/${id}/display`, undefined, token);
+    expect(first.status).toBe(201);
+    const oldKey = first.body.displayKey as string;
+    const key = (await call("POST", `/api/merchants/${id}/display`, undefined, token)).body.displayKey as string;
+    expect(key).not.toBe(oldKey);
+    expect((await call("GET", `/api/displays/${oldKey}`)).status).toBe(404);
+    expect((await call("GET", `/api/merchants/${id}`, undefined, token)).body.displayKey).toBe(key);
+
+    // No sale yet: the phone waits, with no session.
+    expect((await call("GET", `/api/displays/${key}`)).body).toEqual({ shopName: "Tienda Doña Rosa", sale: null });
+
+    const one = await call("POST", `/api/merchants/${id}/sales`, { amount: "10000" }, token);
+    const shown = await call("GET", `/api/displays/${key}`);
+    expect(shown.body.sale).toMatchObject({ id: one.body.sale.id, status: "open" });
+    expect(shown.body.sale.payUrl).toBeTruthy();
+    // The public view never carries where the shares go.
+    expect(JSON.stringify(shown.body)).not.toContain(COOP);
+
+    // A newer sale replaces it on the phone at once.
+    env.clock.now = new Date(env.clock.now.getTime() + 1000);
+    const two = await call("POST", `/api/merchants/${id}/sales`, { amount: "25000" }, token);
+    expect((await call("GET", `/api/displays/${key}`)).body.sale.id).toBe(two.body.sale.id);
+
+    // Paid: the phone celebrates it for a minute, then waits for the next sale.
+    const request = (await env.store.getPayment((await env.store.getSale(two.body.sale.id))!.paymentId!))!;
+    env.deliver(request.incomingPaymentUrl, cop("2500000"));
+    expect((await call("GET", `/api/displays/${key}`)).body.sale).toMatchObject({ status: "paid" });
+    env.clock.now = new Date(env.clock.now.getTime() + 61_000);
+    expect((await call("GET", `/api/displays/${key}`)).body.sale).toBeNull();
+  });
+});
