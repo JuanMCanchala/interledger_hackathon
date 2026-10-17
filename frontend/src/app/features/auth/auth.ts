@@ -12,7 +12,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
 import { safeNext } from '../../core/miplante.utils';
 import { Logo } from '../../shared/brand/logo';
-import { Plant } from '../../shared/brand/plant';
+import { Plant, PlantStage } from '../../shared/brand/plant';
 import { Wizard } from '../../shared/ui/wizard';
 
 const MIN_PASSWORD = 8;
@@ -39,7 +39,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             }}
           </p>
         </div>
-        <app-plant class="flow-plant" [stage]="registering() ? 'seed' : 'bloom'" />
+        <app-plant class="flow-plant" [stage]="plantStage()" />
       </aside>
 
       <main class="flow-main">
@@ -188,6 +188,11 @@ export default class AuthPage implements OnInit {
   protected password = '';
   protected readonly error = signal('');
   protected readonly busy = signal(false);
+
+  /** The aside plant grows with each answered question: seed, sprout, bloom. */
+  protected readonly plantStage = computed<PlantStage>(() =>
+    !this.registering() ? 'bloom' : (['seed', 'sprout', 'bloom'] as const)[this.step()],
+  );
 
   protected firstName(): string {
     return this.name.trim().split(/\s+/)[0] ?? '';

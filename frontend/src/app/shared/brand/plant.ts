@@ -37,6 +37,16 @@ export type PlantStage = 'seed' | 'sprout' | 'bloom';
     :host([data-stage='seed']) :is(.stem, .leaf, .flower, .sparks),
     :host([data-stage='sprout']) :is(.seed, .flower, .sparks),
     :host([data-stage='bloom']) .seed { display: none; }
+    :host([data-stage]) :is(.stem, .leaf, .flower, .sparks, .seed) {
+      transform-box: fill-box; transform-origin: 50% 100%;
+      animation: grow .7s cubic-bezier(.34, 1.56, .64, 1) both;
+    }
+    :host([data-stage]) .leaf-left { transform-origin: 100% 50%; animation-delay: .15s; }
+    :host([data-stage]) .leaf-right { transform-origin: 0% 50%; animation-delay: .25s; }
+    :host([data-stage]) .flower { transform-origin: 50% 50%; animation-delay: .3s; }
+    :host([data-stage]) .sparks { animation-delay: .5s; }
+    @keyframes grow { from { transform: scale(0); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { :host([data-stage]) * { animation: none !important; } }
   `,
 })
 export class Plant {

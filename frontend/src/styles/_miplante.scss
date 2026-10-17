@@ -387,7 +387,6 @@
 
     &:hover {
       background: var(--brand-strong);
-      transform: translateY(-1px);
     }
   }
 }
@@ -740,12 +739,8 @@
     color 0.18s ease,
     box-shadow 0.18s ease;
 
-  &:hover:not([disabled]) {
-    transform: translateY(-2px);
-  }
-
   &:active:not([disabled]) {
-    transform: translateY(1px) scale(0.98);
+    transform: scale(0.98);
   }
 
   &[disabled] {
@@ -842,8 +837,7 @@
     color 0.18s ease;
 
   &:hover {
-    transform: translateY(-2px);
-    border-color: var(--brand);
+    background: var(--brand-soft);
   }
 
   &:active {
@@ -932,14 +926,6 @@
   font-size: 0.8rem;
   font-weight: 700;
   white-space: nowrap;
-
-  &::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: currentColor;
-  }
 }
 
 .badge-ok {
@@ -1485,9 +1471,7 @@
   cursor: pointer;
   transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 
-  &:hover {
-    transform: translateY(-2px);
-    border-color: var(--brand);
+  &:hover:not(.is-cash) {
     background: var(--papel);
   }
 
@@ -1864,7 +1848,7 @@
   transition: transform 0.15s ease, background-color 0.15s ease;
 
   &:hover {
-    transform: translateY(-1px);
+    background: var(--gold-soft);
   }
 
   .cash-dot {
@@ -2244,7 +2228,6 @@
       background: rgb(255 107 94 / 18%);
       border-color: rgb(255 107 94 / 50%);
       color: #ff9c93;
-      transform: translateY(-1px);
     }
 
     &:active {
@@ -2584,7 +2567,6 @@
   &:hover {
     background: rgb(204 241 55 / 45%);
     border-color: var(--monte);
-    transform: translateY(-1px);
   }
 }
 
@@ -2836,7 +2818,6 @@
 
   &:hover {
     border-color: var(--monte);
-    transform: translateY(-2px);
   }
 
   &[aria-pressed='true'] {
@@ -3243,5 +3224,61 @@
   .topbar-actions {
     flex: 1 1 100%;
     justify-content: space-between;
+  }
+}
+
+/* Large screens: both halves hug the centre seam so the page reads as one piece. */
+@media (min-width: 960px) {
+  .flow-aside {
+    grid-template-rows: none;
+    align-content: center;
+    justify-items: end;
+    padding-inline: clamp(2rem, 6vw, 7rem);
+
+    > * {
+      width: min(100%, 520px);
+    }
+  }
+
+  .flow-logo {
+    position: absolute;
+    top: clamp(1.5rem, 4vh, 3rem);
+    left: clamp(2rem, 4vw, 3rem);
+    width: clamp(120px, 10vw, 150px) !important;
+  }
+
+  .flow .flow-plant {
+    width: min(70%, 300px) !important;
+    justify-self: end;
+    margin-right: calc((min(100%, 520px) - min(70%, 300px)) / 2);
+  }
+
+  .flow-main {
+    justify-items: start;
+    padding-inline: clamp(2rem, 6vw, 7rem);
+  }
+
+  .flow-card {
+    width: min(100%, 560px);
+    padding: clamp(28px, 3vw, 40px);
+  }
+
+  .flow-card-wide {
+    width: min(100%, 680px);
+  }
+}
+
+@media (min-width: 1400px) {
+  .flow-aside h1 {
+    font-size: clamp(2.9rem, 3.4vw, 3.6rem);
+  }
+
+  .flow .flow-plant {
+    width: min(70%, 340px) !important;
+    margin-right: calc((min(100%, 520px) - min(70%, 340px)) / 2);
+  }
+
+  .flow-question {
+    font-size: 2.2rem;
   }
 }

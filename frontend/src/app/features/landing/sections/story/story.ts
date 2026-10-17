@@ -55,6 +55,10 @@ export class Story {
         gsap.set(chapters.slice(1), { autoAlpha: 0, y: 30 });
         gsap.set('.scene-debts, .scene-pockets', { autoAlpha: 0 });
 
+        // Snapping fights a finger on touch screens, so only a mouse or trackpad gets it.
+        const snap = matchMedia('(pointer: fine)').matches
+          ? ({ snapTo: 'labelsDirectional', duration: { min: 0.3, max: 0.8 }, delay: 0.1 } as const)
+          : undefined;
         const tl = gsap.timeline({
           defaults: { ease: 'power2.out' },
           scrollTrigger: {
@@ -62,8 +66,9 @@ export class Story {
             start: 'top top',
             end: () => `+=${innerHeight * 4}`,
             pin: true,
-            scrub: 0.6,
-            snap: { snapTo: 'labelsDirectional', duration: { min: 0.3, max: 0.8 }, delay: 0.1 },
+            anticipatePin: 1,
+            scrub: snap ? 0.6 : true,
+            snap,
           },
         });
 

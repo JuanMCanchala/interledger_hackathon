@@ -6,6 +6,8 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { SplitText } from 'gsap/SplitText';
 
 gsap.registerPlugin(ScrollTrigger, ScrollSmoother, SplitText, DrawSVGPlugin);
+// Phones resize the viewport as the address bar hides; re-measuring then makes pinned sections jump.
+ScrollTrigger.config({ ignoreMobileResize: true });
 
 export const MOTION = '(prefers-reduced-motion: no-preference)';
 const NAV_OFFSET_PX = 72;

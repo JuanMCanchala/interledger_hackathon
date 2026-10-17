@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
-import { MOTION, animate, scrollToSection, ScrollSmoother } from '../../core/motion';
+import { FINE_POINTER, animate, scrollToSection, ScrollSmoother } from '../../core/motion';
 import { Cursor } from '../../shared/ui/cursor';
 import { Loader } from './loader/loader';
 import { Nav } from './nav/nav';
@@ -28,7 +28,8 @@ export default class Landing implements OnInit {
 
   constructor() {
     animate((mm) =>
-      mm.add(MOTION, () => {
+      // Touch screens keep their native scroll: smoothing it there fights the finger.
+      mm.add(FINE_POINTER, () => {
         const smoother = ScrollSmoother.create({
           wrapper: '#smooth-wrapper',
           content: '#smooth-content',
