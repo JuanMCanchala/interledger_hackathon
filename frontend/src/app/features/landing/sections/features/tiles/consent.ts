@@ -5,7 +5,7 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h3>Das permiso una sola vez</h3>
-    <p>Tú decides cuánto se puede mover al día y a dónde va cada venta. Lo cambias o lo cancelas cuando quieras.</p>
+    <p>Tú decides cuánto se puede mover al mes y a dónde va cada venta. Lo cambias o lo cancelas cuando quieras.</p>
     <button type="button" role="switch" class="switch" [attr.aria-checked]="allowed()" (click)="allowed.update((on) => !on)">
       <span class="knob" aria-hidden="true"></span>
       {{ allowed() ? 'Permiso activo' : 'Dar permiso' }}
@@ -46,5 +46,5 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 })
 export class ConsentTile {
   protected readonly allowed = signal(false);
-  protected readonly limits = ['Hasta $ 30.000 al día', 'Solo hacia tus bolsillos', 'Lo cancelas cuando quieras'];
+  protected readonly limits = ['Hasta $ 600.000 al mes', 'Solo hacia tus bolsillos', 'Lo cancelas cuando quieras'];
 }
