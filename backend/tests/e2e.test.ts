@@ -438,9 +438,9 @@ describe("cash sales over HTTP", () => {
     // It counts toward the quota, but nothing is set aside in the wallet yet.
     expect(microcredit).toMatchObject({ paidThisMonth: cop("300000"), inCash: cop("300000"), reserved: cop("0") });
 
-    // A deposit short of the oldest share releases nothing and is kept as credit.
+    // A deposit short of the oldest share releases nothing yet, is kept as credit, and reduces what is still left to deposit.
     const short = await call("POST", `/api/merchants/${id}/cash-deposits`, { amount: "500" }, token);
-    expect(short.body).toMatchObject({ sent: cop("0"), reserved: cop("0"), credit: cop("50000"), stillInCash: cop("400000") });
+    expect(short.body).toMatchObject({ sent: cop("0"), reserved: cop("0"), credit: cop("50000"), stillInCash: cop("350000") });
 
     // With the rest it releases both: the savings share leaves now, the debt's waits for its day.
     const rest = await call("POST", `/api/merchants/${id}/cash-deposits`, { amount: "4000" }, token);

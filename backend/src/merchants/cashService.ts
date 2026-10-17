@@ -75,15 +75,28 @@ export class CashService {
     return { sale: await this.sales.view((await this.store.getSale(sale.id))!) };
   }
 
-  /** The shares of cash sales waiting for a deposit, per rule, and their total. */
+  /** The shares of cash sales waiting for a deposit, per rule, and their total (after subtracting any partial cash credit already deposited). */
   async inCash(merchantId: string): Promise<{ total: bigint; byRule: Record<string, bigint> }> {
+    const merchant = await this.merchants.require(merchantId);
+    let remainingCredit = BigInt(merchant.cashCredit?.value ?? "0");
     const byRule: Record<string, bigint> = {};
     let total = 0n;
-    for (const sale of await this.store.listSales({ merchantId })) {
+    const sales = (await this.store.listSales({ merchantId }))
+      .filter((sale) => sale.settlement.items.some((item) => item.status === "cash"))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+    for (const sale of sales) {
       for (const item of sale.settlement.items) {
         if (item.status !== "cash") continue;
-        byRule[item.ruleId] = (byRule[item.ruleId] ?? 0n) + BigInt(item.amount.value);
-        total += BigInt(item.amount.value);
+        let amount = BigInt(item.amount.value);
+        if (remainingCredit > 0n) {
+          const covered = remainingCredit >= amount ? amount : remainingCredit;
+          amount -= covered;
+          remainingCredit -= covered;
+        }
+        if (amount <= 0n) continue;
+        byRule[item.ruleId] = (byRule[item.ruleId] ?? 0n) + amount;
+        total += amount;
       }
     }
     return { total, byRule };
