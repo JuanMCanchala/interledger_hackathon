@@ -1004,7 +1004,7 @@ export default class MerchantPage implements OnInit {
   }
 
   private isSaleFinal(sale: SaleView): boolean {
-    if (sale.status === 'failed') return true;
+    if (sale.status === 'failed' || sale.status === 'cancelled') return true;
     return (
       sale.status === 'paid' &&
       ['done', 'skipped'].includes(sale.settlement?.status || '') &&

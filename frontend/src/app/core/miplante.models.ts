@@ -77,7 +77,8 @@ export interface SaleView {
   amount: Amount;
   pending?: Amount;
   description?: string;
-  status: 'open' | 'awaiting-consent' | 'processing' | 'paid' | 'failed';
+  /** `cancelled`: replaced by a newer sale before anyone paid it. */
+  status: 'open' | 'awaiting-consent' | 'processing' | 'paid' | 'failed' | 'cancelled';
   error?: string;
   payUrl?: string;
   checkoutUrl?: string;

@@ -98,7 +98,7 @@ const MAX_POLLS = 400;
               <app-steps-indicator
                 [labels]="stepLabels"
                 [doneFlags]="stepFlags(s)"
-                [active]="s.status !== 'failed' && s.status !== 'paid'"
+                [active]="s.status !== 'failed' && s.status !== 'paid' && s.status !== 'cancelled'"
                 ariaLabel="Pasos del pago"
               />
             }
@@ -193,6 +193,9 @@ export default class PayPage implements OnInit {
   protected readonly displayError = computed(() => {
     if (this.submitError()) return this.submitError();
     const s = this.sale();
+    if (s?.status === 'cancelled') {
+      return 'Este cobro se reemplazó por uno nuevo. Pide al negocio el código vigente para pagar.';
+    }
     if (s?.status === 'failed') {
       return `El pago no se completó${s.error ? `: ${s.error}` : ''}. Puedes intentarlo de nuevo.`;
     }
@@ -230,7 +233,7 @@ export default class PayPage implements OnInit {
   }
 
   private isFinal(s: SaleView): boolean {
-    if (s.status === 'failed') return true;
+    if (s.status === 'failed' || s.status === 'cancelled') return true;
     return (
       s.status === 'paid' &&
       ['done', 'skipped'].includes(s.settlement?.status || '') &&

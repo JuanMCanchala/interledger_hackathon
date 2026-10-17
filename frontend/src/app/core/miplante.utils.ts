@@ -29,6 +29,7 @@ export const SALE_STATUS: Record<string, StatusInfo> = {
   processing: { text: 'Pago en camino', tone: 'wait' },
   paid: { text: '¡Pagado!', tone: 'ok' },
   failed: { text: 'Pago fallido', tone: 'bad' },
+  cancelled: { text: 'Reemplazado', tone: 'neutral' },
 };
 
 export const CUSTOMER_STATUS: Record<string, StatusInfo> = {
@@ -37,6 +38,7 @@ export const CUSTOMER_STATUS: Record<string, StatusInfo> = {
   processing: { text: 'Procesando el pago', tone: 'wait' },
   paid: { text: 'Pagado', tone: 'ok' },
   failed: { text: 'No se completó', tone: 'bad' },
+  cancelled: { text: 'Cobro reemplazado', tone: 'neutral' },
 };
 
 export const ITEM_STATUS: Record<string, StatusInfo> = {

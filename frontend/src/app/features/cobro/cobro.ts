@@ -168,6 +168,12 @@ interface WakeLockLike {
             </div>
           }
 
+          @if (s.status === 'cancelled') {
+            <p class="banner banner-wait" role="status">
+              Este cobro se reemplazó por uno nuevo. Pide al negocio el código vigente.
+            </p>
+          }
+
           @if (s.status === 'failed') {
             <p class="banner banner-bad" role="alert">
               Este cobro no se completó. Pide al negocio que genere uno nuevo.
@@ -249,7 +255,7 @@ export default class CobroPage implements OnInit {
       this.missing.set(false);
       this.sale.set(s);
       this.title.setTitle(`${formatAmount(s.amount)} · ${s.merchantName || 'MiPlante'}`);
-      return s.status !== 'paid' && s.status !== 'failed';
+      return s.status !== 'paid' && s.status !== 'failed' && s.status !== 'cancelled';
     } catch (err: unknown) {
       const apiErr = err as ApiError;
       if (apiErr?.status === 404 || apiErr?.status === 400) {
