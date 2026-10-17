@@ -22,7 +22,7 @@
     grid-template-columns: repeat(4, 1fr);
     grid-template-areas:
       'network network consent consent'
-      'network network currencies change'
+      'network network currencies currencies'
       'elastic elastic history reminders';
   }
 }
@@ -79,10 +79,6 @@
 
   .currencies {
     grid-area: currencies;
-  }
-
-  .change {
-    grid-area: change;
   }
 
   .elastic {

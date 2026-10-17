@@ -43,7 +43,7 @@ export class Hero {
   protected readonly phrases = [
     'Si hoy no vendes, hoy no pagas',
     'Cada venta se reparte solita',
-    'Tu efectivo se vuelve digital',
+    'También registras tus ventas en efectivo',
     'Tu historial crece contigo',
   ];
   protected readonly floaters: readonly Floater[] = [

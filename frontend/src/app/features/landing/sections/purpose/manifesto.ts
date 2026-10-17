@@ -37,7 +37,7 @@ export const MANIFESTO: readonly Segment[] = [
   { value: '97,5 % recibe pagos en efectivo', source: 1 },
   ' y lo mezcla todo en un solo bolsillo. Cuando no alcanza, el «gota a gota» les cobra hasta ',
   { value: '382 % de interés al año', source: 3 },
-  '. MiPlante existe para que manejen sus deudas, su pensión, sus proveedores y sus gastos sin enredos.',
+  '. MiPlante existe para que manejen sus deudas, sus proveedores y sus gastos sin enredos. Y cada quien podrá crear sus propios bolsillos, como uno para su pensión.',
 ];
 
 export const isFigure = (segment: Segment): segment is Figure => typeof segment !== 'string';
