@@ -32,7 +32,12 @@ export const routes: Routes = [
     path: 'sandbox',
     loadComponent: () => import('./features/sandbox/sandbox'),
   },
-  // Support legacy .html URLs in SPA router as well
+  // Friendly Spanish aliases
+  { path: 'entrar', redirectTo: 'login' },
+  { path: 'registro', redirectTo: 'register' },
+  { path: 'tienda', redirectTo: 'merchant' },
+  { path: 'caja', redirectTo: 'merchant' },
+  // Legacy .html URLs
   { path: 'login.html', redirectTo: 'login' },
   { path: 'register.html', redirectTo: 'register' },
   { path: 'onboard.html', redirectTo: 'onboard' },
