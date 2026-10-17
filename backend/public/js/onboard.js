@@ -40,6 +40,7 @@ const DEFAULT_CATEGORIES = [
         destination: "proveedor-billeticos",
         sharePercent: 10,
         monthlyQuota: "200.000",
+        dueDay: 25,
       },
     ],
   },
@@ -54,6 +55,7 @@ const DEFAULT_CATEGORIES = [
         sharePercent: 15,
         monthlyQuota: "100.000",
         outstanding: "300.000",
+        dueDay: 15,
       },
     ],
   },
@@ -104,6 +106,7 @@ function addWallet(category, values = {}) {
   field(row, "sharePercent").value = values.sharePercent ?? "";
   field(row, "monthlyQuota").value = values.monthlyQuota ?? "";
   field(row, "outstanding").value = values.outstanding ?? "";
+  field(row, "dueDay").value = values.dueDay ?? (category.dataset.kind === "debt" ? 28 : "");
   moneyInput(field(row, "monthlyQuota"));
   moneyInput(field(row, "outstanding"));
   for (const debtField of row.querySelectorAll(".debt-only")) {
@@ -203,6 +206,7 @@ function readWallets() {
         : NaN,
       monthlyQuota: normalizeDecimal(field(row, "monthlyQuota").value),
       outstanding: normalizeDecimal(field(row, "outstanding").value),
+      dueDay: field(row, "dueDay").valueAsNumber,
     };
   });
 }
@@ -297,7 +301,7 @@ function renderSummary() {
           class: "num",
           text:
             w.kind === "debt"
-              ? `${w.sharePercent}% hasta ${pesos(w.monthlyQuota)} al mes`
+              ? `${w.sharePercent}% hasta ${pesos(w.monthlyQuota)} al mes, se paga el día ${w.dueDay}`
               : `${w.sharePercent}% de cada venta`,
         }),
       ),
@@ -408,6 +412,14 @@ function checkWallets() {
         `Escribe cuánto pagas al mes a "${where}", por ejemplo 200.000.`,
         field(w.row, "monthlyQuota"),
       );
+    if (
+      w.kind === "debt" &&
+      (!Number.isInteger(w.dueDay) || w.dueDay < 1 || w.dueDay > 28)
+    )
+      return fail(
+        `Escribe el día del mes en que le pagas a "${where}" (del 1 al 28).`,
+        field(w.row, "dueDay"),
+      );
   }
   const total = wallets.reduce((sum, w) => sum + w.sharePercent, 0);
   if (total > MAX_TOTAL_PERCENT)
@@ -492,7 +504,9 @@ function collect() {
       kind: w.kind,
       destination: normalizeWallet(w.destination),
       sharePercent: w.sharePercent,
-      ...(w.kind === "debt" ? { monthlyQuota: w.monthlyQuota } : {}),
+      ...(w.kind === "debt"
+        ? { monthlyQuota: w.monthlyQuota, dueDay: w.dueDay }
+        : {}),
       ...(w.kind === "debt" && w.outstanding
         ? { outstanding: w.outstanding }
         : {}),

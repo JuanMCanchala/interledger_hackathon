@@ -105,9 +105,9 @@
             </h2>
             <p class="muted small">
               Agrupa tus billeteras por categoría: puedes tener varios
-              proveedores o créditos y crear tus propias categorías. Cada
-              obligación tiene una cuota al mes; cuando se completa, deja de
-              descontarse hasta el mes siguiente.
+              proveedores o créditos y crear tus propias categorías. De cada
+              venta se aparta la parte de cada obligación hasta su cuota del
+              mes, y en su día de pago se le envía todo junto.
             </p>
             <div id="categories" class="stack"></div>
             <div class="new-category stack-sm">
@@ -244,6 +244,18 @@
             inputmode="numeric"
             autocomplete="off"
             placeholder="1.200.000"
+          />
+        </label>
+        <label class="field debt-only">
+          <span>Día de pago (1–28)</span>
+          <input
+            data-field="dueDay"
+            type="number"
+            min="1"
+            max="28"
+            step="1"
+            inputmode="numeric"
+            placeholder="25"
           />
         </label>
         <button type="button" class="btn btn-danger remove-wallet">Quitar</button>

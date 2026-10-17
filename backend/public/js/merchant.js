@@ -168,6 +168,7 @@ function render(m) {
   renderHome(m);
   if (changed($("goals"), [m.rules, m.month, m.monthlySalesGoal])) renderGoals(m);
   if (changed($("rules"), m.rules)) renderRules(m.rules);
+  if (changed($("payouts"), m.payouts)) renderPayouts(m.payouts);
   renderSettings(m);
 }
 
@@ -383,11 +384,13 @@ function renderGoals(m) {
         done: paid,
         target: quota,
         tone: "gold",
-        detail: `Cuota del mes: ${formatAmount(rule.paidThisMonth)} de ${formatAmount(rule.monthlyQuota)}`,
-        note:
+        detail: `Apartado este mes: ${formatAmount(rule.paidThisMonth)} de ${formatAmount(rule.monthlyQuota)}`,
+        note: [
           paid >= quota && quota > 0
             ? "Cuota completa: el resto del mes es ganancia."
             : projection({ done: paid, target: quota, dayOfMonth, daysInMonth, monthly: true }),
+          dueText(rule),
+        ].join(" "),
       }),
     );
   }
@@ -462,6 +465,15 @@ function renderRule(rule) {
   if (rule.kind === "debt") {
     const paid = amountOf(rule.paidThisMonth);
     const quota = amountOf(rule.monthlyQuota);
+    const pay = el("button", {
+      type: "button",
+      class: "btn btn-secondary",
+      text: "Pagar ahora",
+      disabled: amountOf(rule.reserved) <= 0,
+    });
+    pay.addEventListener("click", () =>
+      runPayout(pay, { ruleId: rule.id, reason: "manual" }, $("payout-message")),
+    );
     parts.push(
       el(
         "div",
@@ -472,8 +484,19 @@ function renderRule(rule) {
         ? badge("Cuota del mes completa: el resto es ganancia", "ok")
         : el("p", {
             class: "small",
-            text: `Este mes: pagado ${formatAmount(rule.paidThisMonth)} de ${formatAmount(rule.monthlyQuota)}`,
+            text: `Este mes: apartado ${formatAmount(rule.paidThisMonth)} de ${formatAmount(rule.monthlyQuota)}`,
           }),
+      el(
+        "div",
+        { class: "row between" },
+        el(
+          "p",
+          { class: "small" },
+          el("strong", { text: `Por enviar: ${formatAmount(rule.reserved)}` }),
+          el("span", { class: "muted", text: ` · ${dueText(rule)}` }),
+        ),
+        pay,
+      ),
     );
     if (rule.outstanding) {
       parts.push(
@@ -526,6 +549,80 @@ function renderRules(rules) {
   );
 }
 
+/** "Se le paga el 25 de octubre": the debt's next due day, this month or the next. */
+function dueText(rule) {
+  const day = rule.dueDay ?? 28;
+  const today = new Date();
+  const paidThisMonth = amountOf(rule.paidOutThisMonth) > 0 && amountOf(rule.reserved) <= 0;
+  const next =
+    today.getDate() <= day && !paidThisMonth
+      ? new Date(today.getFullYear(), today.getMonth(), day)
+      : new Date(today.getFullYear(), today.getMonth() + 1, day);
+  return `Se le paga el ${next.toLocaleDateString("es-CO", { day: "numeric", month: "long" })}.`;
+}
+
+const PAYOUT_STATUS = {
+  processing: { text: "Enviando…", tone: "wait" },
+  completed: { text: "Pagado", tone: "ok" },
+  failed: { text: "Falló", tone: "bad" },
+};
+
+function renderPayouts(payouts = []) {
+  $("no-payouts").hidden = payouts.length > 0;
+  $("payouts").replaceChildren(
+    ...payouts.map((payout) =>
+      el(
+        "li",
+        { class: "list-item" },
+        el(
+          "div",
+          { class: "row between" },
+          el("strong", { text: payout.label }),
+          statusBadge(PAYOUT_STATUS, payout.status),
+        ),
+        el("p", {
+          class: "small",
+          text: `${formatAmount(payout.amount)} · ${payout.reason === "manual" ? "pagado antes de su fecha" : "pago de su fecha"} · ${new Date(payout.createdAt).toLocaleDateString("es-CO", { day: "numeric", month: "short" })} ${formatTime(payout.createdAt)}`,
+        }),
+        payout.error ? el("p", { class: "error-text small", text: payout.error }) : null,
+      ),
+    ),
+  );
+}
+
+/** Pays reserved debts now (one, or all as on their due day) and shows what was sent. */
+async function runPayout(button, body, messageBox) {
+  showMessage(messageBox, "");
+  try {
+    await withBusy(button, "Enviando…", async () => {
+      const { payouts } = await postJson(`${merchantPath}/payouts`, body);
+      const sent = payouts.filter((p) => p.status !== "failed");
+      const failed = payouts.filter((p) => p.status === "failed");
+      showMessage(
+        messageBox,
+        [
+          sent.length
+            ? `Enviado: ${sent.map((p) => `${p.label} ${formatAmount(p.amount)}`).join(" · ")}.`
+            : "",
+          failed.length
+            ? `No se pudo enviar a ${failed.map((p) => p.label).join(", ")}: el dinero sigue apartado.`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+        failed.length ? "bad" : "ok",
+      );
+      await loadMerchant();
+    });
+  } catch (error) {
+    showMessage(messageBox, error.message);
+  }
+}
+
+$("simulate-due").addEventListener("click", () =>
+  runPayout($("simulate-due"), { reason: "due-date" }, $("simulate-message")),
+);
+
 let editor = null;
 
 function openRulesEditor() {
@@ -555,6 +652,7 @@ function openRulesEditor() {
       monthlyQuota: toDecimal(rule.monthlyQuota),
       outstanding: toDecimal(rule.outstanding),
       savingsGoal: toDecimal(rule.savingsGoal),
+      dueDay: rule.dueDay,
       destination: walletName(rule.destination),
     });
   }
@@ -572,7 +670,7 @@ function setEditing(editing) {
 $("edit-rules").addEventListener("click", openRulesEditor);
 $("cancel-rules").addEventListener("click", () => setEditing(false));
 $("add-rule").addEventListener("click", () =>
-  editor?.add({ label: "Proveedor", category: "Proveedores", kind: "debt" }),
+  editor?.add({ label: "Proveedor", category: "Proveedores", kind: "debt", dueDay: 25 }),
 );
 $("rules-form").addEventListener("input", () => {
   editor?.render();

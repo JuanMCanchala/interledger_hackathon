@@ -40,6 +40,9 @@ export function createRulesEditor({
     field(row, "kind").value = values.kind ?? "debt";
     field(row, "monthlyQuota").value = values.monthlyQuota ?? "";
     field(row, "savingsGoal").value = values.savingsGoal ?? "";
+    // A debt without a stored due day is paid on the 28th, as the server does.
+    field(row, "dueDay").value =
+      values.dueDay ?? ((values.kind ?? "debt") === "debt" ? 28 : "");
     field(row, "sharePercent").value = values.sharePercent ?? "";
     field(row, "outstanding").value = values.outstanding ?? "";
     field(row, "destination").value = values.destination ?? "";
@@ -106,6 +109,7 @@ export function createRulesEditor({
           kind === "savings"
             ? normalizeDecimal(field(row, "savingsGoal").value)
             : "",
+        dueDay: kind === "debt" ? field(row, "dueDay").valueAsNumber : NaN,
       };
     });
   }
@@ -239,7 +243,13 @@ export function createRulesEditor({
         sharePercent: rule.sharePercent,
       };
       if (rule.id) body.id = rule.id;
-      if (rule.kind === "debt") body.monthlyQuota = rule.monthlyQuota;
+      if (rule.kind === "debt") {
+        if (!Number.isInteger(rule.dueDay) || rule.dueDay < 1 || rule.dueDay > 28) {
+          throw new Error(`${position}: el día de pago va del 1 al 28`);
+        }
+        body.monthlyQuota = rule.monthlyQuota;
+        body.dueDay = rule.dueDay;
+      }
       if (rule.kind === "savings" && rule.savingsGoal) {
         body.savingsGoal = rule.savingsGoal;
       }

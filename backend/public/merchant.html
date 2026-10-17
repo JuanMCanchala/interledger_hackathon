@@ -338,6 +338,19 @@
               </form>
               <p id="rules-saved" class="banner banner-ok" role="status" hidden></p>
             </section>
+
+            <section class="card stack" aria-labelledby="payouts-title">
+              <div class="stack-sm">
+                <h2 id="payouts-title">Pagos a proveedores y créditos</h2>
+                <p class="muted small">
+                  De cada venta se aparta su parte en tu billetera, y el día de
+                  pago se le envía todo junto en un solo pago.
+                </p>
+              </div>
+              <p id="payout-message" class="banner" role="status" hidden></p>
+              <ul class="list" id="payouts"></ul>
+              <p class="muted small" id="no-payouts">Todavía no hay pagos.</p>
+            </section>
           </section>
 
           <!-- Ajustes ----------------------------------------------------------------------- -->
@@ -404,6 +417,19 @@
                 </button>
               </form>
 
+              <section class="card stack" aria-labelledby="simulate-title">
+                <h2 id="simulate-title">Simular fecha de pago</h2>
+                <p class="muted small">
+                  Para la demo: envía ya a cada proveedor y crédito lo que lleva
+                  apartado, como si hoy fuera su día de pago. Ese mes ya no se
+                  vuelve a pagar en su fecha.
+                </p>
+                <p id="simulate-message" class="banner" role="status" hidden></p>
+                <button type="button" class="btn btn-secondary" id="simulate-due">
+                  Simular que llegó la fecha de pago
+                </button>
+              </section>
+
               <section class="card stack">
                 <h2>Tu cuenta</h2>
                 <p>
@@ -468,6 +494,10 @@
         <label class="field debt-only">
           <span>Deuda total (opcional)</span>
           <input data-field="outstanding" inputmode="decimal" autocomplete="off" placeholder="300.000" />
+        </label>
+        <label class="field debt-only">
+          <span>Día de pago (1–28)</span>
+          <input data-field="dueDay" type="number" min="1" max="28" step="1" inputmode="numeric" placeholder="25" />
         </label>
         <label class="field savings-only">
           <span>Meta de ahorro (opcional)</span>

@@ -41,6 +41,7 @@ export const ITEM_STATUS = {
   completed: { text: "Enviado", tone: "ok" },
   failed: { text: "Falló", tone: "bad" },
   skipped: { text: "Límite mensual alcanzado", tone: "neutral" },
+  reserved: { text: "Apartado para su día de pago", tone: "info" },
 };
 
 export const RULE_KIND = {
