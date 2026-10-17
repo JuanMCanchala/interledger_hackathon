@@ -44,6 +44,9 @@ shop's infrastructure.
   `preparar_cobro` covers the rest (between $100 and $100.000.000, only with an active consent). If
   the till cannot charge she says why. A QR only asks the customer to pay: paying a creditor,
   retrying a payout and using the emergency fund stay buttons in the till.
+- **Cash too (ADR 0019).** "Vendí 15 mil en efectivo" records a cash sale and "consigné 50 mil" a
+  deposit, read on the device first and through two strict tools otherwise; the state she gets
+  includes what is still to deposit.
 - **Data minimization.** Wallet addresses, tokens and ids are never sent to the model, only labels,
   amounts and dates. The conversation is not stored on the server; the browser keeps it for the
   visit (`sessionStorage`).

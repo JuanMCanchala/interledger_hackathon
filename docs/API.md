@@ -241,6 +241,20 @@ No session: what the counter display shows. `200 { "shopName": "…", "sale": Pu
 with the shop's newest sale from the last 30 minutes while it waits for the customer, or for a
 minute after it is paid, and `null` otherwise. `404` once the shop changed the link.
 
+### `POST /api/merchants/:id/cash-sales`
+
+A sale paid in cash (ADR 0019): `{ "amount": "20000", "description"?: "Mercado" }` → `201 { "sale" }`,
+with `method: "cash"`, `status: "paid"` and its settlement items in `cash` status: counted and split,
+nothing sent. The merchant view carries `cash: { today, month, toDeposit, credit }` and, per rule,
+`inCash`.
+
+### `POST /api/merchants/:id/cash-deposits`
+
+`{ "amount": "4000" }` → `201 { "deposited", "sent", "reserved", "stillInCash", "credit", "paidNow": [label],
+"failed": [label] }`. The deposit releases the oldest cash shares it covers, whole: savings are sent
+now, debts reserved for their due day (or paid now if it already went out this month); what is left
+over is kept as credit. `409` if the monthly consent is not active.
+
 ### `POST /api/merchants/:id/consent`
 
 Asks for the monthly-capped consent again, with the same cap and rules, when the first attempt was
