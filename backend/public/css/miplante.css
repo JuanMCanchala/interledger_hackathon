@@ -1537,3 +1537,8 @@ fieldset {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* A profit below zero: the month paid creditors more than it sold. */
+.is-negative {
+  color: var(--danger);
+}

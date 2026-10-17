@@ -207,10 +207,12 @@ function renderHome(m) {
   $("today-kept").textContent = formatAmount(m.today.kept);
   $("today-allocated").textContent = formatAmount(m.today.allocated);
   $("month-gross").textContent = formatAmount(m.month.gross);
-  $("month-kept").textContent = formatAmount(m.month.kept);
+  $("month-kept").textContent = formatAmount(m.month.realProfit ?? m.month.kept);
+  $("month-kept").classList.toggle("is-negative", amountOf(m.month.realProfit) < 0);
 
   renderMonthChart(m);
   if (changed($("month-split"), [m.month, m.rules])) renderMonthSplit(m);
+  renderProfitChart(m);
 
   $("monthly-cap").textContent = `Límite: ${formatAmount(m.monthlyCap)}`;
   const spent = amountOf(m.spentThisMonth);
@@ -240,43 +242,71 @@ function renderMonthChart(m) {
   });
 }
 
-/** This month's money: what the shop kept and what each category received. */
+/**
+ * This month's money as it really is: the profit left after what due-day payouts took from it, what
+ * went to creditors (and how much of that came from profit), what is still set aside for them, and
+ * what went to savings.
+ */
 function renderMonthSplit(m) {
-  const gross = amountOf(m.month.gross);
-  const kept = amountOf(m.month.kept);
-  const categories = new Map();
-  for (const rule of m.rules) {
-    const name = rule.category || RULE_KIND[rule.kind];
-    const entry = categories.get(name) ?? { kind: rule.kind, amount: 0 };
-    entry.amount += amountOf(rule.paidThisMonth);
-    categories.set(name, entry);
-  }
-  const width = (value) => `${gross > 0 ? (value * 100) / gross : 0}%`;
+  const zero = { ...asset(), value: "0" };
+  const b = m.month.breakdown ?? {
+    sentToSavings: zero,
+    paidToCreditors: zero,
+    fromProfit: zero,
+    reservedPending: zero,
+  };
+  const real = amountOf(m.month.realProfit ?? m.month.kept);
+  const rows = [
+    { label: "Ganancia real para ti", amount: m.month.realProfit ?? m.month.kept, value: real, seg: "seg-kept", kept: true },
+    {
+      label: "Pagado a tus acreedores",
+      amount: b.paidToCreditors,
+      value: amountOf(b.paidToCreditors),
+      seg: "seg-debt",
+      note: amountOf(b.fromProfit) > 0 ? `${formatAmount(b.fromProfit)} salieron de tus ganancias` : "",
+    },
+    { label: "Apartado por pagar", amount: b.reservedPending, value: amountOf(b.reservedPending), seg: "seg-debt" },
+    { label: "Enviado a tu ahorro", amount: b.sentToSavings, value: amountOf(b.sentToSavings), seg: "seg-savings" },
+  ];
+  const total = rows.reduce((t, r) => t + Math.max(0, r.value), 0);
   $("month-bar").replaceChildren(
-    el("span", { class: "seg-kept", style: `width: ${gross > 0 ? width(kept) : "100%"}` }),
-    ...[...categories.values()].map((entry) =>
-      el("span", {
-        class: entry.kind === "debt" ? "seg-debt" : "seg-savings",
-        style: `width: ${width(entry.amount)}`,
-      }),
-    ),
+    ...rows
+      .filter((r) => r.value > 0)
+      .map((r) => el("span", { class: r.seg, style: `width: ${total > 0 ? (r.value * 100) / total : 0}%` })),
   );
   $("month-split").replaceChildren(
-    el(
-      "li",
-      { class: "split-item is-kept" },
-      el("span", { class: "split-label", text: "Ganancia para ti" }),
-      el("span", { class: "split-amount", text: formatAmount(m.month.kept) }),
-    ),
-    ...[...categories].map(([name, entry]) =>
+    ...rows.map((r) =>
       el(
         "li",
-        { class: "split-item" },
-        el("span", { class: "split-label", text: name }),
-        el("span", { class: "split-amount", text: money(entry.amount) }),
+        { class: `split-item${r.kept ? " is-kept" : ""}` },
+        el("span", { class: "split-label", text: r.label }),
+        el("span", {
+          class: `split-amount${r.value < 0 ? " is-negative" : ""}`,
+          text: formatAmount(r.amount),
+        }),
+        r.note ? el("p", { class: "split-detail small muted", text: r.note }) : null,
       ),
     ),
   );
+}
+
+/** Each day's real profit; a day a payout took more than was sold shows at zero and says so. */
+function renderProfitChart(m) {
+  const { month } = m;
+  const negative = month.days.filter((d) => amountOf(d.realProfit) < 0);
+  const total = month.realProfit ?? month.kept;
+  $("profit-caption").textContent = negative.length
+    ? `Este mes llevas ${formatAmount(total)} de ganancia real. ${negative.length === 1 ? "Un día" : `${negative.length} días`} salió más de lo que entró, por completar cuotas con tus ganancias.`
+    : `Este mes llevas ${formatAmount(total)} de ganancia real.`;
+  barChart($("profit-chart"), {
+    bars: month.days.map((day, index) => ({
+      label: String(index + 1),
+      value: Math.max(0, amountOf(day.realProfit ?? day.gross)),
+      title: `${formatDay(day.date)}: ${formatAmount(day.realProfit ?? day.gross)} de ganancia real`,
+      highlight: index === month.days.length - 1,
+    })),
+    summary: `Ganancia real por día este mes: ${formatAmount(total)} en total`,
+  });
 }
 
 function renderSales(sales) {

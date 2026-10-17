@@ -118,7 +118,7 @@
                   <p class="stat-value" id="month-gross">—</p>
                 </div>
                 <div class="stat">
-                  <p class="stat-label">Ganancia del mes</p>
+                  <p class="stat-label">Ganancia real del mes</p>
                   <p class="stat-value" id="month-kept">—</p>
                 </div>
               </div>
@@ -143,9 +143,23 @@
               </section>
 
               <section class="card stack" aria-labelledby="money-title">
-                <h2 id="money-title">A dónde fue tu dinero este mes</h2>
+                <div class="stack-sm">
+                  <h2 id="money-title">A dónde fue tu dinero este mes</h2>
+                  <p class="muted small">
+                    Tu ganancia real ya descuenta lo que salió de ella para
+                    completar las cuotas de tus acreedores.
+                  </p>
+                </div>
                 <div class="stacked-bar" id="month-bar" aria-hidden="true"></div>
                 <ul class="split" id="month-split"></ul>
+              </section>
+
+              <section class="card stack" aria-labelledby="profit-title">
+                <div class="stack-sm">
+                  <h2 id="profit-title">Tu ganancia real por día</h2>
+                  <p class="muted small" id="profit-caption"></p>
+                </div>
+                <div class="chart-box" id="profit-chart"></div>
               </section>
 
               <section class="card stack" aria-labelledby="cap-title">
