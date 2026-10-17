@@ -80,7 +80,8 @@ async function refresh() {
   try {
     return render(await api(`/api/sales/${encodeURIComponent(saleId)}`));
   } catch (error) {
-    if (error.status === 404) {
+    // A damaged QR or link: the same friendly message as a sale that does not exist.
+    if (error.status === 404 || error.status === 400) {
       $("missing").hidden = false;
       $("cobro").hidden = true;
       return false;

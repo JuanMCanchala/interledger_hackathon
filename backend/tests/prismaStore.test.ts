@@ -98,6 +98,12 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect((await store.getSale(saleId))!.settlement.items).toHaveLength(2);
   });
 
+  it("finds nothing for an id that is not a UUID, instead of failing", async () => {
+    expect(await store.getSale("not-a-real-id")).toBeUndefined();
+    expect(await store.getMerchant("nope")).toBeUndefined();
+    expect(await store.getPayment("123")).toBeUndefined();
+  });
+
   it("lets only one claim win", async () => {
     const env = setupMiPlante(store);
     const { saleId } = await paidSale(env);

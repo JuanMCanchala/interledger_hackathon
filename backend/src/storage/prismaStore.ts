@@ -42,6 +42,7 @@ export class PrismaStore implements Store {
   // Payments --------------------------------------------------------------------------------------
 
   async getPayment(id: string) {
+    if (!isUuid(id)) return undefined;
     const row = await this.prisma.payment.findUnique({ where: { id } });
     return row ? toPayment(row) : undefined;
   }
@@ -89,6 +90,7 @@ export class PrismaStore implements Store {
   // Mandates --------------------------------------------------------------------------------------
 
   async getMandate(id: string) {
+    if (!isUuid(id)) return undefined;
     const row = await this.prisma.mandate.findUnique({ where: { id } });
     return row ? toMandate(row) : undefined;
   }
@@ -119,6 +121,7 @@ export class PrismaStore implements Store {
   // Merchants -------------------------------------------------------------------------------------
 
   async getMerchant(id: string) {
+    if (!isUuid(id)) return undefined;
     const row = await this.prisma.merchant.findUnique({
       where: { id },
       include: merchantInclude,
@@ -254,6 +257,7 @@ export class PrismaStore implements Store {
   // Sales -----------------------------------------------------------------------------------------
 
   async getSale(id: string) {
+    if (!isUuid(id)) return undefined;
     const row = await this.prisma.sale.findUnique({
       where: { id },
       include: saleInclude,
@@ -370,6 +374,7 @@ export class PrismaStore implements Store {
   }
 
   async getUser(id: string) {
+    if (!isUuid(id)) return undefined;
     const row = await this.prisma.user.findUnique({ where: { id } });
     return row ? toUser(row) : undefined;
   }
@@ -651,4 +656,12 @@ function toUser(row: {
     passwordHash: row.passwordHash,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/**
+ * IDs are UUID columns: anything else (a mistyped link, a damaged QR) cannot exist, and PostgreSQL
+ * would reject the query, so the lookup simply finds nothing and the API answers 404.
+ */
+function isUuid(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
