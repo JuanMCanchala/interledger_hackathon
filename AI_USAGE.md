@@ -64,11 +64,12 @@ the wallets and keys, approving consents in the wallet, and configuring the doma
 
 ## Key prompts
 
-The full logs are in [`prompts/`](prompts/). These shaped the project the most:
+The full logs are in [`prompts/`](prompts/). These shaped the project the most (Juan's are quoted
+in their refined version; the original wording is at the end of his log):
 
-- **Open Payments first.** _"mientras elegimos la mejor idea agreguemos toda la logica para usar lo
-  obligatorio que es openpayments"_: the mandatory integration was built and tested before the idea
-  was chosen. ([Juan](prompts/juan-canchala.md))
+- **Open Payments first.** _"Mientras el equipo elige la idea, implementa la integración
+  obligatoria de Open Payments como una capa independiente del producto…"_: the mandatory
+  integration was built and tested before the idea was chosen. ([Juan](prompts/juan-canchala.md))
 - **Each sale is a payment request.** _"Determina si una página de terceros puede aprovechar la
   sesión del test wallet para conocer las billeteras del cliente…"_: research that led to the QR
   that opens the customer's wallet on the sale's incoming payment (ADR 0012).
@@ -76,6 +77,6 @@ The full logs are in [`prompts/`](prompts/). These shaped the project the most:
 - **A brand-aligned, multi-step app.** _"Asegúrate de un buen UX (ej: en lugar de formularios
   largos que requieren scroll, hazlo multistep)"_: the one-question-per-screen sign-up and
   onboarding. ([Isabella](prompts/isabella-pacheco.md))
-- **No bug reaches production.** _"vamos a ir pasando de dev a prod revisa que todo quede
-  funcionando a la perfeccion como lo de register ningun bug puede pasar a prod"_: the review gate
-  described above. ([Juan](prompts/juan-canchala.md))
+- **No bug reaches production.** _"Antes de promover `dev` → `qa` → `prod`, audita cada lote de
+  cambios del equipo… Reproduce cada hallazgo con una prueba que falle antes de corregirlo."_: the
+  review gate described above. ([Juan](prompts/juan-canchala.md))
