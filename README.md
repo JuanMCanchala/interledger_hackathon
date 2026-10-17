@@ -70,16 +70,16 @@ Integration details: [`docs/OPEN_PAYMENTS.md`](docs/OPEN_PAYMENTS.md).
 
 ```mermaid
 flowchart LR
-  subgraph Docker["🐳 docker-compose.yml · Railway in production"]
+  subgraph Docker["🐳 docker-compose.yml · Coolify or Railway in production"]
     subgraph Front["Container 1 · Frontend (:3001)"]
-      web["Angular PWA + GSAP<br/>Landing and brand system"]
-      proxy["nginx in production · ng serve in development<br/>proxies /api and the till pages"]
+      web["Angular PWA + GSAP<br/>Landing · Till + GlorIA · Onboarding · Checkout · Counter display · Sandbox"]
+      proxy["nginx in production · ng serve in development<br/>serves the app, proxies /api"]
     end
 
     subgraph Back["Container 2 · Backend (Express + Prisma :3000)"]
-      pages["Till · Onboarding · QR checkout · Sandbox<br/>backend/public, no build step"]
-      routes["Express routes + zod<br/>REST API and GNAP callbacks"]
-      services["MerchantService · SalesService · sweeper"]
+      routes["Express controllers + zod<br/>REST API and GNAP callbacks"]
+      services["Merchant · Sales · Cash · Payout services · sweeper"]
+      gloria["GlorIA assistant<br/>reads and prepares, never moves money"]
       domain["Allocation engine (pure BigInt)"]
       op["Open Payments adapter<br/>@interledger/open-payments SDK"]
       store["PrismaStore<br/>atomic conditional UPDATEs"]
@@ -94,10 +94,16 @@ flowchart LR
     wallets[("6 team wallets<br/>Tienda · Ahorro · Proveedor · Microcrédito · Clientes (COP/USD)")]
   end
 
+  subgraph AI["DeepSeek API (optional)"]
+    llm[("Chat model")]
+  end
+
   web --- proxy
   proxy -- "same domain" --> routes
-  proxy -- "same domain" --> pages
   routes --> services
+  routes --> gloria
+  gloria --> services
+  gloria -- "only with DEEPSEEK_API_KEY" --> llm
   services --> domain
   services --> op
   services --> store
@@ -105,14 +111,14 @@ flowchart LR
   op -- "GNAP grants, quotes and<br/>HTTP message signatures" --> wallets
 ```
 
-Three containers, the same in `docker-compose.yml` and on Railway:
+Three containers, the same in `docker-compose.yml` and in production (Coolify or Railway):
 
-- **Frontend:** the Angular landing (PWA, GSAP, the brand's design system). It also puts the backend
-  under the same domain: nginx in production and `ng serve` in development proxy `/api/*` and the
-  till, onboarding, checkout and sandbox pages. People, QR codes and the wallets' consent callbacks
-  only ever use the frontend URL.
-- **Backend:** Express, zod, Prisma and `@interledger/open-payments`. It serves the API and the
-  merchant and customer pages.
+- **Frontend:** the Angular PWA (GSAP, the brand's design system) with every page people use: the
+  landing, sign-in, onboarding, the till with GlorIA, the customer checkout, the counter display and
+  the sandbox. nginx in production and `ng serve` in development proxy `/api/*` to the backend, so
+  people, QR codes and the wallets' consent callbacks only ever use the frontend URL.
+- **Backend:** Express, zod, Prisma and `@interledger/open-payments`: the REST API and the GNAP
+  consent callbacks.
 - **Database:** PostgreSQL 16.
 
 Key architecture decisions are recorded as ADRs:
@@ -175,17 +181,19 @@ backend/
   src/
     auth/          shopkeeper accounts: scrypt passwords, session tokens
     domain/        allocation engine and Bogotá calendar (pure functions)
-    merchants/     onboarding, split rules, sales, settlement, payouts, dashboard
+    merchants/     onboarding, split rules, sales, cash sales, settlement, payouts, counter
+                   display, notifications, dashboard
     openPayments/  adapter over the SDK: grants, quotes, payments, hash, tokens
     storage/       Store port: PostgreSQL through Prisma, in memory for tests
     shared/        money (BigInt minor units) and errors
+    assistant/     GlorIA: the shop's live state, strict tools and the DeepSeek client
     http/          app.ts composes the app: controllers/ (one router per resource),
-                   middleware/ (CORS, errors, session token), pages.ts, schemas.ts (zod)
+                   middleware/ (CORS, errors, session token), schemas.ts (zod)
   prisma/          schema and migrations
-  public/          Spanish, mobile-first web client (no build step)
   tests/           Vitest: domain, flows against an Open Payments fake, HTTP, PostgreSQL
   scripts/         check-wallet diagnostic, demo-merchant setup, e2e-smoke
-frontend/          Angular PWA landing + the proxy (nginx / ng serve) to the backend
+frontend/          Angular PWA in Spanish, mobile first: landing, till, onboarding, checkout,
+                   counter display, sandbox and GlorIA, plus the /api proxy (nginx / ng serve)
 docs/              problem, ideation, product brief, ADRs, system design, API, demo
 ```
 
