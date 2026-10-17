@@ -1,5 +1,5 @@
 import {
-  homeOfSignedIn,
+  destinationAfterSignIn,
   param,
   postJson,
   safeNext,
@@ -22,7 +22,7 @@ if (next) {
 }
 
 async function goOn() {
-  window.location.replace(next || (await homeOfSignedIn()));
+  window.location.replace(await destinationAfterSignIn(next));
 }
 
 function fail(message, input) {

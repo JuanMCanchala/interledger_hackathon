@@ -140,6 +140,25 @@ export async function homeOfSignedIn() {
 }
 
 /**
+ * Where to go after signing in or up: the page the shopkeeper was opening, unless it is a till that
+ * is not this account's (a link from another account, or from before signing up). A new account,
+ * or a till link of someone else's shop, goes to its own place: its till, or setting up its shop.
+ */
+export async function destinationAfterSignIn(next) {
+  const home = await homeOfSignedIn();
+  if (!next) return home;
+  const wanted = new URL(next, window.location.origin);
+  if (wanted.pathname.replace(/\/$/, "") !== "/merchant") return next;
+  const ownId = new URL(home, window.location.origin).searchParams.get("id");
+  const wantedId = wanted.searchParams.get("id");
+  // "/merchant" without an id, or with this account's own: keep the tab it asked for.
+  if (ownId && (!wantedId || wantedId === ownId)) {
+    return `/merchant?id=${encodeURIComponent(ownId)}${wanted.hash}`;
+  }
+  return home;
+}
+
+/**
  * A `next` page from the URL, only if it is on this site. It is resolved as a URL rather than
  * matched as text: browsers read "/\evil.com" as "//evil.com", another site.
  */
