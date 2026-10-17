@@ -219,6 +219,37 @@ export class MerchantService {
   }
 
   /**
+   * Asks for the second consent that makes a savings wallet the last resort (ADR 0016): a grant on
+   * that wallet, capped like the shop's, to move money from it back to the shop when profit was not
+   * enough to pay a creditor. It is only used when the shopkeeper chooses to, on a failed payout.
+   */
+  async authorizeEmergency(id: string, ruleId?: string) {
+    const merchant = await this.require(id);
+    const savings = merchant.rules.filter((rule) => rule.kind === "savings");
+    const rule = ruleId ? savings.find((r) => r.id === ruleId) : savings[0];
+    if (!rule) {
+      throw new AppError(
+        ruleId ? "Esa billetera no es de ahorro" : "Agrega primero una billetera de ahorro en tus repartos",
+        409,
+      );
+    }
+    const { mandate, redirectUrl } = await this.flows.startMandate({
+      sender: rule.destination,
+      maxAmount: fromMinorUnits(merchant.monthlyCap.value, merchant.monthlyCap.assetScale),
+      interval: MONTHLY_INTERVAL,
+      intervalStart: startOfBogotaMonth(this.now()),
+      description: `MiPlante · ${rule.label} como último recurso de ${merchant.name}`,
+      returnTo: `/merchant?id=${merchant.id}#ajustes`,
+    });
+    const updated = await this.store.updateMerchant({
+      ...merchant,
+      emergency: { mandateId: mandate.id, ruleId: rule.id },
+      updatedAt: this.now().toISOString(),
+    });
+    return { merchant: await this.view(updated), redirectUrl };
+  }
+
+  /**
    * Asks the merchant for the monthly-capped consent again, with the same cap and rules, when the
    * first attempt was never approved, was rejected, or was revoked. An active consent is kept.
    */
@@ -389,6 +420,14 @@ export class MerchantService {
       monthlySalesGoal: merchant.monthlySalesGoal ?? null,
       /** A new monthly cap waiting for approval in the wallet. */
       pendingCap: merchant.pendingCap?.monthlyCap ?? null,
+      /** The savings wallet kept as the last resort, and whether its grant is approved. */
+      emergency: merchant.emergency
+        ? {
+            ruleId: merchant.emergency.ruleId,
+            label: merchant.rules.find((r) => r.id === merchant.emergency!.ruleId)?.label ?? null,
+            status: (await this.flows.findMandate(merchant.emergency.mandateId)).status,
+          }
+        : null,
       status: mandate.status,
       rules: merchant.rules,
       createdAt: merchant.createdAt,

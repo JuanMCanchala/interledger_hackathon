@@ -479,7 +479,9 @@ export class PrismaStore implements Store {
   async isMerchantMandate(mandateId: string) {
     if (!isUuid(mandateId)) return false;
     const count = await this.prisma.merchant.count({
-      where: { OR: [{ mandateId }, { pendingMandateId: mandateId }] },
+      where: {
+        OR: [{ mandateId }, { pendingMandateId: mandateId }, { emergencyMandateId: mandateId }],
+      },
     });
     return count > 0;
   }
@@ -559,6 +561,8 @@ function merchantColumns(record: MerchantRecord) {
       ? BigInt(record.pendingCap.monthlyCap.value)
       : null,
     pendingMandateId: record.pendingCap?.mandateId ?? null,
+    emergencyMandateId: record.emergency?.mandateId ?? null,
+    emergencyRuleId: record.emergency?.ruleId ?? null,
     mandateId: record.mandateId,
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt),
@@ -604,6 +608,10 @@ function toMerchant(row: MerchantRow): MerchantRecord {
             mandateId: row.pendingMandateId,
             monthlyCap: amount(row.pendingCap, asset),
           },
+    emergency:
+      row.emergencyMandateId === null || row.emergencyRuleId === null
+        ? undefined
+        : { mandateId: row.emergencyMandateId, ruleId: row.emergencyRuleId },
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

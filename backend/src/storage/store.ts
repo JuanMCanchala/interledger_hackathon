@@ -107,7 +107,10 @@ export interface Store {
   deleteSession(token: string): Promise<void>;
   /** The shop a user registered (the newest one if there are several). */
   getMerchantByOwner(ownerId: string): Promise<MerchantRecord | undefined>;
-  /** Whether a shop pays its splits with this mandate, or is waiting for it to approve a new cap. */
+  /**
+   * Whether a shop pays its splits with this mandate, is waiting for it to approve a new cap, or
+   * keeps it as its emergency fund's grant.
+   */
   isMerchantMandate(mandateId: string): Promise<boolean>;
 
   close(): Promise<void>;
@@ -311,7 +314,10 @@ export class MemoryStore implements Store {
 
   async isMerchantMandate(mandateId: string) {
     return [...this.merchants.values()].some(
-      (m) => m.mandateId === mandateId || m.pendingCap?.mandateId === mandateId,
+      (m) =>
+        m.mandateId === mandateId ||
+        m.pendingCap?.mandateId === mandateId ||
+        m.emergency?.mandateId === mandateId,
     );
   }
 

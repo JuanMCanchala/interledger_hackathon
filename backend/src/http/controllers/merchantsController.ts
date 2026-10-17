@@ -81,6 +81,13 @@ export function merchantsController({
     res.json(await payouts.markPaid(merchant.id, req.params.payoutId));
   });
 
+  /** The second consent: a savings wallet as the last resort to pay a creditor (ADR 0016). */
+  router.post("/:id/emergency", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    const { ruleId } = schemas.authorizeEmergency.parse(req.body);
+    res.status(201).json(await merchants.authorizeEmergency(merchant.id, ruleId));
+  });
+
   router.post("/:id/consent", async (req, res) => {
     const merchant = await ownedMerchant(req);
     res.status(201).json(await merchants.renewConsent(merchant.id));

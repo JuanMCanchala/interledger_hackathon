@@ -75,6 +75,9 @@ const rule = z.object({
 
 export const changeCap = z.object({ monthlyCap: decimalAmount });
 
+/** Which savings rule's wallet to keep as the last resort; the first one if not given. */
+export const authorizeEmergency = z.object({ ruleId: z.uuid().optional() });
+
 /** Pay one debt now, or every debt as if its due day had come (`due-date`, for the demo). */
 export const payout = z.object({
   ruleId: z.uuid().optional(),

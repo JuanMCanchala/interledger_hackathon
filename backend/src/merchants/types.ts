@@ -39,6 +39,11 @@ export interface MerchantRecord {
    * working until then; once approved, it replaces `mandateId` and `monthlyCap`.
    */
   pendingCap?: { mandateId: string; monthlyCap: Amount };
+  /**
+   * The last resort when profit is not enough to pay a creditor: a second grant, on the wallet of
+   * one of the shop's savings rules, to move money from it back to the shop (ADR 0016).
+   */
+  emergency?: { mandateId: string; ruleId: string };
   createdAt: string;
   updatedAt: string;
 }
