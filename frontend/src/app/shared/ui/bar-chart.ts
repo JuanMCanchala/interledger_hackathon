@@ -26,14 +26,14 @@ export interface BarEntry {
             [attr.width]="bar.width"
             [attr.height]="bar.height"
             rx="3"
-            [attr.class]="bar.highlight ? 'chart-bar is-today' : 'chart-bar'"
+            [attr.class]="bar.cls"
           >
             <title>{{ bar.title }}</title>
           </rect>
           @if (bar.showLabel) {
             <text
               [attr.x]="bar.labelX"
-              [attr.y]="height + 14"
+              [attr.y]="height + 13"
               class="chart-label"
               text-anchor="middle"
             >
@@ -62,12 +62,12 @@ export class BarChart {
   readonly goalLabel = input<string>('');
   readonly summary = input<string>('');
 
-  protected readonly height = 140;
-  private readonly top = 12;
-  private readonly slot = 16;
+  protected readonly height = 96;
+  private readonly top = 10;
+  private readonly slot = 20;
 
   protected readonly chartWidth = computed(() =>
-    Math.max(this.bars().length * this.slot, this.slot * 7),
+    Math.max(this.bars().length * this.slot, this.slot * 10),
   );
 
   private readonly maxVal = computed(() =>
@@ -81,12 +81,19 @@ export class BarChart {
   protected readonly computedBars = computed(() => {
     const list = this.bars();
     return list.map((bar, index) => {
+      const hasValue = bar.value > 0;
       const yVal = this.yFor(bar.value);
-      const barHeight = Math.max(bar.value > 0 ? 2 : 0, this.height - yVal);
+      const barHeight = hasValue ? Math.max(4, this.height - yVal) : 2.5;
       const day = index + 1;
-      const showLabel = day === 1 || day % 5 === 0 || index === list.length - 1;
+      const showLabel = day === 1 || day % 3 === 0 || index === list.length - 1;
+      const cls = bar.highlight
+        ? 'chart-bar is-today'
+        : hasValue
+          ? 'chart-bar'
+          : 'chart-bar is-empty';
       return {
         ...bar,
+        cls,
         x: index * this.slot + 3,
         y: this.height - barHeight,
         width: this.slot - 6,
