@@ -5,7 +5,6 @@
 
 export const STORAGE_KEYS = {
   session: "miplante.session",
-  merchantId: "miplante.merchantId",
   merchantWallet: "miplante.merchantWallet",
   customerWallet: "miplante.customerWallet",
 };

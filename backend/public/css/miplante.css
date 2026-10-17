@@ -1133,3 +1133,133 @@ fieldset {
 .summary-card .split-amount {
   font-size: 1.1rem;
 }
+
+/* Onboarding stepper ------------------------------------------------------------------------- */
+
+.wizard {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wizard button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wizard button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.wizard-n {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.8rem;
+}
+
+.wizard .is-current button {
+  border-color: var(--brand);
+  color: var(--text);
+}
+
+.wizard .is-current .wizard-n {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+.wizard .is-done button {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border));
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wizard-nav #next {
+  margin-left: auto;
+}
+
+.category {
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.category-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.category-head h3 {
+  margin: 0;
+}
+
+.wallet-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.wallet-row input {
+  background: var(--surface);
+}
+
+.new-category {
+  padding: 14px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.new-category-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 520px) {
+  .wallet-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wallet-row .remove-wallet {
+    align-self: end;
+  }
+
+  .new-category-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}

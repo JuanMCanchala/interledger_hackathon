@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Registra tu negocio · MiPlante</title>
+    <title>Configura tu tienda · MiPlante</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/css/miplante.css" />
     <script type="module" src="/js/onboard.js"></script>
@@ -35,19 +35,35 @@
 
       <main class="narrow stack">
         <div class="stack-sm">
-          <p class="eyebrow">Registro · 1 minuto</p>
-          <h1 class="h1-sm">Registra tu negocio en 3 pasos</h1>
+          <p class="eyebrow">Configura tu tienda</p>
+          <h1 class="h1-sm">Tu tienda en 3 pasos</h1>
           <p class="lead">
-            Cada vez que vendas, una pequeña parte se va sola a pagar tus deudas
-            y a tu ahorro. Al final apruebas todo una sola vez en tu billetera.
+            Cada venta paga sola tus obligaciones del mes. Cuando las completas,
+            todo lo que entra es ganancia tuya.
           </p>
         </div>
 
+        <ol class="wizard" id="wizard" aria-label="Pasos de la configuración">
+          <li data-step="0">
+            <button type="button"><span class="wizard-n">1</span> Tienda</button>
+          </li>
+          <li data-step="1">
+            <button type="button"><span class="wizard-n">2</span> Billeteras</button>
+          </li>
+          <li data-step="2">
+            <button type="button"><span class="wizard-n">3</span> Límite</button>
+          </li>
+        </ol>
+
         <form id="onboard-form" class="stack" novalidate>
-          <!-- Paso 1 -->
-          <section class="card stack" aria-labelledby="step1-title">
+          <!-- Paso 1: la tienda -->
+          <section
+            class="card stack wizard-panel"
+            data-panel="0"
+            aria-labelledby="step1-title"
+          >
             <h2 class="step-title" id="step1-title">
-              <span class="step-number" aria-hidden="true">1</span> Tu negocio
+              <span class="step-number" aria-hidden="true">1</span> Tu tienda
             </h2>
             <label class="field">
               <span>¿Cómo se llama tu negocio?</span>
@@ -59,7 +75,7 @@
               />
             </label>
             <label class="field">
-              <span>¿Cuál es tu billetera?</span>
+              <span>¿Cuál es la billetera de tu negocio?</span>
               <input
                 id="business-wallet"
                 maxlength="300"
@@ -69,73 +85,112 @@
                 placeholder="Ej: tienda-billeticos"
               />
               <small class="hint"
-                >Escribe solo el nombre de tu billetera. Ahí te pagan tus
-                clientes.</small
+                >Escribe solo su nombre. Ahí te pagan tus clientes y de ahí salen
+                los pagos automáticos.</small
               >
               <small class="check" id="wallet-check" aria-live="polite"></small>
             </label>
           </section>
 
-          <!-- Paso 2 -->
-          <section class="card stack" aria-labelledby="step2-title">
+          <!-- Paso 2: billeteras por categoría -->
+          <section
+            class="card stack wizard-panel"
+            data-panel="1"
+            aria-labelledby="step2-title"
+            hidden
+          >
             <h2 class="step-title" id="step2-title">
-              <span class="step-number" aria-hidden="true">2</span> ¿Qué se paga
-              solo con tus ventas?
+              <span class="step-number" aria-hidden="true">2</span> ¿A dónde va
+              cada parte?
             </h2>
             <p class="muted small">
-              Elige una o varias. De cada venta sale un pedacito para cada una.
+              Agrupa tus billeteras por categoría: puedes tener varios
+              proveedores o créditos y crear tus propias categorías. Cada
+              obligación tiene una cuota al mes; cuando se completa, deja de
+              descontarse hasta el mes siguiente.
             </p>
-            <div id="goals" class="stack"></div>
+            <div id="categories" class="stack"></div>
+            <div class="new-category stack-sm">
+              <p class="field-legend">Crear otra categoría</p>
+              <div class="new-category-row">
+                <label class="field">
+                  <span>Nombre</span>
+                  <input
+                    id="new-category-name"
+                    maxlength="40"
+                    placeholder="Ej: Arriendo"
+                  />
+                </label>
+                <label class="field">
+                  <span>Tipo</span>
+                  <select id="new-category-kind">
+                    <option value="debt">Obligación con cuota mensual</option>
+                    <option value="savings">Ahorro</option>
+                  </select>
+                </label>
+                <button type="button" class="btn btn-secondary" id="add-category">
+                  + Crear
+                </button>
+              </div>
+            </div>
+            <p class="small" id="share-total" aria-live="polite"></p>
           </section>
 
-          <!-- Paso 3 -->
-          <section class="card stack" aria-labelledby="step3-title">
+          <!-- Paso 3: límite mensual y resumen -->
+          <section
+            class="card stack wizard-panel"
+            data-panel="2"
+            aria-labelledby="step3-title"
+            hidden
+          >
             <h2 class="step-title" id="step3-title">
               <span class="step-number" aria-hidden="true">3</span> Tu límite
-              diario
+              mensual
             </h2>
-            <fieldset class="stack-sm fieldset-plain">
-              <legend class="field-legend">
-                ¿Máximo cuánto se puede descontar en un día?
-              </legend>
-              <div class="chips" id="cap-chips"></div>
-              <label class="field" id="cap-other-field" hidden>
-                <span>Otro valor</span>
-                <input
-                  id="cap-other"
-                  inputmode="numeric"
-                  autocomplete="off"
-                  placeholder="Ej: 40.000"
-                />
-              </label>
-            </fieldset>
+            <label class="field">
+              <span>¿Máximo cuánto puede salir de tu billetera en un mes?</span>
+              <input
+                id="monthly-cap"
+                class="input-xl"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="Ej: 500.000"
+              />
+              <small class="hint" id="cap-hint"></small>
+            </label>
             <p class="hint">
-              Aunque vendas mucho, nunca se descuenta más de esto en un día. Lo
-              puedes cancelar cuando quieras desde tu billetera.
+              Es lo que apruebas en tu billetera. Se renueva el primer día de
+              cada mes y lo puedes cancelar cuando quieras.
             </p>
+
+            <div class="stack-sm" aria-live="polite">
+              <h3 id="summary-title">Así queda cada venta</h3>
+              <div class="stacked-bar" id="preview-bar" aria-hidden="true"></div>
+              <ul class="split" id="preview-list"></ul>
+            </div>
+            <div class="stack-sm">
+              <h3>Lo que se paga cada mes</h3>
+              <ul class="list" id="quota-list"></ul>
+              <p class="hint">
+                Cuando una obligación completa su cuota del mes, su parte de cada
+                venta vuelve a ser ganancia tuya. El ahorro siempre toma su parte.
+              </p>
+            </div>
           </section>
 
-          <!-- Resumen -->
-          <section class="card stack summary-card" aria-live="polite">
-            <h2 id="summary-title">Así queda cada venta</h2>
-            <div class="stacked-bar" id="preview-bar" aria-hidden="true"></div>
-            <ul class="split" id="preview-list"></ul>
-            <p id="preview-warning" class="banner banner-bad" hidden></p>
-          </section>
-
-          <p class="banner banner-info" id="wallet-tip">
-            Ahora te llevamos a tu billetera. Entra con la cuenta dueña de tu
-            billetera y toca <strong>Aceptar</strong>. Después vuelves aquí
-            solo.
-          </p>
           <p id="form-error" class="banner banner-bad" role="alert" hidden></p>
-          <button
-            type="submit"
-            class="btn btn-primary btn-lg btn-block"
-            id="submit"
-          >
-            Continuar a mi billetera →
-          </button>
+          <p class="banner banner-info" id="wallet-tip" hidden>
+            Ahora te llevamos a tu billetera. Entra con la cuenta dueña de tu
+            billetera y toca <strong>Aceptar</strong>. Después vuelves aquí solo.
+          </p>
+          <div class="wizard-nav">
+            <button type="button" class="btn btn-ghost" id="back" hidden>
+              ← Atrás
+            </button>
+            <button type="submit" class="btn btn-primary btn-lg" id="next">
+              Siguiente →
+            </button>
+          </div>
         </form>
       </main>
 
@@ -144,5 +199,55 @@
         <a href="/sandbox">Sandbox de Open Payments</a>
       </footer>
     </div>
+    <template id="wallet-template">
+      <fieldset class="wallet-row">
+        <legend class="sr-only">Billetera</legend>
+        <label class="field">
+          <span>Nombre</span>
+          <input data-field="label" maxlength="60" placeholder="Ej: Distribuidora" />
+        </label>
+        <label class="field">
+          <span>Billetera</span>
+          <input
+            data-field="destination"
+            maxlength="300"
+            autocomplete="off"
+            spellcheck="false"
+            autocapitalize="off"
+            placeholder="proveedor-billeticos"
+          />
+        </label>
+        <label class="field">
+          <span>% de cada venta</span>
+          <input
+            data-field="sharePercent"
+            type="number"
+            min="0.01"
+            max="50"
+            step="0.01"
+            inputmode="decimal"
+          />
+        </label>
+        <label class="field debt-only">
+          <span>Cuota del mes</span>
+          <input
+            data-field="monthlyQuota"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="200.000"
+          />
+        </label>
+        <label class="field debt-only">
+          <span>Deuda total (opcional)</span>
+          <input
+            data-field="outstanding"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="1.200.000"
+          />
+        </label>
+        <button type="button" class="btn btn-danger remove-wallet">Quitar</button>
+      </fieldset>
+    </template>
   </body>
 </html>
