@@ -47,9 +47,9 @@ Cómo hablas:
 - Las cifras, siempre en pesos y como te las dan las herramientas (por ejemplo "$ 45.000"). Nunca inventes ni calcules cifras que no tengas: si te falta un dato, usa una herramienta o dilo.
 
 Qué haces:
-- Respondes sobre la tienda con los datos reales de tus herramientas: ventas, ganancia real, lo apartado para cada proveedor o crédito, cuotas del mes y fechas de pago, ahorros, límite mensual y avisos.
-- Preparas cobros cuando te lo piden ("cobra veinte mil" o "cobra 15.500 de arroz") con preparar_cobro. El tendero los confirma con un toque; tú nunca cobras ni pagas sola.
-- Llevas a la sección correcta con abrir_seccion cuando ayuda (por ejemplo, Avisos si hay un pago por revisar). Solo di que abres una sección si de verdad llamas a abrir_seccion en esa misma respuesta.
+- Respondes sobre la tienda con sus datos reales: ventas, ganancia real, lo apartado para cada proveedor o crédito, cuotas del mes y fechas de pago, ahorros, límite mensual y avisos. Con cada pregunta recibes el estado actual de la tienda en JSON: respóndelo con esas cifras, tal cual, sin recalcularlas. Usa las herramientas de lectura solo si necesitas algo que no esté ahí.
+- Cuando te piden cobrar ("cobra veinte mil", "hazme un cobro de 15.500 de arroz"), llama SIEMPRE a preparar_cobro con el monto: la app genera el código QR de inmediato. Nunca digas que lo preparaste sin llamar a preparar_cobro, ni le pidas al tendero que confirme o toque algo. Si no entiendes el monto, pregúntalo.
+- Cuando te pidan ir, abrir o ver una sección (Inicio, Vender, Metas, Repartos, Ajustes, Avisos), llama SIEMPRE a abrir_seccion. También cuando ayuda (por ejemplo, Avisos si hay un pago por revisar). Nunca digas que abriste una sección sin llamar a abrir_seccion en esa misma respuesta.
 - Explicas la app en palabras simples:
   · Apartado: de cada venta se separa la parte de cada proveedor o crédito; el dinero sigue en la billetera de la tienda hasta su día de pago.
   · Día de pago: ese día se le envía al acreedor su cuota del mes en un solo pago; si lo apartado no alcanza, lo que falta sale de las ganancias.
@@ -75,15 +75,25 @@ const TOOLS: ToolSpec[] = [
     function: {
       name: "preparar_cobro",
       description:
-        "Prepara un cobro para que el tendero lo confirme con un toque. Úsalo cuando pida cobrar un monto.",
+        "Genera un cobro: la app muestra su código QR al instante para que el cliente pague. Úsalo siempre que el tendero pida cobrar un monto.",
       parameters: {
         type: "object",
         properties: {
-          monto: { type: "number", description: "En pesos colombianos, entero. Ej: 20000" },
-          descripcion: { type: "string", description: "Opcional: qué se vende, corto." },
+          monto: {
+            type: "integer",
+            description: "En pesos colombianos, entero, sin puntos. Ej: 20000",
+            minimum: MIN_SALE,
+            maximum: MAX_SALE,
+          },
+          descripcion: {
+            type: "string",
+            description: "Qué se vende, corto (ej. \"arroz y aceite\"); cadena vacía si no lo dijeron.",
+          },
         },
-        required: ["monto"],
+        required: ["monto", "descripcion"],
+        additionalProperties: false,
       },
+      strict: true,
     },
   },
   {
@@ -95,13 +105,26 @@ const TOOLS: ToolSpec[] = [
         type: "object",
         properties: { seccion: { type: "string", enum: [...SECTIONS] } },
         required: ["seccion"],
+        additionalProperties: false,
       },
+      strict: true,
     },
   },
 ];
 
+/** What each read tool answers; all of them together are the shop's state sent with a question. */
+const READ_TOOLS = ["resumen", "obligaciones", "ahorros", "avisos", "ventas_recientes", "limite_mensual"] as const;
+
 function tool(name: string, description: string): ToolSpec {
-  return { type: "function", function: { name, description, parameters: { type: "object", properties: {} } } };
+  return {
+    type: "function",
+    function: {
+      name,
+      description,
+      parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      strict: true,
+    },
+  };
 }
 
 type Dashboard = Awaited<ReturnType<DashboardService["get"]>>;
@@ -118,17 +141,36 @@ export class GloriaService {
     private readonly dashboard: DashboardService,
   ) {}
 
-  async chat(merchantId: string, history: ConversationTurn[]): Promise<GloriaReply> {
+  async chat(
+    merchantId: string,
+    history: ConversationTurn[],
+    context: { section?: Section } = {},
+  ): Promise<GloriaReply> {
     const turns = history.slice(-MAX_TURNS);
     if (turns.at(-1)?.role !== "user") {
       throw new AppError("Escríbele algo a GlorIA para que te responda");
     }
     const view = await this.dashboard.get(merchantId);
+    const actions: GloriaAction[] = [];
+    // The persona first and always the same, so DeepSeek serves it from its context cache; then the
+    // shop as it is right now, so most questions need no tool round at all.
+    const state = Object.fromEntries(
+      READ_TOOLS.map((name) => [name, this.run(readCall(name), view, actions)]),
+    );
     const messages: ChatMessage[] = [
-      { role: "system", content: `${PERSONA}\n\nLa tienda se llama "${view.name}". Hoy es ${today()}.` },
+      { role: "system", content: PERSONA },
+      {
+        role: "system",
+        content: [
+          `La tienda se llama "${view.name}". Ahora es ${now()} en Colombia.`,
+          context.section ? `El tendero está viendo la sección ${context.section} de la app.` : "",
+          `Estado actual de la tienda (json): ${JSON.stringify(state)}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
       ...turns.map((turn) => ({ role: turn.role, content: turn.content }) as ChatMessage),
     ];
-    const actions: GloriaAction[] = [];
 
     for (let round = 0; round < MAX_ROUNDS; round += 1) {
       let answer;
@@ -230,7 +272,7 @@ export class GloriaService {
             : undefined;
         actions.push({ type: "sale", amount: String(amount), ...(description && { description }) });
         actions.push({ type: "open", section: "vender" });
-        return { listo: `Cobro de $ ${amount.toLocaleString("es-CO")} preparado: el tendero lo confirma con un toque.` };
+        return { listo: `Cobro de $ ${amount.toLocaleString("es-CO")}: la app genera su código QR ahora mismo.` };
       }
       case "abrir_seccion": {
         const section = args.seccion;
@@ -270,14 +312,20 @@ function money(amount: Amount | null | undefined): string {
   return amount ? formatAmount(amount).replace(/\s/g, " ") : "$ 0";
 }
 
-function today(): string {
-  return new Date().toLocaleDateString("es-CO", {
+function now(): string {
+  return new Date().toLocaleString("es-CO", {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
     timeZone: "America/Bogota",
   });
+}
+
+function readCall(name: string): ToolCall {
+  return { id: name, type: "function", function: { name, arguments: "{}" } };
 }
 
 /** Markdown a voice cannot read, out: GlorIA's replies are spoken as well as shown. */

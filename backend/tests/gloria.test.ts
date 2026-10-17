@@ -151,8 +151,34 @@ describe("GlorIA", () => {
     expect(loop.seen).toHaveLength(4);
     const firstCall = loop.seen[0]!.messages;
     expect(firstCall[0]!.role).toBe("system");
-    expect(firstCall.length).toBe(1 + 12);
+    // The persona, then the shop as it is now, then the last 12 turns.
+    expect(firstCall.length).toBe(2 + 12);
     expect(firstCall.at(-1)).toEqual({ role: "user", content: "¿y hoy?" });
+  });
+
+  it("sends the shop as it is now, so one call answers, with strict tools", async () => {
+    const { env, id } = await shopWithSale();
+    const model = new ScriptedModel([{ content: "Llevas $ 10.000 este mes.", toolCalls: [] }]);
+    const answer = await new GloriaService(model, env.dashboard).chat(
+      id,
+      [{ role: "user", content: "¿Cómo voy?" }],
+      { section: "metas" },
+    );
+
+    expect(answer.reply).toBe("Llevas $ 10.000 este mes.");
+    expect(model.seen).toHaveLength(1);
+    const [persona, now] = model.seen[0]!.messages;
+    expect(persona!.content).toMatch(/^Eres GlorIA/);
+    expect(now!.content).toContain("viendo la sección metas");
+    const state = JSON.parse((now!.content as string).split("(json): ")[1]!);
+    expect(state.resumen.mes).toMatchObject({ vendido: "$ 10.000" });
+    expect(state.obligaciones[0]).toMatchObject({ nombre: "Microcrédito", cuota_del_mes: "$ 20.000" });
+    expect(JSON.stringify(state)).not.toMatch(/https?:\/\/|\$ilp/);
+    // Every tool in DeepSeek's strict mode: closed schemas, every property required.
+    for (const tool of model.seen[0]!.tools) {
+      expect(tool.function.strict).toBe(true);
+      expect(tool.function.parameters).toMatchObject({ additionalProperties: false });
+    }
   });
 
   it("needs a question from the shopkeeper", async () => {

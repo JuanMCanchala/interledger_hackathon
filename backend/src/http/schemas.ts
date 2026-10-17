@@ -86,6 +86,8 @@ export const assistantChat = z.object({
     )
     .min(1)
     .max(40),
+  /** The section of the till the shopkeeper is looking at, so "¿qué es esto?" has an answer. */
+  section: z.enum(["inicio", "vender", "metas", "repartos", "ajustes", "avisos"]).optional(),
 });
 
 /** Which savings rule's wallet to keep as the last resort; the first one if not given. */

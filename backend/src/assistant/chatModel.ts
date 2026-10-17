@@ -18,6 +18,8 @@ export interface ToolSpec {
     name: string;
     description: string;
     parameters: Record<string, unknown>;
+    /** DeepSeek's strict mode (beta): the call always matches `parameters`. */
+    strict?: boolean;
   };
 }
 
@@ -47,7 +49,8 @@ const RETRY_DELAY_MS = 600;
 /**
  * DeepSeek through its OpenAI-compatible chat API (ADR 0017). Thinking is off: GlorIA answers short
  * questions about the shop's own figures, which need speed more than reasoning, and in thinking mode
- * every tool turn would have to carry the reasoning back.
+ * every tool turn would have to carry the reasoning back. Tools with `strict` go through the beta
+ * endpoint, where every call matches its schema; a low temperature keeps the answers to the facts.
  */
 export class DeepSeekChatModel implements ChatModel {
   constructor(
@@ -84,7 +87,8 @@ export class DeepSeekChatModel implements ChatModel {
   }
 
   private send(messages: ChatMessage[], tools: ToolSpec[]): Promise<Response> {
-    return fetch(`${this.options.baseUrl}/chat/completions`, {
+    const strict = tools.some((t) => t.function.strict);
+    return fetch(`${this.options.baseUrl}${strict ? "/beta" : ""}/chat/completions`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${this.options.apiKey}`,
@@ -96,7 +100,7 @@ export class DeepSeekChatModel implements ChatModel {
         tools,
         tool_choice: "auto",
         thinking: { type: "disabled" },
-        temperature: 0.4,
+        temperature: 0.2,
         max_tokens: 600,
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
