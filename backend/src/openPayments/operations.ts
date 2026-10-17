@@ -12,7 +12,7 @@ import {
 } from "@interledger/open-payments";
 import type { Amount } from "../shared/money.js";
 import { AppError } from "../shared/errors.js";
-import { isAuthError } from "./errors.js";
+import { isTokenRejected } from "./errors.js";
 import type { StoredToken } from "./records.js";
 
 export type OutgoingGrantLimits =
@@ -180,7 +180,7 @@ export class OpenPaymentsOperations implements PaymentOperations {
           accessToken,
         };
       } catch (error) {
-        if (!isAuthError(error)) throw error;
+        if (!isTokenRejected(error)) throw error;
       }
     }
     return this.withGrantToken(
@@ -352,7 +352,7 @@ export class OpenPaymentsOperations implements PaymentOperations {
       try {
         return await fn(cached.value);
       } catch (error) {
-        if (!isAuthError(error)) throw error;
+        if (!isTokenRejected(error)) throw error;
         this.tokens.delete(key);
       }
     }

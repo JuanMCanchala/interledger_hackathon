@@ -98,4 +98,29 @@ describe("Open Payments operations cache", () => {
       expect.anything(),
     );
   });
+
+  it("reads an incoming payment with a new token when the stored one is inactive (403)", async () => {
+    const client = stubClient();
+    const ops = new OpenPaymentsOperations(
+      client as unknown as AuthenticatedClient,
+    );
+    client.incomingPayment.get.mockRejectedValueOnce(
+      new OpenPaymentsClientError("forbidden", {
+        description: "Inactive Token",
+        status: 403,
+      }),
+    );
+
+    const { accessToken } = await ops.readIncomingPayment(
+      "https://ilp/incoming-payments/1",
+      WALLET,
+      "stored-token",
+    );
+
+    expect(accessToken).toBe("token-1");
+    expect(client.incomingPayment.get).toHaveBeenLastCalledWith({
+      url: "https://ilp/incoming-payments/1",
+      accessToken: "token-1",
+    });
+  });
 });
