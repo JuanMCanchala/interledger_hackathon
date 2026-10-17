@@ -1,18 +1,21 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { animate, gsap, ScrollTrigger } from '../../../core/motion';
+import { RouterLink } from '@angular/router';
+import { APP_LINKS } from '../../../core/app-links';
 import { Logo } from '../../../shared/brand/logo';
 
 const SHOW_NAV_UNTIL_PX = 120;
 
 @Component({
   selector: 'app-nav',
-  imports: [Logo],
+  imports: [Logo, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown.escape)': 'menuOpen.set(false)' },
   templateUrl: './nav.html',
   styleUrl: './nav.scss',
 })
 export class Nav {
+  protected readonly app = APP_LINKS;
   protected readonly links = [
     { href: '#proposito', label: 'Por qué MiPlante', hint: 'El problema que resolvemos' },
     { href: '#historia', label: 'Para quién es', hint: 'La historia de Doña Nelly' },
