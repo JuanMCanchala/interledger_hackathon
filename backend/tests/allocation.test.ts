@@ -9,6 +9,7 @@ import {
   bogotaDay,
   lastBogotaDays,
   startOfBogotaDay,
+  startOfBogotaMonth,
 } from "../src/domain/calendar.js";
 
 const COP = { assetCode: "COP", assetScale: 2 };
@@ -20,7 +21,17 @@ const microcredit: AllocationRule = {
   kind: "debt",
   destination: "https://ilp.interledger-test.dev/coop",
   shareBps: 1500,
+  monthlyQuota: cop("10000000"),
   outstanding: cop("30000000"),
+};
+/** A supplier: a monthly quota, no total balance. */
+const supplier: AllocationRule = {
+  id: "supplier",
+  label: "Distribuidora",
+  kind: "debt",
+  destination: "https://ilp.interledger-test.dev/proveedor",
+  shareBps: 1000,
+  monthlyQuota: cop("20000000"),
 };
 const savings: AllocationRule = {
   id: "savings",
@@ -112,23 +123,76 @@ describe("planAllocations", () => {
   });
 });
 
+describe("monthly quotas", () => {
+  it("takes each debt's share until its monthly quota is paid", () => {
+    // 1,000 COP of the supplier's 200,000 quota are left this month.
+    const plan = planAllocations(cop("1000000"), [supplier, savings], undefined, {
+      supplier: cop("19900000"),
+    });
+
+    expect(plan.allocations).toEqual([
+      { ruleId: "supplier", amount: cop("100000"), capped: false },
+      { ruleId: "savings", amount: cop("50000"), capped: false },
+    ]);
+    expect(plan.kept).toEqual(cop("850000"));
+  });
+
+  it("makes the whole share profit once the quota of the month is paid", () => {
+    const plan = planAllocations(cop("1000000"), [supplier, savings], undefined, {
+      supplier: cop("20000000"),
+    });
+
+    // Savings has no quota: it always takes its share.
+    expect(plan.allocations).toEqual([
+      { ruleId: "savings", amount: cop("50000"), capped: false },
+    ]);
+    expect(plan.kept).toEqual(cop("950000"));
+  });
+
+  it("lets a good day pay the month ahead: a big sale fills the quota at once", () => {
+    // A 3,000,000 COP sale would give the supplier 300,000; the quota is 200,000.
+    const plan = planAllocations(cop("300000000"), [supplier], undefined, {});
+
+    expect(plan.allocations).toEqual([
+      { ruleId: "supplier", amount: cop("20000000"), capped: false },
+    ]);
+    expect(plan.kept).toEqual(cop("280000000"));
+  });
+
+  it("still never takes more than the outstanding balance", () => {
+    const plan = planAllocations(
+      cop("1000000"),
+      [{ ...microcredit, outstanding: cop("50000") }],
+      undefined,
+      {},
+    );
+
+    expect(plan.allocations[0]!.amount).toEqual(cop("50000"));
+  });
+});
+
 describe("validateRules", () => {
-  it("accepts rules that take up to 50% of a sale", () => {
+  it("accepts rules that take up to 99% of a sale, like a supplier taking 80%", () => {
     expect(() =>
-      validateRules([microcredit, { ...savings, shareBps: 3500 }], COP),
+      validateRules([{ ...microcredit, shareBps: 8000 }, { ...savings, shareBps: 1900 }], COP),
     ).not.toThrow();
   });
 
-  it("keeps the majority of every sale for the merchant", () => {
+  it("always leaves the merchant a part of every sale", () => {
     expect(() =>
-      validateRules([microcredit, { ...savings, shareBps: 3501 }], COP),
-    ).toThrow("50%");
+      validateRules([{ ...microcredit, shareBps: 8000 }, { ...savings, shareBps: 1901 }], COP),
+    ).toThrow("99%");
   });
 
-  it("requires a positive outstanding balance in the merchant's asset for debts", () => {
+  it("requires a monthly quota for debts, and a positive balance when one is given", () => {
     expect(() =>
-      validateRules([{ ...microcredit, outstanding: undefined }], COP),
-    ).toThrow();
+      validateRules([{ ...microcredit, monthlyQuota: undefined }], COP),
+    ).toThrow("cuota mensual");
+    expect(() =>
+      validateRules([{ ...microcredit, monthlyQuota: cop("0") }], COP),
+    ).toThrow("cuota mensual");
+    // A supplier has a quota and no total balance.
+    expect(() => validateRules([supplier], COP)).not.toThrow();
     expect(() =>
       validateRules([{ ...microcredit, outstanding: cop("0") }], COP),
     ).toThrow();
@@ -152,9 +216,9 @@ describe("validateRules", () => {
     ).toThrow();
   });
 
-  it("requires between one and five rules", () => {
+  it("requires between one and ten rules", () => {
     expect(() => validateRules([], COP)).toThrow();
-    const many = Array.from({ length: 6 }, (_, i) => ({
+    const many = Array.from({ length: 11 }, (_, i) => ({
       ...savings,
       id: `s${i}`,
       shareBps: 100,
@@ -183,6 +247,16 @@ describe("Bogotá calendar (UTC−5, no daylight saving time)", () => {
     expect(
       startOfBogotaDay(new Date("2026-10-16T05:00:00Z")).toISOString(),
     ).toBe("2026-10-16T05:00:00.000Z");
+  });
+
+  it("starts the month on the 1st at 05:00 UTC", () => {
+    expect(
+      startOfBogotaMonth(new Date("2026-10-17T03:00:00Z")).toISOString(),
+    ).toBe("2026-10-01T05:00:00.000Z");
+    // 1 November, 02:00 UTC is still 31 October in Bogotá.
+    expect(
+      startOfBogotaMonth(new Date("2026-11-01T02:00:00Z")).toISOString(),
+    ).toBe("2026-10-01T05:00:00.000Z");
   });
 
   it("labels dates and lists the last days oldest first", () => {

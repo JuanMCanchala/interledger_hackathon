@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { Title } from '@angular/platform-browser';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MOTION, animate, scrollToSection, ScrollSmoother } from '../../core/motion';
 import { Cursor } from '../../shared/ui/cursor';
 import { Loader } from './loader/loader';
@@ -17,7 +19,11 @@ import { Story } from './sections/story/story';
   host: { '(document:click)': 'followHashLink($event)' },
   templateUrl: './landing.html',
 })
-export default class Landing {
+export default class Landing implements OnInit {
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly title = inject(Title);
+
   protected readonly revealed = signal(false);
 
   constructor() {
@@ -33,6 +39,14 @@ export default class Landing {
         return () => smoother.kill();
       }),
     );
+  }
+
+  ngOnInit(): void {
+    this.title.setTitle("MiPlante: tus finanzas pa' lante");
+    const params = this.route.snapshot.queryParams;
+    if (params['payment'] || params['mandate']) {
+      this.router.navigate(['/sandbox'], { queryParams: params, replaceUrl: true });
+    }
   }
 
   protected followHashLink(event: MouseEvent): void {

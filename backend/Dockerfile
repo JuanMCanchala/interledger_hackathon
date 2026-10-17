@@ -9,7 +9,6 @@ RUN npm ci
 
 COPY tsconfig.json ./
 COPY src ./src
-COPY public ./public
 COPY scripts ./scripts
 
 ENV PRISMA_HIDE_UPDATE_MESSAGE=1

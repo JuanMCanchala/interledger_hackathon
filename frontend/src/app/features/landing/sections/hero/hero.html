@@ -8,7 +8,11 @@
         [style.top.%]="floater.y"
         [style.--size]="floater.size"
       >
-        <app-doodle class="floater-doodle" [name]="floater.name" [attr.data-depth]="floater.depth" />
+        <app-doodle
+          class="floater-doodle"
+          [name]="floater.name"
+          [attr.data-depth]="floater.depth"
+        />
       </span>
     }
   </div>
@@ -17,7 +21,13 @@
     <h1 class="headline">
       <span class="sentence">Con MiPlante llevamos tus finanzas</span>
       <span class="sr-only">pa' lante</span>
-      <app-logo class="word" data-loader-target aria-hidden="true" [wordplay]="true" [settled]="true" />
+      <app-logo
+        class="word"
+        data-loader-target
+        aria-hidden="true"
+        [wordplay]="true"
+        [settled]="true"
+      />
     </h1>
 
     <div class="aside">
@@ -26,8 +36,8 @@
         préstamo y tu ahorro. Si hoy no vendes, hoy no pagas.
       </p>
       <div class="actions">
-        <a class="button magnetic" href="/onboard.html">Registrar mi negocio</a>
-        <a class="button button-ghost" href="#funciones">Mira lo que hace</a>
+        <a class="button magnetic" [routerLink]="app.register">Registra tu negocio</a>
+        <a class="button button-ghost magnetic" href="#funciones">Mira lo que hace</a>
       </div>
     </div>
 
@@ -81,7 +91,9 @@
         @for (phrase of phrases; track phrase) {
           <span class="ticker-item">
             {{ phrase }}
-            <svg class="ticker-star" viewBox="0 0 76 76"><path d="M38 0 50 26 76 38 50 50 38 76 26 50 0 38 26 26Z" /></svg>
+            <svg class="ticker-star" viewBox="0 0 76 76">
+              <path d="M38 0 50 26 76 38 50 50 38 76 26 50 0 38 26 26Z" />
+            </svg>
           </span>
         }
       }

@@ -51,9 +51,15 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     const { merchantId, saleId } = await paidSale(env);
 
     const sale = await env.sales.refresh(saleId);
+    // The microcredit's share was reserved; its due day pays it and it counts as repaid.
+    const [payout] = await env.payOutDebts(merchantId);
 
     expect(sale.settlement.status).toBe("done");
     expect(sale.settlement.kept).toEqual(cop("800000"));
+    expect(sale.settlement.items.map((i) => i.status)).toEqual(["reserved", "processing"]);
+    expect((await store.listPayouts(merchantId)).map((p) => [p.id, p.amount, p.status])).toEqual([
+      [payout!.id, cop("150000"), "completed"],
+    ]);
     expect(sale.settlement.items.map((i) => i.amount.value)).toEqual([
       "150000",
       "50000",
@@ -72,9 +78,31 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     const mandate = (await store.getMandate(merchant.mandateId))!;
     expect(mandate.token?.value).toBe("outgoing-token");
     expect(mandate.continuation).toBeDefined();
-    expect(await store.listPayments({ mandateId: mandate.id })).toHaveLength(2);
+    expect(await store.listPayments({ mandateId: mandate.id })).toHaveLength(2); // savings + payout
     const dashboard = await store.listSales({ merchantId });
     expect(dashboard.map((s) => s.id)).toEqual([saleId]);
+  });
+
+  it("finds a shop by its counter display's key, and only by the current one", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const { displayKey: oldKey } = await env.merchants.linkDisplay(merchantId);
+    const { displayKey } = await env.merchants.linkDisplay(merchantId);
+    expect((await store.getMerchantByDisplayKey(displayKey!))?.id).toBe(merchantId);
+    expect(await store.getMerchantByDisplayKey(oldKey!)).toBeUndefined();
+  });
+
+  it("stores a cash sale, its held shares and the deposited credit", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const { sale } = await env.cash.recordSale(merchantId, { amount: "20000" });
+    const stored = (await store.getSale(sale.id))!;
+    expect(stored.method).toBe("cash");
+    expect(stored.settlement.items.every((item) => item.status === "cash")).toBe(true);
+
+    await env.cash.deposit(merchantId, { amount: "100" });
+    expect((await store.getMerchant(merchantId))!.cashCredit).toMatchObject({ value: "10000" });
+    expect((await store.getSale(sale.id))!.settlement.items.map((i) => i.status)).toContain("cash");
   });
 
   it("settles exactly once when many polls race", async () => {
@@ -86,9 +114,51 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     );
     await env.sales.refresh(saleId);
 
-    // One outgoing payment for the customer, plus one per rule.
-    expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(3);
+    // One outgoing payment for the customer, plus the savings share; the debt's is only reserved.
+    expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(2);
     expect((await store.getSale(saleId))!.settlement.status).toBe("done");
+    expect((await store.getSale(saleId))!.settlement.items).toHaveLength(2);
+  });
+
+  it("stores a payout's top-up, its review and its move from the emergency fund", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const ruleId = (await store.getMerchant(merchantId))!.rules[0]!.id;
+    const now = new Date().toISOString();
+    const payout = {
+      id: "00000000-0000-4000-8000-0000000000aa",
+      merchantId,
+      ruleId,
+      label: "Microcrédito",
+      destination: "https://ilp.interledger-test.dev/coop",
+      amount: cop("2000000"),
+      topUp: cop("1700000"),
+      reason: "due-date" as const,
+      month: "2026-10",
+      status: "failed" as const,
+      error: "timeout",
+      resolution: "retried" as const,
+      resolvedAt: now,
+      emergencyDraw: {
+        paymentId: "00000000-0000-4000-8000-0000000000bb",
+        amount: cop("2000000"),
+        status: "completed" as const,
+        counted: true,
+      },
+      createdAt: now,
+      updatedAt: now,
+    };
+    await store.savePayout(payout);
+    await store.savePayout(payout);
+
+    expect(await store.listPayouts(merchantId)).toEqual([payout]);
+  });
+
+  it("finds nothing for an id that is not a UUID, instead of failing", async () => {
+    expect(await store.getSale("not-a-real-id")).toBeUndefined();
+    expect(await store.getMerchant("nope")).toBeUndefined();
+    expect(await store.getPayment("123")).toBeUndefined();
+    expect(await store.isMerchantMandate("abc")).toBe(false);
   });
 
   it("lets only one claim win", async () => {
@@ -119,7 +189,9 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
       rules: [
         {
           label: "Proveedor",
+          category: "Proveedores",
           kind: "debt",
+          monthlyQuota: "5000",
           destination: COOP,
           sharePercent: 10,
           outstanding: "1000",
@@ -144,10 +216,59 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     expect(rule!.outstanding).toEqual(cop("0"));
   });
 
+  it("keeps a repayment recorded after the shop was read when the shop is saved", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const stale = (await store.getMerchant(merchantId))!;
+    const debt = stale.rules.find((rule) => rule.kind === "debt")!;
+
+    await store.recordRepayment(merchantId, debt.id, "150000", new Date().toISOString());
+    const saved = await store.updateMerchant({ ...stale, name: "Doña Rosa" });
+
+    const rule = saved.rules.find((r) => r.id === debt.id)!;
+    expect(saved.name).toBe("Doña Rosa");
+    expect(rule.repaid).toEqual(cop("150000"));
+    expect((await store.getMerchant(merchantId))!.rules).toEqual(saved.rules);
+  });
+
+  it("stores the shop's goals", async () => {
+    const env = setupMiPlante(store);
+    const merchantId = await env.onboardRosa();
+    const [microcredit, savings] = (await store.getMerchant(merchantId))!.rules;
+    await env.merchants.updateSettings(merchantId, { monthlySalesGoal: "3000000" });
+    await env.merchants.updateRules(merchantId, [
+      {
+        id: microcredit!.id,
+        label: microcredit!.label,
+        category: microcredit!.category,
+        kind: "debt",
+        destination: microcredit!.destination,
+        sharePercent: 15,
+        monthlyQuota: "20000",
+      },
+      {
+        id: savings!.id,
+        label: savings!.label,
+        category: savings!.category,
+        kind: "savings",
+        destination: savings!.destination,
+        sharePercent: 5,
+        savingsGoal: "1000000",
+      },
+    ]);
+
+    const stored = (await store.getMerchant(merchantId))!;
+    expect(stored.monthlySalesGoal).toEqual(cop("300000000"));
+    expect(stored.rules[1]!.savingsGoal).toEqual(cop("100000000"));
+    expect(stored.rules[0]!.savingsGoal).toBeUndefined();
+  });
+
   it("edits the rules in place: reorders, adds, keeps what was repaid", async () => {
     const env = setupMiPlante(store);
     const { merchantId, saleId } = await paidSale(env);
     await env.sales.refresh(saleId);
+    await env.deliverShares(saleId);
+    await env.payOutDebts(merchantId);
     const [microcredit, savings] = (await store.getMerchant(merchantId))!
       .rules;
 
@@ -155,13 +276,16 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
       {
         id: savings!.id,
         label: "Ahorro",
+        category: "Ahorro",
         kind: "savings",
         destination: savings!.destination,
         sharePercent: 10,
       },
       {
         label: "Proveedor",
+        category: "Proveedores",
         kind: "debt",
+        monthlyQuota: "5000",
         destination: SUPPLIER,
         sharePercent: 10,
         outstanding: "50000",
@@ -169,7 +293,9 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
       {
         id: microcredit!.id,
         label: microcredit!.label,
+        category: "Proveedores",
         kind: "debt",
+        monthlyQuota: "5000",
         destination: microcredit!.destination,
         sharePercent: 15,
       },

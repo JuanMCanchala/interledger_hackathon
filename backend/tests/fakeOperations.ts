@@ -125,6 +125,18 @@ export function createFakeOperations() {
         accessToken: "incoming-token",
       };
     }),
+    completeIncomingPayment: vi.fn(
+      async (url: string, receiver: WalletAddress) => {
+        const state = incoming.get(url) ?? { completed: false, received: cop("0") };
+        incoming.set(url, { ...state, completed: true });
+        return mockIncomingPaymentWithPaymentMethods({
+          id: url,
+          walletAddress: receiver.id,
+          completed: true,
+          receivedAmount: state.received,
+        });
+      },
+    ),
     createQuote: vi.fn(
       async (
         sender: WalletAddress,
@@ -182,10 +194,13 @@ export function createFakeOperations() {
     getOutgoingPayment: vi.fn(async (url: string) =>
       mockOutgoingPayment({ id: url, failed: false }),
     ),
-    getGrantSpentAmounts: vi.fn(async () => ({
-      spentDebitAmount: usd("1300"),
-      spentReceiveAmount: null,
-    })),
+    // Like the wallet, nothing spent yet is reported as null.
+    getGrantSpentAmounts: vi.fn(
+      async (): Promise<{ spentDebitAmount: Amount | null; spentReceiveAmount: Amount | null }> => ({
+        spentDebitAmount: usd("1300"),
+        spentReceiveAmount: null,
+      }),
+    ),
     rotateToken: vi.fn(async () => ({
       value: "rotated-token",
       manage: `${AUTH_SERVER}/token/2`,
@@ -195,9 +210,16 @@ export function createFakeOperations() {
     cancelGrant: vi.fn(async () => {}),
   } satisfies PaymentOperations;
 
-  /** Simulates Interledger delivering the money to an incoming payment. */
-  const deliver = (incomingPaymentUrl: string, received: Amount) => {
-    incoming.set(incomingPaymentUrl, { completed: true, received });
+  /**
+   * Simulates Interledger delivering money to an incoming payment: all of it by default, or part
+   * of it (`completed: false`) when the payer sent less.
+   */
+  const deliver = (
+    incomingPaymentUrl: string,
+    received: Amount,
+    { completed = true }: { completed?: boolean } = {},
+  ) => {
+    incoming.set(incomingPaymentUrl, { completed, received });
   };
 
   return { ops, deliver };

@@ -23,13 +23,18 @@ export type PaymentStatus =
 
 export interface PaymentRecord {
   id: string;
-  /** one-off: single consent per payment. mandate-charge: paid under a recurring consent. */
-  kind: "one-off" | "mandate-charge";
+  /**
+   * one-off: single consent per payment. mandate-charge: paid under a recurring consent.
+   * payment-request: an incoming payment for an exact amount that the payer pays from their own
+   * wallet; MiPlante only watches it, so it has no sender, quote or outgoing payment.
+   */
+  kind: "one-off" | "mandate-charge" | "payment-request";
   status: PaymentStatus;
   description?: string;
   /** Page where the browser lands after the consent screen. */
   returnTo?: string;
-  sender: string;
+  /** Unknown for a payment request: the payer picks their wallet in their own wallet app. */
+  sender?: string;
   receiver: string;
   mandateId?: string;
   incomingPaymentUrl: string;

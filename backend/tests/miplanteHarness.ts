@@ -2,6 +2,9 @@ import {
   MerchantService,
   type OnboardInput,
 } from "../src/merchants/merchantService.js";
+import { CashService } from "../src/merchants/cashService.js";
+import { DashboardService } from "../src/merchants/dashboardService.js";
+import { PayoutService } from "../src/merchants/payoutService.js";
 import { SalesService } from "../src/merchants/salesService.js";
 import { PaymentFlows } from "../src/openPayments/flows.js";
 import { computeInteractHash } from "../src/openPayments/hash.js";
@@ -26,17 +29,20 @@ export const cop = (value: string) => ({
 export const ROSA: OnboardInput = {
   name: "Tienda Doña Rosa",
   wallet: "$ilp.interledger-test.dev/bob",
-  dailyCap: "30000",
+  monthlyCap: "30000",
   rules: [
     {
       label: "Microcrédito",
+      category: "Microcréditos",
       kind: "debt",
       destination: COOP,
       sharePercent: 15,
+      monthlyQuota: "20000",
       outstanding: "300000",
     },
     {
       label: "Fondo de emergencia",
+      category: "Ahorro",
       kind: "savings",
       destination: SAVINGS,
       sharePercent: 5,
@@ -58,6 +64,13 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
   const sales = new SalesService(flows, merchants, store, {
     frontendUrl: BASE_URL,
     now,
+  });
+  const payouts = new PayoutService(flows, merchants, store, { now });
+  const cash = new CashService(flows, merchants, sales, payouts, store, { now });
+  const dashboard = new DashboardService(flows, merchants, sales, store, {
+    now,
+    payouts,
+    cash,
   });
 
   /** What the wallet appends to the finish URL when its owner approves. */
@@ -88,8 +101,36 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     return merchant.id;
   };
 
+  /**
+   * Pays every debt what it has reserved ("Pagar ahora") and has the money arrive at each creditor,
+   * so the debts count as repaid (ADR 0014). The due day itself also completes the quota from
+   * profit (ADR 0015); payouts.test.ts covers that.
+   */
+  const payOutDebts = async (merchantId: string) => {
+    const sent = await payouts.pay(merchantId, { reason: "manual" });
+    for (const payout of sent) {
+      deliver(
+        (await store.getPayment(payout.paymentId!))!.incomingPaymentUrl,
+        cop("5000000"),
+      );
+    }
+    await payouts.refresh(merchantId);
+    return sent;
+  };
+
+  /** Has every share a sale sent (its savings) arrive, and follows them, so they count as saved. */
+  const deliverShares = async (saleId: string) => {
+    for (const item of (await store.getSale(saleId))!.settlement.items) {
+      if (!item.paymentId) continue;
+      deliver((await store.getPayment(item.paymentId))!.incomingPaymentUrl, cop("5000000"));
+    }
+    return sales.refresh(saleId);
+  };
+
   return {
     clock,
+    payOutDebts,
+    deliverShares,
     now,
     ops,
     deliver,
@@ -97,6 +138,9 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     flows,
     merchants,
     sales,
+    payouts,
+    cash,
+    dashboard,
     approve,
     approveMandate,
     approvePayment,

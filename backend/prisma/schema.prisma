@@ -13,35 +13,59 @@ datasource db {
 }
 
 model Merchant {
-  id         String   @id @db.Uuid
-  name       String
-  wallet     String
-  assetCode  String   @map("asset_code")
-  assetScale Int      @map("asset_scale")
-  dailyCap   BigInt   @map("daily_cap")
-  mandateId  String   @unique @map("mandate_id") @db.Uuid
-  createdAt  DateTime @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
+  id                 String   @id @db.Uuid
+  /// The account that registered the shop.
+  ownerId            String?  @map("owner_id") @db.Uuid
+  name               String
+  wallet             String
+  assetCode          String   @map("asset_code")
+  assetScale         Int      @map("asset_scale")
+  monthlyCap         BigInt   @map("monthly_cap")
+  mandateId          String   @unique @map("mandate_id") @db.Uuid
+  /// Optional monthly sales goal, in minor units.
+  monthlySalesGoal   BigInt?  @map("monthly_sales_goal")
+  /// A new monthly cap waiting for approval, and the mandate that asks for it.
+  pendingCap         BigInt?  @map("pending_cap")
+  pendingMandateId   String?  @map("pending_mandate_id") @db.Uuid
+  /// The grant on a savings wallet used as the last resort to pay a creditor (ADR 0016).
+  emergencyMandateId String?  @map("emergency_mandate_id") @db.Uuid
+  emergencyRuleId    String?  @map("emergency_rule_id") @db.Uuid
+  /// The counter display's key: a phone with it shows each new sale's QR (ADR 0018).
+  displayKey         String?  @unique @map("display_key")
+  /// Cash deposited and not yet matched to a cash sale's share, in minor units (ADR 0019).
+  cashCredit         BigInt   @default(0) @map("cash_credit")
+  createdAt          DateTime @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @map("updated_at") @db.Timestamptz(3)
 
-  mandate Mandate @relation(fields: [mandateId], references: [id])
+  mandate Mandate  @relation(fields: [mandateId], references: [id])
+  owner   User?    @relation(fields: [ownerId], references: [id])
   rules   Rule[]
+  payouts Payout[]
   sales   Sale[]
 
   @@map("merchants")
 }
 
-/// Applied in `position` order, which is also their priority when the daily cap runs out.
+/// Applied in `position` order, which is also their priority when the monthly cap runs out.
 model Rule {
-  merchantId  String  @map("merchant_id") @db.Uuid
-  id          String  @db.Uuid
-  position    Int
-  label       String
-  kind        String
-  destination String
-  shareBps    Int     @map("share_bps")
+  merchantId   String  @map("merchant_id") @db.Uuid
+  id           String  @db.Uuid
+  position     Int
+  label        String
+  /// Groups the shop's wallets on screen (Proveedores, Microcréditos, Ahorro or the shop's own).
+  category     String  @default("")
+  kind         String
+  destination  String
+  shareBps     Int     @map("share_bps")
+  /// Debt rules: what is due each calendar month.
+  monthlyQuota BigInt? @map("monthly_quota")
   /// Debt rules only: what is still owed.
-  outstanding BigInt?
-  repaid      BigInt  @default(0)
+  outstanding  BigInt?
+  repaid       BigInt  @default(0)
+  /// Savings rules, optional: the amount the shop wants to reach.
+  savingsGoal  BigInt? @map("savings_goal")
+  /// Debt rules: day of the month (1-28) the creditor is paid.
+  dueDay       Int?    @map("due_day")
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
@@ -60,6 +84,8 @@ model Sale {
   status           String
   customer         String?
   paymentId        String?   @map("payment_id") @db.Uuid
+  /// "qr" (Open Payments) or "cash" (ADR 0019).
+  method           String    @default("qr")
   error            String?
   /// pending → running → done | skipped; moved to running atomically before any money moves.
   settlementStatus String    @map("settlement_status")
@@ -128,7 +154,8 @@ model Payment {
   status             String
   description        String?
   returnTo           String?   @map("return_to")
-  sender             String
+  /// Null for a payment request (the payer is not known).
+  sender             String?
   receiver           String
   mandateId          String?   @map("mandate_id") @db.Uuid
   incomingPaymentUrl String    @map("incoming_payment_url")
@@ -154,4 +181,66 @@ model Payment {
 
   @@index([mandateId, createdAt(sort: Desc)])
   @@map("payments")
+}
+
+/// A shopkeeper's account. The password is stored only as a salted scrypt hash.
+model User {
+  id           String   @id @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @map("created_at") @db.Timestamptz(3)
+
+  merchants Merchant[]
+  sessions  Session[]
+
+  @@map("users")
+}
+
+/// A signed-in browser; the random token is sent as a Bearer token.
+model Session {
+  token     String   @id
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+/// One payment to a creditor: everything reserved for a debt rule, sent on its due day or early.
+model Payout {
+  id                 String    @id @db.Uuid
+  merchantId         String    @map("merchant_id") @db.Uuid
+  ruleId             String    @map("rule_id") @db.Uuid
+  label              String
+  destination        String
+  amount             BigInt
+  assetCode          String    @map("asset_code")
+  assetScale         Int       @map("asset_scale")
+  reason             String
+  month              String
+  status             String
+  paymentId          String?   @map("payment_id") @db.Uuid
+  error              String?
+  /// Due-day payouts: the part taken from the shop\'s profit to complete the quota.
+  topUp              BigInt?   @map("top_up")
+  /// How a failed payout was resolved by the shopkeeper: "retried" or "marked-paid".
+  resolution         String?
+  resolvedAt         DateTime? @map("resolved_at") @db.Timestamptz(3)
+  /// The move from the emergency fund to the shop for this failed payout (ADR 0016).
+  emergencyPaymentId String?   @map("emergency_payment_id") @db.Uuid
+  emergencyAmount    BigInt?   @map("emergency_amount")
+  emergencyStatus    String?   @map("emergency_status")
+  emergencyError     String?   @map("emergency_error")
+  emergencyCounted   Boolean   @default(false) @map("emergency_counted")
+  createdAt          DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, createdAt])
+  @@map("payouts")
 }

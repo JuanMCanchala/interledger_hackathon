@@ -73,12 +73,12 @@ npm run dev                          # http://localhost:3000
 npm run demo:merchant                # optional: the demo shop with the team's wallets
 ```
 
-- **MiPlante:** register the merchant at `/onboard.html` and approve the daily cap in the wallet.
-  From the till (`/merchant.html?id=…`), create a sale, open its QR link (`/pay.html?sale=…`) on a
+- **MiPlante:** register the merchant at `/onboard` and approve the daily cap in the wallet.
+  From the till (`/merchant?id=…`), create a sale, open its QR link (`/pay?sale=…`) on a
   phone, pay from the customer's wallet, and watch the sale split itself. **Editar repartos**
   changes the shares and destinations for the next sales, with no new consent: the grant only
   caps the daily total (ADR 0004).
-- **Sandbox:** `/sandbox.html` runs the raw flows (one-off payment, mandate, charges) and shows the
+- **Sandbox:** `/sandbox` runs the raw flows (one-off payment, mandate, charges) and shows the
   four required demo steps.
 
 The consent callback returns to the user's browser. When the phone is not on the same network as the

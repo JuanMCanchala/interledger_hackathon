@@ -1,5 +1,14 @@
+import { APP_LINKS } from '../../../../core/app-links';
 import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from '@angular/core';
-import { FINE_POINTER, MOTION, ScrollTrigger, SplitText, animate, gsap } from '../../../../core/motion';
+import { RouterLink } from '@angular/router';
+import {
+  FINE_POINTER,
+  MOTION,
+  ScrollTrigger,
+  SplitText,
+  animate,
+  gsap,
+} from '../../../../core/motion';
 import { formatCop } from '../../../../core/money';
 import { Doodle, DoodleName } from '../../../../shared/brand/doodle';
 import { Logo } from '../../../../shared/brand/logo';
@@ -19,12 +28,14 @@ const PARALLAX_PX = 36;
 
 @Component({
   selector: 'app-hero',
-  imports: [Logo, Doodle],
+  imports: [Logo, Doodle, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './hero.html',
   styleUrl: './hero.scss',
 })
 export class Hero {
+  protected readonly app = APP_LINKS;
+
   readonly revealed = input(false);
 
   protected readonly pockets = POCKETS;
@@ -93,8 +104,18 @@ export class Hero {
       .timeline({ defaults: { ease: 'power3.out' } })
       .fromTo(words, { yPercent: 110, autoAlpha: 1 }, { yPercent: 0, stagger: 0.06, duration: 0.6 })
       .fromTo('.aside > *', { y: 20 }, { y: 0, autoAlpha: 1, stagger: 0.1, duration: 0.6 }, '<0.2')
-      .fromTo('.till', { y: 80, rotationX: 25 }, { y: 0, rotationX: 0, autoAlpha: 1, duration: 1 }, '<')
-      .fromTo('.floater-doodle', { scale: 0 }, { scale: 1, autoAlpha: 1, stagger: 0.07, ease: 'back.out(2.5)', duration: 0.6 }, '<0.2')
+      .fromTo(
+        '.till',
+        { y: 80, rotationX: 25 },
+        { y: 0, rotationX: 0, autoAlpha: 1, duration: 1 },
+        '<',
+      )
+      .fromTo(
+        '.floater-doodle',
+        { scale: 0 },
+        { scale: 1, autoAlpha: 1, stagger: 0.07, ease: 'back.out(2.5)', duration: 0.6 },
+        '<0.2',
+      )
       .add(() =>
         ScrollTrigger.create({
           trigger: '.till',
@@ -106,7 +127,12 @@ export class Hero {
   }
 
   private ticker(): void {
-    const loop = gsap.to('.ticker-track', { xPercent: -50, ease: 'none', duration: 28, repeat: -1 });
+    const loop = gsap.to('.ticker-track', {
+      xPercent: -50,
+      ease: 'none',
+      duration: 28,
+      repeat: -1,
+    });
     ScrollTrigger.create({
       onUpdate: (self) => {
         const boost = 1 + Math.min(Math.abs(self.getVelocity()) / 400, 4);
@@ -161,7 +187,11 @@ export class Hero {
     const ticket = q('.ticket')[0].getBoundingClientRect();
     const tl = (this.running = gsap.timeline());
 
-    tl.fromTo(q('.ticket'), { scale: 0.92 }, { scale: 1, duration: 0.5, ease: 'elastic.out(1, 0.5)' });
+    tl.fromTo(
+      q('.ticket'),
+      { scale: 0.92 },
+      { scale: 1, duration: 0.5, ease: 'elastic.out(1, 0.5)' },
+    );
     tl.set(q('.fill'), { scaleY: 0 }, 0);
 
     q('.pocket').forEach((pocket, i) => {
@@ -184,13 +214,22 @@ export class Hero {
       )
         .to(coin, { opacity: 0, duration: 0.15 })
         .to(pocket.querySelector('.fill'), { scaleY: 1, duration: 0.6, ease: 'power2.out' }, '<')
-        .fromTo(pocket.querySelector('.jar-doodle'), { y: 0 }, { y: -8, duration: 0.15, yoyo: true, repeat: 1 }, '<')
-        .to(counter, {
-          value: shares[i],
-          duration: 0.6,
-          ease: 'power1.out',
-          onUpdate: () => (amountEl.textContent = formatCop(Math.round(counter.value))),
-        }, '<');
+        .fromTo(
+          pocket.querySelector('.jar-doodle'),
+          { y: 0 },
+          { y: -8, duration: 0.15, yoyo: true, repeat: 1 },
+          '<',
+        )
+        .to(
+          counter,
+          {
+            value: shares[i],
+            duration: 0.6,
+            ease: 'power1.out',
+            onUpdate: () => (amountEl.textContent = formatCop(Math.round(counter.value))),
+          },
+          '<',
+        );
     });
     return tl;
   }

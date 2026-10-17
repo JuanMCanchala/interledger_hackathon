@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Quote, WalletAddress } from "@interledger/open-payments";
 import { AppError, NotFoundError } from "../shared/errors.js";
-import { compareAmounts, toAmount, type Amount } from "../shared/money.js";
+import {
+  compareAmounts,
+  fromMinorUnits,
+  toAmount,
+  type Amount,
+} from "../shared/money.js";
 import type { Store } from "../storage/store.js";
 import { describeError, isAuthError } from "./errors.js";
 import { verifyInteractHash } from "./hash.js";
@@ -41,6 +46,11 @@ export interface StartPaymentInput {
   description?: string;
   /** Page (path starting with "/") where the browser lands after the consent screen. */
   returnTo?: string;
+  /**
+   * Pay this incoming payment (a payment request already shown to the payer) instead of creating
+   * a new one, so a sale keeps a single destination however the customer pays it.
+   */
+  incoming?: { url: string; accessToken?: string };
 }
 
 export interface StartMandateInput {
@@ -49,6 +59,8 @@ export interface StartMandateInput {
   maxAmount: string;
   /** ISO 8601 duration, e.g. P1W. Omit for a one-time total cap. */
   interval?: string;
+  /** When the first interval starts (default: now), e.g. the 1st of the month for P1M. */
+  intervalStart?: Date;
   repetitions?: number;
   description?: string;
   /** Page (path starting with "/") where the browser lands after the consent screen. */
@@ -107,13 +119,20 @@ export class PaymentFlows {
       this.resolve(input.sender),
       this.resolve(input.receiver),
     ]);
-    const { incomingPayment, accessToken: incomingToken } =
-      await this.ops.createIncomingPayment(receiver, {
+    let incoming = input.incoming;
+    if (!incoming) {
+      const created = await this.ops.createIncomingPayment(receiver, {
         incomingAmount: toAmount(input.amount, receiver),
         description: input.description,
       });
+      incoming = {
+        url: created.incomingPayment.id,
+        accessToken: created.accessToken,
+      };
+    }
+    const { url: incomingPaymentUrl, accessToken: incomingToken } = incoming;
     const quote = await this.ops.createQuote(sender, {
-      receiver: incomingPayment.id,
+      receiver: incomingPaymentUrl,
     });
     const id = randomUUID();
     const { interaction, redirectUrl } = await this.requestConsent(
@@ -130,7 +149,7 @@ export class PaymentFlows {
       returnTo: assertReturnPath(input.returnTo),
       sender: sender.id,
       receiver: receiver.id,
-      incomingPaymentUrl: incomingPayment.id,
+      incomingPaymentUrl,
       incomingToken,
       ...quoteFields(quote),
       interaction,
@@ -168,7 +187,8 @@ export class PaymentFlows {
         authorizedAt: this.timestamp(),
         interaction: undefined,
       });
-      const sender = await this.resolve(record.sender);
+      // Consented payments always know their sender; only payment requests do not.
+      const sender = await this.resolve(record.sender!);
       const quote = await this.ensureFreshQuote(record, sender);
       const outgoing = await this.ops.createOutgoingPayment(
         sender,
@@ -195,10 +215,47 @@ export class PaymentFlows {
     return this.refreshPayment(id);
   }
 
+  /**
+   * Open Payments payment request: an incoming payment on the receiver's wallet for exactly
+   * `amount`. Any wallet can pay its URL; the payer approves it in their own wallet, where they
+   * are signed in. MiPlante needs no consent callback from the payer: it watches the payment.
+   */
+  async requestPayment(input: {
+    receiver: string;
+    amount: string;
+    description?: string;
+  }) {
+    const receiver = await this.resolve(input.receiver);
+    const amount = toAmount(input.amount, receiver);
+    const { incomingPayment, accessToken } =
+      await this.ops.createIncomingPayment(receiver, {
+        incomingAmount: amount,
+        description: input.description,
+      });
+    const timestamp = this.timestamp();
+    const record = await this.store.savePayment({
+      id: randomUUID(),
+      kind: "payment-request",
+      status: "awaiting-consent",
+      description: input.description,
+      receiver: receiver.id,
+      incomingPaymentUrl: incomingPayment.id,
+      incomingToken: accessToken,
+      receiveAmount: amount,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    return toPublicPayment(record);
+  }
+
   /** Reads the current state from Open Payments. Safe to poll from the frontend. */
   async refreshPayment(id: string) {
     let record = await this.requirePayment(id);
-    if (record.status !== "processing") return toPublicPayment(record);
+    const waitingForPayer =
+      record.kind === "payment-request" && record.status === "awaiting-consent";
+    if (record.status !== "processing" && !waitingForPayer) {
+      return toPublicPayment(record);
+    }
     try {
       const receiver = await this.resolve(record.receiver);
       const { incomingPayment, accessToken } =
@@ -214,18 +271,36 @@ export class PaymentFlows {
         incomingPayment.completed ||
         (record.receiveAmount !== undefined &&
           BigInt(received.value) >= BigInt(record.receiveAmount.value));
+      // A payment request waits until the payer's money starts arriving. A payer who sends less
+      // can pay the rest to the same request; if it expires before it is complete, it fails.
+      const nothingYet = BigInt(received.value) === 0n;
+      const expired =
+        record.kind === "payment-request" &&
+        !fullyReceived &&
+        incomingPayment.expiresAt !== undefined &&
+        Date.parse(incomingPayment.expiresAt) <= this.now().getTime();
       record = await this.updatePayment(record, {
-        status: outgoingFailed
-          ? "failed"
-          : fullyReceived
-            ? "completed"
-            : "processing",
+        status:
+          outgoingFailed || expired
+            ? "failed"
+            : fullyReceived
+              ? "completed"
+              : waitingForPayer && nothingYet
+                ? "awaiting-consent"
+                : "processing",
         error: outgoingFailed
           ? "El pago saliente falló en Interledger"
-          : undefined,
+          : expired
+            ? nothingYet
+              ? "La solicitud de pago venció sin recibir el pago"
+              : `La solicitud de pago venció incompleta: llegaron ${fromMinorUnits(received.value, received.assetScale)} ${received.assetCode}`
+            : undefined,
         receivedAmount: received,
         incomingToken: accessToken,
       });
+      if (record.status === "completed" && !incomingPayment.completed) {
+        await this.closeIncomingPayment(record, receiver);
+      }
     } catch (error) {
       // Polling must not break the UI; the next poll retries.
       console.warn(
@@ -237,6 +312,44 @@ export class PaymentFlows {
 
   async getPayment(id: string) {
     return toPublicPayment(await this.requirePayment(id));
+  }
+
+  /**
+   * Closes a payment request nobody has started paying, so its QR takes no more money (the shop
+   * made a newer sale). Returns false, and closes nothing, when money already arrived or the payer
+   * is on it. If money lands while it closes, the request goes on as a payment being received.
+   */
+  async closePaymentRequest(id: string): Promise<boolean> {
+    await this.refreshPayment(id);
+    const record = await this.requirePayment(id);
+    const untouched =
+      record.kind === "payment-request" &&
+      record.status === "awaiting-consent" &&
+      BigInt(record.receivedAmount?.value ?? "0") === 0n;
+    if (!untouched) return false;
+    const receiver = await this.resolve(record.receiver);
+    const closed = await this.ops.completeIncomingPayment(
+      record.incomingPaymentUrl,
+      receiver,
+      record.incomingToken,
+    );
+    const received = closed.receivedAmount;
+    if (BigInt(received.value) > 0n) {
+      await this.updatePayment(record, { status: "processing", receivedAmount: received });
+      return false;
+    }
+    // Failed, not completed: a closed request with nothing received must never read as paid.
+    await this.updatePayment(record, {
+      status: "failed",
+      error: "Se reemplazó por un cobro nuevo",
+      receivedAmount: received,
+    });
+    return true;
+  }
+
+  /** The mandate that paid a payment, if one did. The public view never carries it. */
+  async paymentMandate(id: string): Promise<string | undefined> {
+    return (await this.requirePayment(id)).mandateId;
   }
 
   /** Stored view of a mandate, without calling the wallet. */
@@ -253,7 +366,7 @@ export class PaymentFlows {
     const maxAmount = toAmount(input.maxAmount, sender);
     const interval = input.interval
       ? buildRepeatingInterval(input.interval, {
-          start: this.now(),
+          start: input.intervalStart ?? this.now(),
           repetitions: input.repetitions,
         })
       : undefined;
@@ -488,6 +601,28 @@ export class PaymentFlows {
     return { interaction, redirectUrl: pending.interact.redirect };
   }
 
+  /**
+   * Everything quoted arrived at an incoming payment without a fixed amount (a split share): close
+   * it, so the receiver's wallet shows it completed instead of pending until it expires. The money
+   * has already arrived, so a failure here is only logged.
+   */
+  private async closeIncomingPayment(
+    record: PaymentRecord,
+    receiver: WalletAddress,
+  ) {
+    try {
+      await this.ops.completeIncomingPayment(
+        record.incomingPaymentUrl,
+        receiver,
+        record.incomingToken,
+      );
+    } catch (error) {
+      console.warn(
+        `[payments] no se pudo cerrar la incoming payment de ${record.id}: ${describeError(error)}`,
+      );
+    }
+  }
+
   /** Quotes expire within minutes; if the user took long to consent, quote again within the approved limit. */
   private async ensureFreshQuote(record: PaymentRecord, sender: WalletAddress) {
     const expiresAt = record.quoteExpiresAt
@@ -687,14 +822,22 @@ export function toPublicPayment(record: PaymentRecord) {
     interaction: _i,
     incomingToken: _it,
     outgoingToken: _ot,
+    // Public: which grant paid it would let anyone find a shop's mandate.
+    mandateId: _m,
     ...rest
   } = record;
+  // A payment request is authorized and executed in the payer's own wallet: MiPlante sees the
+  // money arriving.
+  const arriving =
+    record.kind === "payment-request" &&
+    (record.status === "completed" ||
+      BigInt(record.receivedAmount?.value ?? "0") > 0n);
   return {
     ...rest,
     steps: {
       request: true,
-      authorization: Boolean(record.authorizedAt),
-      execution: Boolean(record.outgoingPaymentUrl),
+      authorization: arriving || Boolean(record.authorizedAt),
+      execution: arriving || Boolean(record.outgoingPaymentUrl),
       completion: record.status === "completed",
     },
   };

@@ -43,9 +43,13 @@ describe("amounts", () => {
     expect(fromMinorUnits("1250", 2)).toBe("12.50");
     expect(fromMinorUnits("5", 2)).toBe("0.05");
     expect(fromMinorUnits("42", 0)).toBe("42");
+    // People read these in messages: "$ 50.000", like the rest of the app.
     expect(
-      formatAmount(toAmount("50000", { assetCode: "COP", assetScale: 2 })),
-    ).toBe("50000.00 COP");
+      formatAmount(toAmount("50000", { assetCode: "COP", assetScale: 2 })).replace(/\s/g, " "),
+    ).toBe("$ 50.000");
+    expect(
+      formatAmount(toAmount("12.5", { assetCode: "USD", assetScale: 2 })).replace(/\s/g, " "),
+    ).toBe("US$ 12,50");
   });
 
   it("compares amounts of the same asset only", () => {

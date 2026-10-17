@@ -6,7 +6,7 @@ MiPlante runs as three Railway services in one project:
 | ---------- | ----------------------------------------- | ----------------------------------- | -------------------------------------------------------------- |
 | `Postgres` | Railway PostgreSQL template               | —                                   | Provides `DATABASE_URL`                                        |
 | `backend`  | `backend/` (Dockerfile + `railway.json`)  | `https://<backend>.up.railway.app`  | Applies Prisma migrations on start, health check `/api/health` |
-| `frontend` | `frontend/` (Dockerfile + `railway.json`) | `https://<frontend>.up.railway.app` | What people open: pages and `/api` are proxied to the backend  |
+| `frontend` | `frontend/` (Dockerfile + `railway.json`) | `https://<frontend>.up.railway.app` | What people open: the Angular app, with `/api` proxied to the backend |
 
 People only ever use the **frontend URL**: the QR codes, the wallet consent callbacks and the API
 all go through it, so the phone needs no tunnel.
@@ -65,7 +65,7 @@ curl https://<frontend>/api/health                       # {"ok":true}
 railway run --service backend npx tsx scripts/check-wallet.ts
 ```
 
-Then onboard the shop at `https://<frontend>/onboard.html`, approve in the wallet and pay a sale from
+Then onboard the shop at `https://<frontend>/onboard`, approve in the wallet and pay a sale from
 a phone by scanning the QR.
 
 ## Notes

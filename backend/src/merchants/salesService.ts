@@ -3,9 +3,16 @@ import { planAllocations } from "../domain/allocation.js";
 import { describeError } from "../openPayments/errors.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
-import { fromMinorUnits, toAmount, type Amount } from "../shared/money.js";
+import {
+  formatAmount,
+  fromMinorUnits,
+  toAmount,
+  type Amount,
+} from "../shared/money.js";
 import type { SalePaymentChanges, Store } from "../storage/store.js";
 import type { MerchantService } from "./merchantService.js";
+import { capRoom, monthCoverage } from "./monthly.js";
+import { committedBalances } from "./payoutService.js";
 import type {
   MerchantRecord,
   SaleRecord,
@@ -18,8 +25,21 @@ type PublicPayment = Awaited<ReturnType<PaymentFlows["getPayment"]>>;
 export interface SalesOptions {
   /** Base URL of the web client, used for the customer's pay link. */
   frontendUrl: string;
+  /**
+   * The wallet app's send screen (the Interledger test wallet's /send). Given an incoming payment
+   * as `merchantWA`, it fills in what is left of its amount and locks its description, and lets the signed-in
+   * customer pick their own account and wallet address. Without it, the QR is the incoming payment
+   * URL itself.
+   */
+  walletSendUrl?: string;
   now?: () => Date;
 }
+
+/**
+ * The most a single sale can be, in the shop's currency. Far above any shop's sale, and far below
+ * what an Open Payments amount can hold, so a typo never reaches the wallet as an overflow.
+ */
+const MAX_SALE_MAJOR = 100_000_000n;
 
 /** The sweeper only looks at sales from the last day. */
 const SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -27,12 +47,17 @@ const SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
 /**
  * A sale is a one-off Open Payments payment from the customer's wallet to the merchant's:
  * payment request → customer consent → execution → completion (the four steps the demo shows).
- * Once paid, the sale settles: each rule's share leaves the merchant's wallet under the
- * daily-capped grant (ADR 0004), exactly once (ADR 0006).
+ * Once paid, the sale settles exactly once (ADR 0006): savings shares leave the merchant's wallet
+ * under the monthly-capped grant (ADR 0004), and debt shares are reserved until their due day,
+ * when the creditor gets them in one payment (ADR 0014).
  */
 export class SalesService {
   private readonly now: () => Date;
   private sweeping = false;
+  /** Sales whose shares are being followed right now (see refreshSettlement). */
+  private readonly refreshing = new Set<string>();
+  /** The settlement each shop is running; the next one of that shop waits for it. */
+  private readonly settling = new Map<string, Promise<void>>();
 
   constructor(
     private readonly flows: PaymentFlows,
@@ -43,44 +68,109 @@ export class SalesService {
     this.now = options.now ?? (() => new Date());
   }
 
-  /** The merchant types the amount; the till shows `payUrl` as a QR code. */
+  /**
+   * The merchant types the amount and the till shows `payUrl` as a QR code. Each sale is an Open
+   * Payments payment request: an incoming payment on the merchant's wallet for exactly that amount.
+   * The QR opens the customer's wallet app on it (the shop fixed and the amount filled in,
+   * and the signed-in customer only confirms), and MiPlante settles the sale once it completes.
+   * `checkoutUrl` is MiPlante's checkout, the full consent flow, which pays the same request.
+   */
   async createSale(
     merchantId: string,
     input: { amount: string; description?: string },
   ) {
     const merchant = await this.merchants.require(merchantId);
+    const amount = toAmount(input.amount, merchant.asset);
+    const max = MAX_SALE_MAJOR * 10n ** BigInt(merchant.asset.assetScale);
+    if (BigInt(amount.value) > max) {
+      throw new AppError(
+        `El monto es demasiado grande: el máximo por venta es ${formatAmount({ ...amount, value: max.toString() })}`,
+      );
+    }
+    const request = await this.flows.requestPayment({
+      receiver: merchant.wallet,
+      amount: fromMinorUnits(amount.value, amount.assetScale),
+      description: saleDescription(merchant.name, input.description),
+    });
     const timestamp = this.timestamp();
     const sale = await this.store.saveSale({
       id: randomUUID(),
       merchantId,
-      amount: toAmount(input.amount, merchant.asset),
+      amount,
       description: input.description,
       status: "open",
+      paymentId: request.id,
       settlement: { status: "pending", items: [] },
       createdAt: timestamp,
       updatedAt: timestamp,
     });
-    return {
-      sale: await this.view(sale),
-      payUrl: this.payUrl(sale.id),
-    };
+    const view = await this.view(sale);
+    // The shop charges one sale at a time: the older ones nobody started paying are closed, in the
+    // background so the new QR shows at once.
+    void this.closeOlderSales(merchantId, sale.id);
+    return { sale: view, payUrl: view.payUrl, checkoutUrl: view.checkoutUrl };
+  }
+
+  /**
+   * Closes the shop's open sales other than `keepId` that nobody started paying: their payment
+   * requests stop taking money and they read "cancelled". A sale the customer is authorizing or
+   * paying, or that already received part of its money, is left as it is. Returns how many closed.
+   */
+  async closeOlderSales(merchantId: string, keepId: string): Promise<number> {
+    const open = (await this.store.listSales({ merchantId })).filter(
+      (s) => s.id !== keepId && s.status === "open" && s.paymentId,
+    );
+    const closed = await Promise.all(
+      open.map(async (old) => {
+        try {
+          if (!(await this.flows.closePaymentRequest(old.paymentId!))) {
+            // Its customer is paying: the sale shows that now instead of waiting for a poll.
+            await this.refresh(old.id);
+            return false;
+          }
+          return Boolean(
+            await this.store.transitionSale(
+              old.id,
+              ["open"],
+              { status: "cancelled", error: "Se reemplazó por un cobro nuevo" },
+              this.timestamp(),
+            ),
+          );
+        } catch (error) {
+          // It stays open, as before; the next sale tries again.
+          console.warn(`[sales] no se pudo cerrar la venta ${old.id}: ${describeError(error)}`);
+          return false;
+        }
+      }),
+    );
+    return closed.filter(Boolean).length;
   }
 
   /** The customer enters their wallet; returns the URL where they approve the payment. */
   async pay(saleId: string, input: { customerWallet: string }) {
     const sale = await this.require(saleId);
+    if (sale.status === "cancelled") {
+      throw new AppError("Este cobro se reemplazó por uno nuevo. Pide al negocio el código vigente.", 409);
+    }
     if (sale.status !== "open" && sale.status !== "failed") {
       throw new AppError("Esta venta ya se está pagando o ya fue pagada", 409);
     }
     const merchant = await this.merchants.require(sale.merchantId);
+    // Pay the sale's own payment request while it can still be paid, so the QR and the checkout
+    // share one destination and the sale can only be paid once.
+    const current = sale.paymentId
+      ? await this.store.getPayment(sale.paymentId)
+      : undefined;
+    const reusable = current && current.status !== "failed" && current.status !== "rejected";
     const { payment, redirectUrl } = await this.flows.startPayment({
       sender: input.customerWallet,
       receiver: merchant.wallet,
       amount: fromMinorUnits(sale.amount.value, sale.amount.assetScale),
-      description: sale.description
-        ? `${merchant.name} · ${sale.description}`
-        : merchant.name,
-      returnTo: `/pay.html?sale=${sale.id}`,
+      description: saleDescription(merchant.name, sale.description),
+      returnTo: `/pay?sale=${sale.id}`,
+      incoming: reusable
+        ? { url: current.incomingPaymentUrl, accessToken: current.incomingToken }
+        : undefined,
     });
     const updated = await this.store.transitionSale(
       sale.id,
@@ -105,7 +195,9 @@ export class SalesService {
     let sale = await this.require(saleId);
     if (
       sale.paymentId &&
-      (sale.status === "awaiting-consent" || sale.status === "processing")
+      (sale.status === "open" ||
+        sale.status === "awaiting-consent" ||
+        sale.status === "processing")
     ) {
       const payment = await this.flows.refreshPayment(sale.paymentId);
       sale =
@@ -135,87 +227,155 @@ export class SalesService {
    */
   async settle(saleId: string): Promise<void> {
     if (!(await this.store.claimSettlement(saleId, this.timestamp()))) return;
-    let sale = await this.require(saleId);
+    const { merchantId } = await this.require(saleId);
+    // One settlement at a time per shop: each one reads what this month's quotas have already
+    // received, so two at once would both pay the same part of a quota. One server instance runs
+    // the settlements (docs/DEPLOY.md), so waiting in memory is enough.
+    const previous = this.settling.get(merchantId) ?? Promise.resolve();
+    const current = previous.then(() => this.split(saleId));
+    const done = current.catch(() => {});
+    this.settling.set(merchantId, done);
+    try {
+      await current;
+    } finally {
+      if (this.settling.get(merchantId) === done) this.settling.delete(merchantId);
+    }
+  }
 
-    const merchant = await this.merchants.require(sale.merchantId);
-    if ((await this.flows.findMandate(merchant.mandateId)).status !== "active") {
-      await this.update(sale, {
-        settlement: {
-          status: "skipped",
-          reason: "La autorización diaria del comercio no está activa",
-          items: [],
-          kept: sale.amount,
-          settledAt: this.timestamp(),
-        },
+  private async split(saleId: string): Promise<void> {
+    let sale = await this.require(saleId);
+    let merchant: MerchantRecord;
+    let plan: ReturnType<typeof planAllocations>;
+    try {
+      merchant = await this.merchants.require(sale.merchantId);
+      if ((await this.flows.findMandate(merchant.mandateId)).status !== "active") {
+        await this.update(sale, {
+          settlement: {
+            status: "skipped",
+            reason: "La autorización mensual del comercio no está activa",
+            items: [],
+            kept: sale.amount,
+            settledAt: this.timestamp(),
+          },
+        });
+        return;
+      }
+      const [cap, paidThisMonth, reserved] = await Promise.all([
+        capRoom(this.flows, this.store, merchant, this.now()),
+        this.paidThisMonth(merchant.id, saleId),
+        committedBalances(this.store, merchant.id),
+      ]);
+      // What is reserved will leave under the same grant on the due day: it already uses the cap,
+      // and it already counts against each debt's balance.
+      const pending = Object.values(reserved).reduce(
+        (sum, value) => sum + (value > 0n ? value : 0n),
+        0n,
+      );
+      const remainingCap = {
+        ...cap,
+        value: (BigInt(cap.value) > pending ? BigInt(cap.value) - pending : 0n).toString(),
+      };
+      const rules = merchant.rules.map((rule) => {
+        const held = reserved[rule.id] ?? 0n;
+        if (!rule.outstanding || held <= 0n) return rule;
+        const left = BigInt(rule.outstanding.value) - held;
+        return { ...rule, outstanding: { ...rule.outstanding, value: (left > 0n ? left : 0n).toString() } };
       });
+      plan = planAllocations(sale.amount, rules, remainingCap, paidThisMonth);
+    } catch (error) {
+      // Nothing has moved yet: give the claim back so the next poll or the sweeper tries again,
+      // instead of leaving the sale "running" for good.
+      await this.update(sale, { settlement: { status: "pending", items: [] } });
+      console.warn(`[settle] venta ${saleId}: ${describeError(error)}`);
       return;
     }
-
-    const plan = planAllocations(
-      sale.amount,
-      merchant.rules,
-      await this.remainingCap(merchant),
+    // The rules are charged in parallel: their amounts already fit the remaining monthly cap
+    // (and the wallet rejects any excess anyway), so the split takes one charge, not one per rule.
+    const items: (SettlementItem | undefined)[] = plan.allocations.map(
+      () => undefined,
     );
-    const items: SettlementItem[] = [];
-    for (const allocation of plan.allocations) {
-      const rule = merchant.rules.find((r) => r.id === allocation.ruleId)!;
-      const base = {
-        ruleId: rule.id,
-        label: rule.label,
-        kind: rule.kind,
-        destination: rule.destination,
-        amount: allocation.amount,
-        capped: allocation.capped,
-      };
-      if (allocation.amount.value === "0") {
-        items.push({ ...base, status: "skipped" });
-        continue;
-      }
-      try {
-        const payment = await this.flows.chargeMandate(merchant.mandateId, {
-          receiver: rule.destination,
-          amount: fromMinorUnits(
-            allocation.amount.value,
-            allocation.amount.assetScale,
-          ),
-          amountType: "send",
-          description: `MiPlante · ${rule.label}`,
+    // Progress is written as each charge finishes, one write at a time, so a crash never hides
+    // money that already moved.
+    let progress = Promise.resolve();
+    const persistProgress = () => {
+      progress = progress.then(async () => {
+        sale = await this.update(await this.require(saleId), {
+          settlement: {
+            ...sale.settlement,
+            status: "running",
+            items: items.filter((item) => item !== undefined),
+          },
         });
-        items.push({
-          ...base,
-          status: itemStatus(payment.status),
-          paymentId: payment.id,
-        });
-        await this.merchants.recordRepayment(
-          merchant.id,
-          rule.id,
-          allocation.amount,
-        );
-      } catch (error) {
-        // The debt balance stays untouched when the repayment could not be sent.
-        items.push({
-          ...base,
-          status: "failed",
-          error: describeError(error),
-        });
-      }
-      // Persist progress after every item, so a crash never hides money that already moved.
-      sale = await this.update(await this.require(saleId), {
-        settlement: {
-          ...sale.settlement,
-          status: "running",
-          items: [...items],
-        },
       });
-    }
+      return progress;
+    };
+    await Promise.all(
+      plan.allocations.map(async (allocation, index) => {
+        const rule = merchant.rules.find((r) => r.id === allocation.ruleId)!;
+        const base = {
+          ruleId: rule.id,
+          label: rule.label,
+          kind: rule.kind,
+          destination: rule.destination,
+          amount: allocation.amount,
+          capped: allocation.capped,
+        };
+        if (allocation.amount.value === "0") {
+          items[index] = { ...base, status: "skipped" };
+          return;
+        }
+        if (sale.method === "cash") {
+          // The money is in the drawer: the share waits for the shopkeeper to deposit it (ADR 0019).
+          items[index] = { ...base, status: "cash" };
+          await persistProgress();
+          return;
+        }
+        if (rule.kind === "debt") {
+          // Set aside in the merchant's wallet; the creditor is paid in one go on the due day.
+          items[index] = { ...base, status: "reserved" };
+          await persistProgress();
+          return;
+        }
+        try {
+          const payment = await this.flows.chargeMandate(merchant.mandateId, {
+            receiver: rule.destination,
+            amount: fromMinorUnits(
+              allocation.amount.value,
+              allocation.amount.assetScale,
+            ),
+            amountType: "send",
+            description: `MiPlante · ${rule.label}`,
+          });
+          items[index] = {
+            ...base,
+            status: itemStatus(payment.status),
+            paymentId: payment.id,
+          };
+          // A share counts as saved once it arrives; most arrive later (refreshSettlement).
+          if (payment.status === "completed") {
+            await this.merchants.recordRepayment(merchant.id, rule.id, allocation.amount);
+          }
+        } catch (error) {
+          // Nothing left the wallet: nothing counts as saved.
+          items[index] = {
+            ...base,
+            status: "failed",
+            error: describeError(error),
+          };
+        }
+        await persistProgress();
+      }),
+    );
+    await progress;
 
-    const sent = items
+    const done = items.filter((item) => item !== undefined);
+    const sent = done
       .filter((item) => item.status !== "failed" && item.status !== "skipped")
       .reduce((total, item) => total + BigInt(item.amount.value), 0n);
     await this.update(await this.require(saleId), {
       settlement: {
         status: "done",
-        items,
+        items: done,
         kept: {
           ...sale.amount,
           value: (BigInt(sale.amount.value) - sent).toString(),
@@ -254,9 +414,56 @@ export class SalesService {
     return () => clearInterval(timer);
   }
 
-  /** Link the customer opens from the QR code. */
+  /**
+   * The wallet app's send screen on the sale's incoming payment: it reads the amount and the
+   * description from it (the amount stays editable; a smaller payment leaves the sale pending),
+   * and preselects the signed-in customer's wallet. Without
+   * `walletSendUrl`, the incoming payment URL itself, which any Open Payments wallet can pay.
+   */
+  private qrUrl(incomingPaymentUrl: string): string {
+    if (!this.options.walletSendUrl) return incomingPaymentUrl;
+    const url = new URL(this.options.walletSendUrl);
+    url.searchParams.set("merchantWA", incomingPaymentUrl);
+    return url.toString();
+  }
+
+  /** MiPlante's own checkout, where the customer types their wallet name. */
+  /**
+   * What the counter display shows (ADR 0018): the shop's newest sale while it waits for the
+   * customer, or for a minute once paid, so the customer sees it arrive; otherwise nothing, and the
+   * phone waits for the next one. Reading it moves the sale forward, as /cobro does.
+   */
+  async display(key: string) {
+    const merchant = await this.store.getMerchantByDisplayKey(key);
+    if (!merchant) {
+      throw new NotFoundError("Esta pantalla ya no está enlazada a una tienda");
+    }
+    const now = this.now().getTime();
+    // A cash sale has no QR: the display shows the newest sale the customer pays by QR.
+    const [latest] = (
+      await this.store.listSales({
+        merchantId: merchant.id,
+        createdSince: new Date(now - DISPLAY_SALE_MS).toISOString(),
+      })
+    ).filter((sale) => sale.method !== "cash");
+    let sale: ReturnType<typeof toPublicSale> | null = null;
+    if (latest && latest.status !== "failed" && latest.status !== "cancelled") {
+      const view = await this.refresh(latest.id);
+      const paidAgo = view.paidAt ? now - Date.parse(view.paidAt) : 0;
+      if (view.status !== "failed" && !(view.status === "paid" && paidAgo > DISPLAY_PAID_MS)) {
+        sale = toPublicSale(view);
+      }
+    }
+    return { shopName: merchant.name, sale };
+  }
+
+  /** The link a phone opens once to become the shop's counter display. */
+  displayUrl(key: string): string {
+    return `${this.options.frontendUrl}/cobro?pantalla=${encodeURIComponent(key)}`;
+  }
+
   payUrl(saleId: string): string {
-    return `${this.options.frontendUrl}/pay.html?sale=${saleId}`;
+    return `${this.options.frontendUrl}/pay?sale=${saleId}`;
   }
 
   async require(id: string): Promise<SaleRecord> {
@@ -276,6 +483,7 @@ export class SalesService {
       merchantName: merchant?.name,
       amount: sale.amount,
       description: sale.description,
+      method: sale.method ?? "qr",
       status: sale.status,
       customer: sale.customer,
       error: sale.error,
@@ -285,8 +493,20 @@ export class SalesService {
         debitAmount: payment.debitAmount,
         receivedAmount: payment.receivedAmount,
       },
-      payUrl: this.payUrl(sale.id),
-      settlement: sale.settlement,
+      // The QR: the wallet app on the sale's incoming payment while it can still be paid. After a
+      // partial payment it asks for exactly what is left.
+      payUrl:
+        payment && sale.status !== "failed"
+          ? this.qrUrl(payment.incomingPaymentUrl)
+          : this.payUrl(sale.id),
+      /** What is still missing after a partial payment; absent until money arrives or once paid. */
+      pending: pendingAmount(sale, payment?.receivedAmount),
+      checkoutUrl: this.payUrl(sale.id),
+      // Public (the customer and /cobro read it): the internal payment of each share stays out.
+      settlement: {
+        ...sale.settlement,
+        items: sale.settlement.items.map(({ paymentId: _p, ...item }) => item),
+      },
       createdAt: sale.createdAt,
       updatedAt: sale.updatedAt,
       paidAt: sale.paidAt,
@@ -308,40 +528,46 @@ export class SalesService {
     return this.now().toISOString();
   }
 
-  /** What is left of today's cap, from the grant's spent amount. Undefined if unknown. */
-  private async remainingCap(
-    merchant: MerchantRecord,
-  ): Promise<Amount | undefined> {
-    const spent = (await this.flows.getMandate(merchant.mandateId)).spent
-      ?.debitAmount;
-    const cap = merchant.dailyCap;
-    if (
-      !spent ||
-      spent.assetCode !== cap.assetCode ||
-      spent.assetScale !== cap.assetScale
-    ) {
-      return undefined;
-    }
-    const left = BigInt(cap.value) - BigInt(spent.value);
-    return { ...cap, value: (left > 0n ? left : 0n).toString() };
+  /** How much of each rule's month is covered (see monthCoverage). */
+  paidThisMonth(merchantId: string, exceptSaleId?: string): Promise<Record<string, Amount>> {
+    return monthCoverage(this.store, merchantId, this.now(), exceptSaleId);
   }
 
+  /**
+   * Follows the shares on their way. One that arrives counts as saved; one that fails goes back to
+   * what the merchant kept. One pass per sale at a time, so a share is never counted twice.
+   */
   private async refreshSettlement(saleId: string): Promise<void> {
-    const sale = await this.require(saleId);
-    const items = await Promise.all(
-      sale.settlement.items.map(async (item) => {
-        if (item.status !== "processing" || !item.paymentId) return item;
-        const payment = await this.flows.refreshPayment(item.paymentId);
-        return {
-          ...item,
-          status: itemStatus(payment.status),
-          error: payment.error,
-        };
-      }),
-    );
-    await this.update(await this.require(saleId), {
-      settlement: { ...sale.settlement, items },
-    });
+    if (this.refreshing.has(saleId)) return;
+    this.refreshing.add(saleId);
+    try {
+      const sale = await this.require(saleId);
+      const arrived: SettlementItem[] = [];
+      const items = await Promise.all(
+        sale.settlement.items.map(async (item) => {
+          if (item.status !== "processing" || !item.paymentId) return item;
+          const payment = await this.flows.refreshPayment(item.paymentId);
+          const next = { ...item, status: itemStatus(payment.status), error: payment.error };
+          if (next.status === "completed") arrived.push(next);
+          return next;
+        }),
+      );
+      const moved = items
+        .filter((item) => item.status !== "failed" && item.status !== "skipped")
+        .reduce((total, item) => total + BigInt(item.amount.value), 0n);
+      await this.update(await this.require(saleId), {
+        settlement: {
+          ...sale.settlement,
+          items,
+          kept: { ...sale.amount, value: (BigInt(sale.amount.value) - moved).toString() },
+        },
+      });
+      for (const item of arrived) {
+        await this.merchants.recordRepayment(sale.merchantId, item.ruleId, item.amount);
+      }
+    } finally {
+      this.refreshing.delete(saleId);
+    }
   }
 
   private statusFrom(payment: PublicPayment): SalePaymentChanges {
@@ -357,9 +583,37 @@ export class SalesService {
       case "processing":
         return { status: "processing" };
       default:
-        return { status: "awaiting-consent" };
+        // Nobody has paid the sale's payment request yet: the sale is still open.
+        return payment.kind === "payment-request"
+          ? { status: "open" }
+          : { status: "awaiting-consent" };
     }
   }
+}
+
+export type SaleView = Awaited<ReturnType<SalesService["view"]>>;
+
+/**
+ * The sale as anyone holding its link sees it (the customer's checkout, the phone at the till): how
+ * it was split, but not the wallets each share went to nor the payments that carried them, which
+ * are the shop's own business.
+ */
+/** A sale older than this is no longer the one at the counter. */
+const DISPLAY_SALE_MS = 30 * 60_000;
+/** How long the display celebrates a payment before waiting for the next sale. */
+const DISPLAY_PAID_MS = 60_000;
+
+export function toPublicSale(sale: SaleView) {
+  return {
+    ...sale,
+    settlement: {
+      ...sale.settlement,
+      items: sale.settlement.items.map(
+        // The payment of each share never reaches here: view() already leaves it out.
+        ({ destination: _d, ruleId: _r, ...item }) => item,
+      ),
+    },
+  };
 }
 
 function itemStatus(paymentStatus: string): SettlementItemStatus {
@@ -371,9 +625,31 @@ function itemStatus(paymentStatus: string): SettlementItemStatus {
 
 function needsWork(sale: SaleRecord): boolean {
   return (
+    (sale.status === "open" && Boolean(sale.paymentId)) ||
     sale.status === "awaiting-consent" ||
     sale.status === "processing" ||
     (sale.status === "paid" && sale.settlement.status === "pending") ||
     sale.settlement.items.some((item) => item.status === "processing")
   );
+}
+
+function saleDescription(merchantName: string, description?: string): string {
+  return description ? `${merchantName} · ${description}` : merchantName;
+}
+
+/** A payer who sent less than the sale left this much to pay. */
+function pendingAmount(
+  sale: SaleRecord,
+  received: Amount | undefined,
+): Amount | undefined {
+  if (sale.status !== "processing" || !received) return undefined;
+  if (
+    received.assetCode !== sale.amount.assetCode ||
+    received.assetScale !== sale.amount.assetScale
+  ) {
+    return undefined;
+  }
+  const left = BigInt(sale.amount.value) - BigInt(received.value);
+  if (BigInt(received.value) <= 0n || left <= 0n) return undefined;
+  return { ...sale.amount, value: left.toString() };
 }

@@ -2,6 +2,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "../generated/prisma/client.js";
 import type {
   MerchantRecord,
+  PayoutRecord,
   SaleRecord,
   SaleStatus,
   SettlementItem,
@@ -13,6 +14,7 @@ import type {
   StoredToken,
 } from "../openPayments/records.js";
 import type { Amount, Asset } from "../shared/money.js";
+import type { SessionRecord, UserRecord } from "../auth/types.js";
 import type { RuleUpdate, SalePaymentChanges, Store } from "./store.js";
 
 const merchantInclude = { rules: { orderBy: { position: "asc" } } } as const;
@@ -40,6 +42,7 @@ export class PrismaStore implements Store {
   // Payments --------------------------------------------------------------------------------------
 
   async getPayment(id: string) {
+    if (!isUuid(id)) return undefined;
     const row = await this.prisma.payment.findUnique({ where: { id } });
     return row ? toPayment(row) : undefined;
   }
@@ -50,7 +53,7 @@ export class PrismaStore implements Store {
       status: record.status,
       description: record.description ?? null,
       returnTo: record.returnTo ?? null,
-      sender: record.sender,
+      sender: record.sender ?? null,
       receiver: record.receiver,
       mandateId: record.mandateId ?? null,
       incomingPaymentUrl: record.incomingPaymentUrl,
@@ -87,6 +90,7 @@ export class PrismaStore implements Store {
   // Mandates --------------------------------------------------------------------------------------
 
   async getMandate(id: string) {
+    if (!isUuid(id)) return undefined;
     const row = await this.prisma.mandate.findUnique({ where: { id } });
     return row ? toMandate(row) : undefined;
   }
@@ -117,6 +121,7 @@ export class PrismaStore implements Store {
   // Merchants -------------------------------------------------------------------------------------
 
   async getMerchant(id: string) {
+    if (!isUuid(id)) return undefined;
     const row = await this.prisma.merchant.findUnique({
       where: { id },
       include: merchantInclude,
@@ -125,16 +130,7 @@ export class PrismaStore implements Store {
   }
 
   async saveMerchant(record: MerchantRecord) {
-    const data = {
-      name: record.name,
-      wallet: record.wallet,
-      assetCode: record.asset.assetCode,
-      assetScale: record.asset.assetScale,
-      dailyCap: BigInt(record.dailyCap.value),
-      mandateId: record.mandateId,
-      createdAt: new Date(record.createdAt),
-      updatedAt: new Date(record.updatedAt),
-    };
+    const data = merchantColumns(record);
     await this.prisma.$transaction([
       this.prisma.merchant.upsert({
         where: { id: record.id },
@@ -148,15 +144,30 @@ export class PrismaStore implements Store {
           id: rule.id,
           position,
           label: rule.label,
+          category: rule.category,
           kind: rule.kind,
           destination: rule.destination,
           shareBps: rule.shareBps,
+          monthlyQuota: rule.monthlyQuota
+            ? BigInt(rule.monthlyQuota.value)
+            : null,
           outstanding: rule.outstanding ? BigInt(rule.outstanding.value) : null,
           repaid: BigInt(rule.repaid.value),
+          savingsGoal: rule.savingsGoal ? BigInt(rule.savingsGoal.value) : null,
+          dueDay: rule.dueDay ?? null,
         })),
       }),
     ]);
     return record;
+  }
+
+  async updateMerchant(record: MerchantRecord) {
+    const row = await this.prisma.merchant.update({
+      where: { id: record.id },
+      data: merchantColumns(record),
+      include: merchantInclude,
+    });
+    return toMerchant(row);
   }
 
   async recordRepayment(
@@ -202,9 +213,15 @@ export class PrismaStore implements Store {
         const fields = {
           position,
           label: rule.label,
+          category: rule.category,
           kind: rule.kind,
           destination: rule.destination,
           shareBps: rule.shareBps,
+          monthlyQuota: rule.monthlyQuota
+            ? BigInt(rule.monthlyQuota.value)
+            : null,
+          savingsGoal: rule.savingsGoal ? BigInt(rule.savingsGoal.value) : null,
+          dueDay: rule.dueDay ?? null,
         };
         return this.prisma.rule.upsert({
           where: { merchantId_id: { merchantId, id: rule.id } },
@@ -232,6 +249,7 @@ export class PrismaStore implements Store {
   // Sales -----------------------------------------------------------------------------------------
 
   async getSale(id: string) {
+    if (!isUuid(id)) return undefined;
     const row = await this.prisma.sale.findUnique({
       where: { id },
       include: saleInclude,
@@ -250,6 +268,7 @@ export class PrismaStore implements Store {
       status: record.status,
       customer: record.customer ?? null,
       paymentId: record.paymentId ?? null,
+      method: record.method ?? "qr",
       error: record.error ?? null,
       settlementStatus: settlement.status,
       settlementReason: settlement.reason ?? null,
@@ -330,6 +349,167 @@ export class PrismaStore implements Store {
     return count === 1;
   }
 
+  // Accounts ----------------------------------------------------------------------------------
+
+  async saveUser(record: UserRecord) {
+    const data = {
+      name: record.name,
+      email: record.email,
+      passwordHash: record.passwordHash,
+      createdAt: new Date(record.createdAt),
+    };
+    await this.prisma.user.upsert({
+      where: { id: record.id },
+      create: { id: record.id, ...data },
+      update: data,
+    });
+    return record;
+  }
+
+  async getUser(id: string) {
+    if (!isUuid(id)) return undefined;
+    const row = await this.prisma.user.findUnique({ where: { id } });
+    return row ? toUser(row) : undefined;
+  }
+
+  async getUserByEmail(email: string) {
+    const row = await this.prisma.user.findUnique({ where: { email } });
+    return row ? toUser(row) : undefined;
+  }
+
+  async saveSession(record: SessionRecord) {
+    await this.prisma.session.create({
+      data: {
+        token: record.token,
+        userId: record.userId,
+        createdAt: new Date(record.createdAt),
+        expiresAt: new Date(record.expiresAt),
+      },
+    });
+    return record;
+  }
+
+  async getSession(token: string) {
+    const row = await this.prisma.session.findUnique({ where: { token } });
+    return row
+      ? {
+          token: row.token,
+          userId: row.userId,
+          createdAt: row.createdAt.toISOString(),
+          expiresAt: row.expiresAt.toISOString(),
+        }
+      : undefined;
+  }
+
+  async deleteSession(token: string) {
+    await this.prisma.session.deleteMany({ where: { token } });
+  }
+
+  async getMerchantByOwner(ownerId: string) {
+    const row = await this.prisma.merchant.findFirst({
+      where: { ownerId },
+      include: merchantInclude,
+      orderBy: { createdAt: "desc" },
+    });
+    return row ? toMerchant(row) : undefined;
+  }
+
+  async getMerchantByDisplayKey(key: string) {
+    const row = await this.prisma.merchant.findUnique({
+      where: { displayKey: key },
+      include: merchantInclude,
+    });
+    return row ? toMerchant(row) : undefined;
+  }
+
+  async listMerchants() {
+    const rows = await this.prisma.merchant.findMany({ include: merchantInclude });
+    return rows.map(toMerchant);
+  }
+
+  async savePayout(record: PayoutRecord) {
+    const data = {
+      merchantId: record.merchantId,
+      ruleId: record.ruleId,
+      label: record.label,
+      destination: record.destination,
+      amount: BigInt(record.amount.value),
+      assetCode: record.amount.assetCode,
+      assetScale: record.amount.assetScale,
+      reason: record.reason,
+      month: record.month,
+      status: record.status,
+      paymentId: record.paymentId ?? null,
+      error: record.error ?? null,
+      topUp: record.topUp ? BigInt(record.topUp.value) : null,
+      resolution: record.resolution ?? null,
+      resolvedAt: record.resolvedAt ? new Date(record.resolvedAt) : null,
+      emergencyPaymentId: record.emergencyDraw?.paymentId ?? null,
+      emergencyAmount: record.emergencyDraw ? BigInt(record.emergencyDraw.amount.value) : null,
+      emergencyStatus: record.emergencyDraw?.status ?? null,
+      emergencyError: record.emergencyDraw?.error ?? null,
+      emergencyCounted: record.emergencyDraw?.counted ?? false,
+      createdAt: new Date(record.createdAt),
+      updatedAt: new Date(record.updatedAt),
+    };
+    await this.prisma.payout.upsert({
+      where: { id: record.id },
+      create: { id: record.id, ...data },
+      update: data,
+    });
+    return record;
+  }
+
+  async listPayouts(merchantId: string) {
+    const rows = await this.prisma.payout.findMany({
+      where: { merchantId },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(
+      (row): PayoutRecord => ({
+        id: row.id,
+        merchantId: row.merchantId,
+        ruleId: row.ruleId,
+        label: row.label,
+        destination: row.destination,
+        amount: amount(row.amount, { assetCode: row.assetCode, assetScale: row.assetScale }),
+        reason: row.reason as PayoutRecord["reason"],
+        month: row.month,
+        status: row.status as PayoutRecord["status"],
+        paymentId: opt(row.paymentId),
+        error: opt(row.error),
+        topUp:
+          row.topUp === null
+            ? undefined
+            : amount(row.topUp, { assetCode: row.assetCode, assetScale: row.assetScale }),
+        resolution: (row.resolution ?? undefined) as PayoutRecord["resolution"],
+        resolvedAt: row.resolvedAt?.toISOString(),
+        emergencyDraw:
+          row.emergencyAmount === null || row.emergencyStatus === null
+            ? undefined
+            : {
+                paymentId: opt(row.emergencyPaymentId),
+                amount: amount(row.emergencyAmount, { assetCode: row.assetCode, assetScale: row.assetScale }),
+                status: row.emergencyStatus as NonNullable<PayoutRecord["emergencyDraw"]>["status"],
+                error: opt(row.emergencyError),
+                counted: row.emergencyCounted,
+              },
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      }),
+    );
+  }
+
+  async isMerchantMandate(mandateId: string) {
+    if (!isUuid(mandateId)) return false;
+    const count = await this.prisma.merchant.count({
+      where: {
+        OR: [{ mandateId }, { pendingMandateId: mandateId }, { emergencyMandateId: mandateId }],
+      },
+    });
+    return count > 0;
+  }
+
   async close() {
     await this.prisma.$disconnect();
   }
@@ -337,7 +517,7 @@ export class PrismaStore implements Store {
   /** Empties every table. Only for the integration tests' throwaway database. */
   async truncateForTests() {
     await this.prisma.$executeRawUnsafe(
-      "TRUNCATE settlement_items, sales, rules, merchants, payments, mandates",
+      "TRUNCATE payouts, settlement_items, sales, rules, merchants, payments, mandates, sessions, users",
     );
   }
 }
@@ -351,7 +531,7 @@ function toPayment(row: PaymentRow): PaymentRecord {
     status: row.status as PaymentRecord["status"],
     description: opt(row.description),
     returnTo: opt(row.returnTo),
-    sender: row.sender,
+    sender: opt(row.sender),
     receiver: row.receiver,
     mandateId: opt(row.mandateId),
     incomingPaymentUrl: row.incomingPaymentUrl,
@@ -389,25 +569,77 @@ function toMandate(row: MandateRow): MandateRecord {
   };
 }
 
+/** The shop's own columns; its rules are stored apart. */
+function merchantColumns(record: MerchantRecord) {
+  return {
+    ownerId: record.ownerId ?? null,
+    name: record.name,
+    wallet: record.wallet,
+    assetCode: record.asset.assetCode,
+    assetScale: record.asset.assetScale,
+    monthlyCap: BigInt(record.monthlyCap.value),
+    monthlySalesGoal: record.monthlySalesGoal
+      ? BigInt(record.monthlySalesGoal.value)
+      : null,
+    pendingCap: record.pendingCap
+      ? BigInt(record.pendingCap.monthlyCap.value)
+      : null,
+    pendingMandateId: record.pendingCap?.mandateId ?? null,
+    emergencyMandateId: record.emergency?.mandateId ?? null,
+    emergencyRuleId: record.emergency?.ruleId ?? null,
+    displayKey: record.displayKey ?? null,
+    cashCredit: BigInt(record.cashCredit?.value ?? "0"),
+    mandateId: record.mandateId,
+    createdAt: new Date(record.createdAt),
+    updatedAt: new Date(record.updatedAt),
+  };
+}
+
 function toMerchant(row: MerchantRow): MerchantRecord {
   const asset: Asset = { assetCode: row.assetCode, assetScale: row.assetScale };
   return {
     id: row.id,
+    ownerId: opt(row.ownerId),
     name: row.name,
     wallet: row.wallet,
     asset,
-    dailyCap: amount(row.dailyCap, asset),
+    monthlyCap: amount(row.monthlyCap, asset),
     rules: row.rules.map((rule) => ({
       id: rule.id,
       label: rule.label,
+      category: rule.category,
       kind: rule.kind as MerchantRecord["rules"][number]["kind"],
       destination: rule.destination,
       shareBps: rule.shareBps,
+      monthlyQuota:
+        rule.monthlyQuota === null
+          ? undefined
+          : amount(rule.monthlyQuota, asset),
       outstanding:
         rule.outstanding === null ? undefined : amount(rule.outstanding, asset),
       repaid: amount(rule.repaid, asset),
+      savingsGoal:
+        rule.savingsGoal === null ? undefined : amount(rule.savingsGoal, asset),
+      dueDay: opt(rule.dueDay),
     })),
     mandateId: row.mandateId,
+    monthlySalesGoal:
+      row.monthlySalesGoal === null
+        ? undefined
+        : amount(row.monthlySalesGoal, asset),
+    pendingCap:
+      row.pendingCap === null || row.pendingMandateId === null
+        ? undefined
+        : {
+            mandateId: row.pendingMandateId,
+            monthlyCap: amount(row.pendingCap, asset),
+          },
+    emergency:
+      row.emergencyMandateId === null || row.emergencyRuleId === null
+        ? undefined
+        : { mandateId: row.emergencyMandateId, ruleId: row.emergencyRuleId },
+    displayKey: opt(row.displayKey),
+    cashCredit: row.cashCredit > 0n ? amount(row.cashCredit, asset) : undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -423,6 +655,7 @@ function toSale(row: SaleRow): SaleRecord {
     status: row.status as SaleRecord["status"],
     customer: opt(row.customer),
     paymentId: opt(row.paymentId),
+    method: row.method as SaleRecord["method"],
     error: opt(row.error),
     settlement: {
       status: row.settlementStatus as SaleRecord["settlement"]["status"],
@@ -475,4 +708,28 @@ function json(value: object | undefined) {
 
 function fromJson<T>(value: Prisma.JsonValue): T | undefined {
   return value === null ? undefined : (value as unknown as T);
+}
+
+function toUser(row: {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  createdAt: Date;
+}): UserRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    passwordHash: row.passwordHash,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/**
+ * IDs are UUID columns: anything else (a mistyped link, a damaged QR) cannot exist, and PostgreSQL
+ * would reject the query, so the lookup simply finds nothing and the API answers 404.
+ */
+function isUuid(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }

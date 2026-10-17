@@ -28,9 +28,11 @@ Details and sources: [`docs/product/PROBLEM.md`](docs/product/PROBLEM.md).
 
 ## How it works
 
-1. **Set up once.** The merchant lists their obligations, for example a microcredit repaid with 15% of
-   each sale until 300,000 COP are covered, and an emergency fund that gets 5%. They also set a daily
-   cap and approve **one Open Payments grant** in their own wallet.
+1. **Set up once.** The merchant creates an account and sets up the shop in three steps. They list
+   their obligations by category, for example a supplier paid with 10% of each sale up to 200,000 COP
+   a month and a microcredit with 15% up to 100,000 COP a month, plus an emergency fund that gets 5%.
+   They set a monthly cap and approve **one Open Payments grant** in their own wallet. Once a month's
+   quotas are paid, the rest of the month's sales are profit.
 2. **Sell.** The till shows a QR code. The customer scans it and pays from their own wallet, at any
    provider, approving the payment in that wallet.
 3. **Split.** As soon as the payment arrives, the sale splits itself:
@@ -40,13 +42,15 @@ Details and sources: [`docs/product/PROBLEM.md`](docs/product/PROBLEM.md).
    | 10,000 COP |      **8,000** |             1,500 |                 500 |
 
 4. **See.** The dashboard shows today's sales and split, how much of each debt is left, the savings,
-   the cap used today and a seven-day income history.
+   how much of each monthly quota is paid, the savings, the cap used this month and a seven-day
+   income history.
 
 **The four promises.** These are guaranteed by Open Payments, not just by our code:
 
 - **No sales, no collection.** Shares are taken only from real sales.
-- **Never above the cap.** The merchant's wallet enforces the daily cap.
-- **The merchant always keeps the majority.** Rules can take at most 50% of a sale.
+- **Never above the cap.** The merchant's wallet enforces the monthly cap.
+- **The merchant always keeps a part.** Rules can take up to 99% of a sale: a corner shop's
+  supplier can be most of what comes in, since its gross margin is around 15–25%.
 - **Revocable at any time** from the merchant's own wallet.
 
 ## Open Payments, end to end
@@ -56,7 +60,7 @@ Details and sources: [`docs/product/PROBLEM.md`](docs/product/PROBLEM.md).
 | **Payment request** | The merchant creates a sale and shows its QR code; the customer enters their wallet    | `incoming-payment` grant and incoming payment on the merchant's wallet; `quote` grant and quote on the customer's                                                   |
 | **Authorization**   | The customer approves in their own wallet                                              | Interactive `outgoing-payment` grant (GNAP redirect and finish, interaction hash verified)                                                                          |
 | **Execution**       | MiPlante creates the payment; Interledger delivers it, converting currencies if needed | Outgoing payment from the quote                                                                                                                                     |
-| **Completion**      | The incoming payment completes, and the sale splits itself                             | Incoming payment polled until completed; one outgoing payment per rule under the merchant's grant (`limits.debitAmount` = daily cap, `limits.interval` = `R/…/P1D`) |
+| **Completion**      | The incoming payment completes, and the sale splits itself                             | Incoming payment polled until completed; one outgoing payment per rule under the merchant's grant (`limits.debitAmount` = monthly cap, `limits.interval` = `R/<1st of the month>/P1M`) |
 
 Integration details: [`docs/OPEN_PAYMENTS.md`](docs/OPEN_PAYMENTS.md).
 
@@ -66,16 +70,16 @@ Integration details: [`docs/OPEN_PAYMENTS.md`](docs/OPEN_PAYMENTS.md).
 
 ```mermaid
 flowchart LR
-  subgraph Docker["🐳 docker-compose.yml · Railway in production"]
+  subgraph Docker["🐳 docker-compose.yml · Coolify or Railway in production"]
     subgraph Front["Container 1 · Frontend (:3001)"]
-      web["Angular PWA + GSAP<br/>Landing and brand system"]
-      proxy["nginx in production · ng serve in development<br/>proxies /api and the till pages"]
+      web["Angular PWA + GSAP<br/>Landing · Till + GlorIA · Onboarding · Checkout · Counter display · Sandbox"]
+      proxy["nginx in production · ng serve in development<br/>serves the app, proxies /api"]
     end
 
     subgraph Back["Container 2 · Backend (Express + Prisma :3000)"]
-      pages["Till · Onboarding · QR checkout · Sandbox<br/>backend/public, no build step"]
-      routes["Express routes + zod<br/>REST API and GNAP callbacks"]
-      services["MerchantService · SalesService · sweeper"]
+      routes["Express controllers + zod<br/>REST API and GNAP callbacks"]
+      services["Merchant · Sales · Cash · Payout services · sweeper"]
+      gloria["GlorIA assistant<br/>reads and prepares, never moves money"]
       domain["Allocation engine (pure BigInt)"]
       op["Open Payments adapter<br/>@interledger/open-payments SDK"]
       store["PrismaStore<br/>atomic conditional UPDATEs"]
@@ -90,10 +94,16 @@ flowchart LR
     wallets[("6 team wallets<br/>Tienda · Ahorro · Proveedor · Microcrédito · Clientes (COP/USD)")]
   end
 
+  subgraph AI["DeepSeek API (optional)"]
+    llm[("Chat model")]
+  end
+
   web --- proxy
   proxy -- "same domain" --> routes
-  proxy -- "same domain" --> pages
   routes --> services
+  routes --> gloria
+  gloria --> services
+  gloria -- "only with DEEPSEEK_API_KEY" --> llm
   services --> domain
   services --> op
   services --> store
@@ -101,14 +111,14 @@ flowchart LR
   op -- "GNAP grants, quotes and<br/>HTTP message signatures" --> wallets
 ```
 
-Three containers, the same in `docker-compose.yml` and on Railway:
+Three containers, the same in `docker-compose.yml` and in production (Coolify or Railway):
 
-- **Frontend:** the Angular landing (PWA, GSAP, the brand's design system). It also puts the backend
-  under the same domain: nginx in production and `ng serve` in development proxy `/api/*` and the
-  till, onboarding, checkout and sandbox pages. People, QR codes and the wallets' consent callbacks
-  only ever use the frontend URL.
-- **Backend:** Express, zod, Prisma and `@interledger/open-payments`. It serves the API and the
-  merchant and customer pages.
+- **Frontend:** the Angular PWA (GSAP, the brand's design system) with every page people use: the
+  landing, sign-in, onboarding, the till with GlorIA, the customer checkout, the counter display and
+  the sandbox. nginx in production and `ng serve` in development proxy `/api/*` to the backend, so
+  people, QR codes and the wallets' consent callbacks only ever use the frontend URL.
+- **Backend:** Express, zod, Prisma and `@interledger/open-payments`: the REST API and the GNAP
+  consent callbacks.
 - **Database:** PostgreSQL 16.
 
 Key architecture decisions are recorded as ADRs:
@@ -148,13 +158,17 @@ Or run everything in containers with `npm run docker:up`: Compose reads `.env` a
 from the repository root, and the backend applies the migrations when it starts. After changing
 `backend/prisma/schema.prisma`, create a migration with `npm run db:migrate -- --name <change>`.
 
+GlorIA, the assistant in the till, turns on with `DEEPSEEK_API_KEY` in `.env` (see
+[`env.example`](env.example); after changing it, `docker compose up -d backend`). Without it the
+till works the same and the chat says she is off.
+
 Then open:
 
-- `/onboard.html` to register a merchant (or `npm run demo:merchant` for the demo shop with the
-  team's wallets);
-- `/merchant.html?id=…` for the till, where the shop can also change its splits;
-- `/pay.html?sale=…` for the customer, from the QR code;
-- `/sandbox.html` for the raw Open Payments flows.
+- `/register` to create an account and set up a shop, or `/login` to open its till (or
+  `npm run demo:merchant` for the demo shop with the team's wallets);
+- `/merchant?id=…` for the till, where the shop can also change its splits;
+- `/pay?sale=…` for the customer, from the QR code;
+- `/sandbox` for the raw Open Payments flows.
 
 Setting up the test wallet, step by step:
 [`docs/OPEN_PAYMENTS.md`](docs/OPEN_PAYMENTS.md#1-set-up-the-test-wallet-once). Pitch and demo
@@ -165,17 +179,21 @@ script: [`docs/DEMO.md`](docs/DEMO.md).
 ```
 backend/
   src/
+    auth/          shopkeeper accounts: scrypt passwords, session tokens
     domain/        allocation engine and Bogotá calendar (pure functions)
-    merchants/     onboarding, split rules, sales, settlement, dashboard
+    merchants/     onboarding, split rules, sales, cash sales, settlement, payouts, counter
+                   display, notifications, dashboard
     openPayments/  adapter over the SDK: grants, quotes, payments, hash, tokens
     storage/       Store port: PostgreSQL through Prisma, in memory for tests
     shared/        money (BigInt minor units) and errors
-    http/          Express routes and zod validation
+    assistant/     GlorIA: the shop's live state, strict tools and the DeepSeek client
+    http/          app.ts composes the app: controllers/ (one router per resource),
+                   middleware/ (CORS, errors, session token), schemas.ts (zod)
   prisma/          schema and migrations
-  public/          Spanish, mobile-first web client (no build step)
   tests/           Vitest: domain, flows against an Open Payments fake, HTTP, PostgreSQL
-  scripts/         check-wallet diagnostic, demo-merchant setup
-frontend/          Angular PWA landing + the proxy (nginx / ng serve) to the backend
+  scripts/         check-wallet diagnostic, demo-merchant setup, e2e-smoke
+frontend/          Angular PWA in Spanish, mobile first: landing, till, onboarding, checkout,
+                   counter display, sandbox and GlorIA, plus the /api proxy (nginx / ng serve)
 docs/              problem, ideation, product brief, ADRs, system design, API, demo
 ```
 
@@ -207,9 +225,11 @@ problem → ideation → product brief → decisions → system design → integ
 
 ## Team
 
-| Name              | Role |
-| ----------------- | ---- |
-| _to be completed_ |      |
+- Juan Manuel Canchala
+- Brayan Zuluaga
+- Juan José Cuartas
+- Juan Esteban Saez
+- Isabella Pacheco
 
 ## License
 

@@ -21,3 +21,8 @@ backend/src/generated/
 # Local data from the old JSON store (holds access tokens)
 data/
 
+
+# Coding-agent skills (Claude Code, Cursor...): each person installs their own, they are not MiPlante
+.claude/
+.agents/
+skills-lock.json

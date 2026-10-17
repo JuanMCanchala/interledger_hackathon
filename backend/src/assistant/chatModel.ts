@@ -1,0 +1,122 @@
+import { AppError } from "../shared/errors.js";
+
+/** One turn of a conversation, in the OpenAI chat format DeepSeek speaks. */
+export type ChatMessage =
+  | { role: "system" | "user"; content: string }
+  | { role: "assistant"; content: string; tool_calls?: ToolCall[] }
+  | { role: "tool"; tool_call_id: string; content: string };
+
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+export interface ToolSpec {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+    /** DeepSeek's strict mode (beta): the call always matches `parameters`. */
+    strict?: boolean;
+  };
+}
+
+export interface ChatReply {
+  content: string;
+  toolCalls: ToolCall[];
+}
+
+/** What GlorIA needs from a language model; tests replace it with a scripted one. */
+export interface ChatModel {
+  complete(messages: ChatMessage[], tools: ToolSpec[]): Promise<ChatReply>;
+}
+
+/** Thrown when the model cannot answer (down, slow, out of quota): GlorIA says so kindly. */
+export class ModelUnavailableError extends AppError {
+  constructor(detail: string) {
+    super("GlorIA no está disponible en este momento. Intenta de nuevo en un rato.", 503);
+    this.name = "ModelUnavailableError";
+    this.detail = detail;
+  }
+  readonly detail: string;
+}
+
+const TIMEOUT_MS = 20_000;
+const RETRY_DELAY_MS = 600;
+
+/**
+ * DeepSeek through its OpenAI-compatible chat API (ADR 0017). Thinking is off: GlorIA answers short
+ * questions about the shop's own figures, which need speed more than reasoning, and in thinking mode
+ * every tool turn would have to carry the reasoning back. Tools with `strict` go through the beta
+ * endpoint, where every call matches its schema; a low temperature keeps the answers to the facts.
+ */
+export class DeepSeekChatModel implements ChatModel {
+  constructor(
+    private readonly options: { apiKey: string; baseUrl: string; model: string },
+  ) {}
+
+  async complete(messages: ChatMessage[], tools: ToolSpec[]): Promise<ChatReply> {
+    // A dropped connection or a busy model often clears up in a moment: one retry, then give up.
+    let res: Response;
+    try {
+      res = await this.send(messages, tools);
+      if (res.status === 429 || res.status >= 500) {
+        await sleep(RETRY_DELAY_MS);
+        res = await this.send(messages, tools);
+      }
+    } catch (error) {
+      if (isTimeout(error)) throw new ModelUnavailableError(describe(error));
+      await sleep(RETRY_DELAY_MS);
+      try {
+        res = await this.send(messages, tools);
+      } catch (retryError) {
+        throw new ModelUnavailableError(describe(retryError));
+      }
+    }
+    const body = (await res.json().catch(() => ({}))) as {
+      choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[];
+      error?: { message?: string };
+    };
+    if (!res.ok) {
+      throw new ModelUnavailableError(`HTTP ${res.status}: ${body.error?.message ?? "sin detalle"}`);
+    }
+    const message = body.choices?.[0]?.message;
+    return { content: message?.content ?? "", toolCalls: message?.tool_calls ?? [] };
+  }
+
+  private send(messages: ChatMessage[], tools: ToolSpec[]): Promise<Response> {
+    const strict = tools.some((t) => t.function.strict);
+    return fetch(`${this.options.baseUrl}${strict ? "/beta" : ""}/chat/completions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${this.options.apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: this.options.model,
+        messages,
+        tools,
+        tool_choice: "auto",
+        thinking: { type: "disabled" },
+        temperature: 0.2,
+        max_tokens: 600,
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  }
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
+/** "fetch failed" says little: the cause (ENOTFOUND, ECONNRESET…) is what to look at. */
+function describe(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = (error as Error & { cause?: { code?: string; message?: string } }).cause;
+  return cause ? `${error.message} (${cause.code ?? cause.message})` : error.message;
+}

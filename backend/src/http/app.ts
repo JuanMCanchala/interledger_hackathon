@@ -1,243 +1,60 @@
-import { fileURLToPath } from "node:url";
-import { OpenPaymentsClientError } from "@interledger/open-payments";
-import express, {
-  type NextFunction,
-  type Request,
-  type Response,
-} from "express";
-import { z } from "zod";
-import { describeError } from "../openPayments/errors.js";
-import { AppError } from "../shared/errors.js";
+import express from "express";
+import type { GloriaService } from "../assistant/gloriaService.js";
+import type { AuthService } from "../auth/authService.js";
+import type { CashService } from "../merchants/cashService.js";
 import type { DashboardService } from "../merchants/dashboardService.js";
 import type { MerchantService } from "../merchants/merchantService.js";
+import type { PayoutService } from "../merchants/payoutService.js";
 import type { SalesService } from "../merchants/salesService.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
-import * as schemas from "./schemas.js";
+import { authController } from "./controllers/authController.js";
+import { displaysController } from "./controllers/displaysController.js";
+import { mandatesController } from "./controllers/mandatesController.js";
+import { merchantsController } from "./controllers/merchantsController.js";
+import { paymentsController } from "./controllers/paymentsController.js";
+import { salesController } from "./controllers/salesController.js";
+import { walletsController } from "./controllers/walletsController.js";
+import { cors } from "./middleware/cors.js";
+import { apiNotFound, errorHandler } from "./middleware/errors.js";
 
 export interface AppOptions {
+  auth: AuthService;
+  payouts: PayoutService;
   flows: PaymentFlows;
   merchants: MerchantService;
   sales: SalesService;
+  cash: CashService;
   dashboard: DashboardService;
   /** Where the browser lands after the consent screen. */
   frontendUrl: string;
-  /** Origin allowed to call /api from another host (e.g. a Vite or Next.js dev server). */
+  /** Origin allowed to call /api from another host (e.g. an Angular dev server). */
   corsOrigin?: string;
+  /** GlorIA, when a model is configured (ADR 0017). */
+  gloria?: GloriaService;
 }
 
-const PUBLIC_DIR = fileURLToPath(new URL("../../public", import.meta.url));
-
-export function createApp({
-  flows,
-  merchants,
-  sales,
-  dashboard,
-  frontendUrl,
-  corsOrigin,
-}: AppOptions) {
+/**
+ * The HTTP API app under /api with one controller per resource (docs/API.md).
+ * Errors from any controller end in `errorHandler`.
+ */
+export function createApp(options: AppOptions) {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "20kb" }));
-  if (corsOrigin) app.use("/api", cors(corsOrigin));
-  app.use(express.static(PUBLIC_DIR));
+  if (options.corsOrigin) app.use("/api", cors(options.corsOrigin));
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
   });
+  app.use("/api/wallet-address", walletsController(options));
+  app.use("/api/payments", paymentsController(options));
+  app.use("/api/mandates", mandatesController(options));
+  app.use("/api/auth", authController(options));
+  app.use("/api/merchants", merchantsController(options));
+  app.use("/api/sales", salesController(options));
+  app.use("/api/displays", displaysController(options));
 
-  app.get("/api/wallet-address", async (req, res) => {
-    const { url } = schemas.walletAddressQuery.parse(req.query);
-    res.json(await flows.describeWalletAddress(url));
-  });
-
-  // One-off payment ------------------------------------------------------------------------------
-
-  app.post("/api/payments", async (req, res) => {
-    res
-      .status(201)
-      .json(await flows.startPayment(schemas.createPayment.parse(req.body)));
-  });
-
-  app.get("/api/payments/:id", async (req, res) => {
-    res.json(await flows.refreshPayment(req.params.id));
-  });
-
-  app.get("/api/payments/:id/callback", async (req, res) => {
-    const { id } = req.params;
-    try {
-      await flows.completePayment(id, schemas.callbackQuery.parse(req.query));
-    } catch (error) {
-      // The record keeps the error; the frontend shows it when it polls.
-      console.error(`[callback] pago ${id}: ${describeError(error)}`);
-    }
-    const fallback = `/?payment=${encodeURIComponent(id)}`;
-    res.redirect(
-      303,
-      `${frontendUrl}${await returnPath(async () => (await flows.getPayment(id)).returnTo, fallback)}`,
-    );
-  });
-
-  // Mandates (recurring / capped consent) ---------------------------------------------------------
-
-  app.post("/api/mandates", async (req, res) => {
-    res
-      .status(201)
-      .json(await flows.startMandate(schemas.createMandate.parse(req.body)));
-  });
-
-  app.get("/api/mandates/:id", async (req, res) => {
-    res.json(await flows.getMandate(req.params.id));
-  });
-
-  app.get("/api/mandates/:id/callback", async (req, res) => {
-    const { id } = req.params;
-    try {
-      await flows.completeMandate(id, schemas.callbackQuery.parse(req.query));
-    } catch (error) {
-      console.error(`[callback] autorización ${id}: ${describeError(error)}`);
-    }
-    const fallback = `/?mandate=${encodeURIComponent(id)}`;
-    res.redirect(
-      303,
-      `${frontendUrl}${await returnPath(async () => (await flows.findMandate(id)).returnTo, fallback)}`,
-    );
-  });
-
-  app.post("/api/mandates/:id/charges", async (req, res) => {
-    res
-      .status(201)
-      .json(
-        await flows.chargeMandate(
-          req.params.id,
-          schemas.chargeMandate.parse(req.body),
-        ),
-      );
-  });
-
-  app.post("/api/mandates/:id/split", async (req, res) => {
-    res
-      .status(201)
-      .json(
-        await flows.splitMandate(
-          req.params.id,
-          schemas.splitMandate.parse(req.body),
-        ),
-      );
-  });
-
-  app.delete("/api/mandates/:id", async (req, res) => {
-    res.json(await flows.revokeMandate(req.params.id));
-  });
-
-  // MiPlante ---------------------------------------------------------------------------------------
-
-  app.post("/api/merchants", async (req, res) => {
-    res
-      .status(201)
-      .json(await merchants.onboard(schemas.onboardMerchant.parse(req.body)));
-  });
-
-  app.get("/api/merchants/:id", async (req, res) => {
-    res.json(await dashboard.get(req.params.id));
-  });
-
-  app.put("/api/merchants/:id/rules", async (req, res) => {
-    const { rules } = schemas.updateRules.parse(req.body);
-    res.json(await merchants.updateRules(req.params.id, rules));
-  });
-
-  app.post("/api/merchants/:id/consent", async (req, res) => {
-    res.status(201).json(await merchants.renewConsent(req.params.id));
-  });
-
-  app.post("/api/merchants/:id/sales", async (req, res) => {
-    res
-      .status(201)
-      .json(
-        await sales.createSale(
-          req.params.id,
-          schemas.createSale.parse(req.body),
-        ),
-      );
-  });
-
-  app.get("/api/sales/:id", async (req, res) => {
-    res.json(await sales.refresh(req.params.id));
-  });
-
-  app.post("/api/sales/:id/pay", async (req, res) => {
-    res
-      .status(201)
-      .json(await sales.pay(req.params.id, schemas.paySale.parse(req.body)));
-  });
-
-  app.use("/api", (_req, res) => {
-    res.status(404).json({ error: "Ruta no encontrada" });
-  });
+  app.use("/api", apiNotFound);
   app.use(errorHandler);
   return app;
-}
-
-/** Where to send the browser after a consent callback: the record's page, or the sandbox. */
-async function returnPath(
-  read: () => Promise<string | undefined>,
-  fallback: string,
-): Promise<string> {
-  try {
-    return (await read()) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function errorHandler(
-  error: unknown,
-  _req: Request,
-  res: Response,
-  _next: NextFunction,
-): void {
-  if (error instanceof z.ZodError) {
-    res.status(400).json({
-      error: "Datos inválidos",
-      details: error.issues.map(
-        (issue) => `${issue.path.join(".") || "body"}: ${issue.message}`,
-      ),
-    });
-    return;
-  }
-  if (error instanceof AppError) {
-    res.status(error.status).json({ error: error.message });
-    return;
-  }
-  if (error instanceof OpenPaymentsClientError) {
-    res.status(502).json({
-      error: "Open Payments rechazó la solicitud",
-      details: describeError(error),
-      upstreamStatus: error.status,
-    });
-    return;
-  }
-  if (error instanceof SyntaxError) {
-    res.status(400).json({ error: "JSON inválido" });
-    return;
-  }
-  console.error(error);
-  res.status(500).json({ error: "Error interno" });
-}
-
-function cors(origin: string) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET,POST,PUT,DELETE,OPTIONS",
-    );
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    if (req.method === "OPTIONS") {
-      res.sendStatus(204);
-      return;
-    }
-    next();
-  };
 }

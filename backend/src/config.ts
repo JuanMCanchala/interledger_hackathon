@@ -24,6 +24,15 @@ const envSchema = z.object({
   OP_PRIVATE_KEY_PATH: z.string().default("private.key"),
   OP_ALLOWED_WALLET_HOSTS: z.string().default("ilp.interledger-test.dev"),
   OP_LOG_LEVEL: z.enum(LOG_LEVELS).default("warn"),
+  // The wallet app's send screen: the sale's QR opens it with the shop as the receiver, so a
+  // signed-in customer only picks their wallet. Empty to put the bare wallet address in the QR.
+  OP_WALLET_SEND_URL: z
+    .union([z.url(), z.literal("")])
+    .default("https://wallet.interledger-test.dev/send"),
+  // GlorIA, the shopkeeper's assistant (ADR 0017). Without a key she is simply off.
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_BASE_URL: z.url().default("https://api.deepseek.com"),
+  DEEPSEEK_MODEL: z.string().default("deepseek-flash"),
   DATABASE_URL: z
     .string()
     .regex(/^postgres(ql)?:\/\//, "debe ser una URL postgresql://")
@@ -42,8 +51,12 @@ export interface Config {
   privateKey: string;
   allowedWalletHosts: string[] | "*";
   logLevel: (typeof LOG_LEVELS)[number];
+  /** Wallet app send screen that takes `merchantWA`; undefined to use the bare wallet address. */
+  walletSendUrl?: string;
   /** PostgreSQL connection string (ADR 0010). */
   databaseUrl: string;
+  /** GlorIA's model, an OpenAI-compatible chat API (ADR 0017); undefined when no key is set. */
+  assistant?: { apiKey: string; baseUrl: string; model: string };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -64,7 +77,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     privateKey: resolvePrivateKey(e.OP_PRIVATE_KEY, e.OP_PRIVATE_KEY_PATH),
     allowedWalletHosts: parseHosts(e.OP_ALLOWED_WALLET_HOSTS),
     logLevel: e.OP_LOG_LEVEL,
+    walletSendUrl: e.OP_WALLET_SEND_URL || undefined,
     databaseUrl: e.DATABASE_URL,
+    assistant: e.DEEPSEEK_API_KEY
+      ? {
+          apiKey: e.DEEPSEEK_API_KEY,
+          baseUrl: stripTrailingSlash(e.DEEPSEEK_BASE_URL),
+          model: e.DEEPSEEK_MODEL,
+        }
+      : undefined,
   };
 }
 

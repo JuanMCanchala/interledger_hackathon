@@ -1,0 +1,570 @@
+// GlorIA's chat: a paper notebook with the shop's green, following design-system/miplante/MASTER.md.
+
+:host {
+  --g-ink: var(--monte);
+  --g-ink-soft: #3d5753;
+  --g-line: rgb(9 70 65 / 12%);
+  --g-paper: var(--papel);
+}
+
+svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid var(--lima);
+  outline-offset: 2px;
+}
+
+// Launcher ------------------------------------------------------------------
+
+.launcher {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(92px + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 8px 22px 8px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lima);
+  color: var(--monte);
+  box-shadow: 0 18px 40px -16px rgb(0 0 0 / 65%);
+  transition: transform 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(1px) scale(0.98);
+  }
+
+  &.is-awake {
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @media (min-width: 900px) {
+    bottom: max(24px, env(safe-area-inset-bottom));
+  }
+}
+
+.launcher-avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--monte);
+  color: var(--lima);
+
+  app-gloria-icon {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+.launcher-copy {
+  display: grid;
+  text-align: left;
+  line-height: 1.1;
+
+  strong {
+    font: 700 1.05rem/1.1 var(--sans);
+  }
+
+  small {
+    font-size: 0.78rem;
+    font-weight: 600;
+    opacity: 0.8;
+  }
+}
+
+// What she just did, by the launcher --------------------------------------
+
+.peek {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(166px + env(safe-area-inset-bottom));
+  z-index: 41;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: min(340px, calc(100vw - 32px));
+  padding: 6px;
+  border-radius: 18px 18px 6px 18px;
+  background: #fff;
+  color: var(--monte);
+  box-shadow: 0 18px 40px -18px rgb(0 0 0 / 60%), 0 0 0 1px rgb(9 70 65 / 12%);
+  animation: rise 0.22s ease-out;
+
+  @media (min-width: 900px) {
+    bottom: calc(98px + env(safe-area-inset-bottom));
+  }
+}
+
+.peek-body {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+
+  &:hover {
+    background: rgb(9 70 65 / 5%);
+  }
+}
+
+.peek-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--monte);
+  color: var(--lima);
+
+  app-gloria-icon {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.peek-text {
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.peek-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--g-ink-soft);
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+// Panel ---------------------------------------------------------------------
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  background: rgb(6 51 47 / 45%);
+}
+
+.panel {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--g-paper) url(/paper.png);
+  color: var(--g-ink);
+  animation: rise 0.22s ease-out;
+
+  @media (min-width: 700px) {
+    inset: auto 24px 24px auto;
+    width: min(400px, calc(100vw - 48px));
+    height: min(660px, calc(100vh - 48px));
+    border-radius: var(--radius-lg);
+    box-shadow: 0 40px 80px -30px rgb(0 0 0 / 70%), 0 0 0 1px rgb(9 70 65 / 18%);
+  }
+}
+
+.head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: max(14px, env(safe-area-inset-top)) 12px 14px 16px;
+  background: var(--monte-hondo) url(/paper.png);
+  color: var(--papel);
+}
+
+.avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--lima);
+  color: var(--monte);
+  --gloria-shell: var(--papel);
+  --gloria-spark: var(--lima);
+
+  app-gloria-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  &.is-awake {
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+}
+
+.who {
+  flex: 1;
+  min-width: 0;
+
+  h2 {
+    margin: 0;
+    font: 700 1.15rem/1.1 var(--sans);
+  }
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0 0;
+  font-size: 0.82rem;
+  color: rgb(253 251 251 / 75%);
+}
+
+.status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(253 251 251 / 45%);
+
+  &.is-live {
+    background: var(--lima);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+}
+
+.head-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--papel);
+
+  &:hover {
+    background: rgb(253 251 251 / 10%);
+  }
+
+  &.is-on {
+    background: var(--lima);
+    color: var(--monte);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.notice {
+  flex: none;
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--danger-soft, #fdeceb);
+  color: #7a160e;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+// Conversation --------------------------------------------------------------
+
+.thread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  margin: 0;
+  padding: 18px 14px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 100%;
+
+  &.from-user {
+    justify-content: flex-end;
+  }
+}
+
+.msg-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--monte);
+  color: var(--lima);
+
+  app-gloria-icon {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+.bubble {
+  max-width: min(82%, 300px);
+  margin: 0;
+  padding: 11px 14px;
+  border-radius: 18px 18px 18px 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--g-line), 0 6px 14px -12px rgb(9 70 65 / 45%);
+  color: var(--g-ink);
+  font-size: 0.98rem;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+
+  .from-user & {
+    border-radius: 18px 18px 6px 18px;
+    background: var(--monte);
+    box-shadow: none;
+    color: var(--papel);
+  }
+}
+
+.typing {
+  display: inline-flex;
+  gap: 5px;
+  padding: 14px 16px;
+
+  span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--monte);
+    animation: dot 1s ease-in-out infinite;
+
+    &:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    &:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+  }
+}
+
+// Suggestions and composer --------------------------------------------------
+
+.suggestions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  padding: 0 14px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chip {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1.5px solid rgb(9 70 65 / 30%);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--g-ink);
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: var(--monte);
+  }
+}
+
+.composer {
+  flex: none;
+  padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--g-line);
+  background: rgb(253 251 251 / 92%);
+}
+
+.live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 8px;
+  font-size: 0.85rem;
+  color: var(--g-ink-soft);
+}
+
+.live-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lima-hondo, #93b51c);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1.5px rgb(9 70 65 / 22%);
+
+  &:focus-within {
+    box-shadow: 0 0 0 3px var(--lima), 0 0 0 4.5px var(--monte);
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 6px;
+    border: 0;
+    background: transparent;
+    color: var(--g-ink);
+    font: 400 1rem/1.2 var(--sans);
+
+    &::placeholder {
+      color: rgb(9 70 65 / 50%);
+    }
+
+    &:focus {
+      outline: none;
+    }
+  }
+}
+
+.mic,
+.send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+}
+
+.mic {
+  background: rgb(9 70 65 / 8%);
+  color: var(--monte);
+
+  &.is-listening {
+    background: var(--lima);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+}
+
+.send {
+  background: var(--monte);
+  color: var(--lima);
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.note {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--g-ink-soft);
+}
+
+// Motion --------------------------------------------------------------------
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes dot {
+  50% {
+    opacity: 0.3;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(204 241 55 / 55%);
+  }
+  50% {
+    box-shadow: 0 0 0 9px rgb(204 241 55 / 0%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .peek,
+  .launcher,
+  .avatar,
+  .status-dot,
+  .live-dot,
+  .mic,
+  .typing span {
+    animation: none !important;
+    transition: none;
+  }
+}

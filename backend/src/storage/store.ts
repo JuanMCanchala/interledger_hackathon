@@ -1,10 +1,12 @@
 import type {
   MerchantRecord,
   MerchantRule,
+  PayoutRecord,
   SaleRecord,
   SaleStatus,
 } from "../merchants/types.js";
 import type { Amount } from "../shared/money.js";
+import type { SessionRecord, UserRecord } from "../auth/types.js";
 import type { MandateRecord, PaymentRecord } from "../openPayments/records.js";
 
 /** Customer-payment fields of a sale; changing them never touches its settlement. */
@@ -35,7 +37,19 @@ export interface Store {
   saveMandate(record: MandateRecord): Promise<MandateRecord>;
 
   getMerchant(id: string): Promise<MerchantRecord | undefined>;
+  listMerchants(): Promise<MerchantRecord[]>;
+
+  savePayout(record: PayoutRecord): Promise<PayoutRecord>;
+  /** Newest first. */
+  listPayouts(merchantId: string): Promise<PayoutRecord[]>;
+
+  /** Stores a shop with its rules, replacing any stored before: for a new shop. */
   saveMerchant(record: MerchantRecord): Promise<MerchantRecord>;
+  /**
+   * Saves a shop's own fields (name, goal, cap, grant) and keeps its rules as they are stored, so a
+   * change made from an earlier read never undoes a repayment recorded meanwhile. Returns the shop.
+   */
+  updateMerchant(record: MerchantRecord): Promise<MerchantRecord>;
 
   getSale(id: string): Promise<SaleRecord | undefined>;
   saveSale(record: SaleRecord): Promise<SaleRecord>;
@@ -85,6 +99,22 @@ export interface Store {
     updatedAt: string,
   ): Promise<void>;
 
+  saveUser(record: UserRecord): Promise<UserRecord>;
+  getUser(id: string): Promise<UserRecord | undefined>;
+  getUserByEmail(email: string): Promise<UserRecord | undefined>;
+  saveSession(record: SessionRecord): Promise<SessionRecord>;
+  getSession(token: string): Promise<SessionRecord | undefined>;
+  deleteSession(token: string): Promise<void>;
+  /** The shop a user registered (the newest one if there are several). */
+  getMerchantByOwner(ownerId: string): Promise<MerchantRecord | undefined>;
+  /** The shop whose counter display has this key. */
+  getMerchantByDisplayKey(key: string): Promise<MerchantRecord | undefined>;
+  /**
+   * Whether a shop pays its splits with this mandate, is waiting for it to approve a new cap, or
+   * keeps it as its emergency fund's grant.
+   */
+  isMerchantMandate(mandateId: string): Promise<boolean>;
+
   close(): Promise<void>;
 }
 
@@ -94,6 +124,9 @@ export class MemoryStore implements Store {
   private readonly mandates = new Map<string, MandateRecord>();
   private readonly merchants = new Map<string, MerchantRecord>();
   private readonly sales = new Map<string, SaleRecord>();
+  private readonly users = new Map<string, UserRecord>();
+  private readonly payouts = new Map<string, PayoutRecord>();
+  private readonly sessions = new Map<string, SessionRecord>();
 
   async getPayment(id: string) {
     return copy(this.payments.get(id));
@@ -120,6 +153,22 @@ export class MemoryStore implements Store {
     return record;
   }
 
+  async listMerchants() {
+    return [...this.merchants.values()].map((m) => copy(m));
+  }
+
+  async savePayout(record: PayoutRecord) {
+    this.payouts.set(record.id, copy(record));
+    return record;
+  }
+
+  async listPayouts(merchantId: string) {
+    return [...this.payouts.values()]
+      .filter((p) => p.merchantId === merchantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((p) => copy(p));
+  }
+
   async getMerchant(id: string) {
     return copy(this.merchants.get(id));
   }
@@ -127,6 +176,13 @@ export class MemoryStore implements Store {
   async saveMerchant(record: MerchantRecord) {
     this.merchants.set(record.id, copy(record));
     return record;
+  }
+
+  async updateMerchant(record: MerchantRecord) {
+    const stored = this.merchants.get(record.id);
+    if (!stored) throw new Error(`No merchant ${record.id}`);
+    this.merchants.set(record.id, { ...copy(record), rules: stored.rules });
+    return copy(this.merchants.get(record.id))!;
   }
 
   async getSale(id: string) {
@@ -217,6 +273,58 @@ export class MemoryStore implements Store {
       };
     });
     merchant.updatedAt = updatedAt;
+  }
+
+  async saveUser(record: UserRecord) {
+    // Like the unique email in PostgreSQL.
+    for (const user of this.users.values()) {
+      if (user.email === record.email && user.id !== record.id) {
+        throw new Error(`Unique constraint failed on the email ${record.email}`);
+      }
+    }
+    this.users.set(record.id, copy(record));
+    return record;
+  }
+
+  async getUser(id: string) {
+    return copy(this.users.get(id));
+  }
+
+  async getUserByEmail(email: string) {
+    return copy([...this.users.values()].find((u) => u.email === email));
+  }
+
+  async saveSession(record: SessionRecord) {
+    this.sessions.set(record.token, copy(record));
+    return record;
+  }
+
+  async getSession(token: string) {
+    return copy(this.sessions.get(token));
+  }
+
+  async deleteSession(token: string) {
+    this.sessions.delete(token);
+  }
+
+  async getMerchantByOwner(ownerId: string) {
+    const owned = [...this.merchants.values()]
+      .filter((m) => m.ownerId === ownerId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return copy(owned[0]);
+  }
+
+  async getMerchantByDisplayKey(key: string) {
+    return copy([...this.merchants.values()].find((m) => m.displayKey === key));
+  }
+
+  async isMerchantMandate(mandateId: string) {
+    return [...this.merchants.values()].some(
+      (m) =>
+        m.mandateId === mandateId ||
+        m.pendingCap?.mandateId === mandateId ||
+        m.emergency?.mandateId === mandateId,
+    );
   }
 
   async close() {}

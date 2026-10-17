@@ -63,24 +63,61 @@ export const callbackQuery = z
 
 const rule = z.object({
   label: z.string().trim().min(1).max(60),
+  category: z.string().trim().min(1).max(40),
   kind: z.enum(["debt", "savings"]),
   destination: walletAddress,
-  sharePercent: z.number().gt(0).max(50),
+  sharePercent: z.number().gt(0).max(99),
+  monthlyQuota: decimalAmount.optional(),
   outstanding: decimalAmount.optional(),
+  savingsGoal: decimalAmount.optional(),
+  dueDay: z.number().int().min(1).max(28).optional(),
 });
+
+export const changeCap = z.object({ monthlyCap: decimalAmount });
+
+/** A conversation with GlorIA, as the browser keeps it (ADR 0017). */
+export const assistantChat = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().trim().min(1).max(1000),
+      }),
+    )
+    .min(1)
+    .max(40),
+  /** The section of the till the shopkeeper is looking at, so "¿qué es esto?" has an answer. */
+  section: z.enum(["inicio", "vender", "metas", "repartos", "ajustes", "avisos"]).optional(),
+});
+
+/** Which savings rule's wallet to keep as the last resort; the first one if not given. */
+export const authorizeEmergency = z.object({ ruleId: z.uuid().optional() });
+
+/** Pay one debt now, or every debt as if its due day had come (`due-date`, for the demo). */
+export const payout = z.object({
+  ruleId: z.uuid().optional(),
+  reason: z.enum(["manual", "due-date"]).default("manual"),
+});
+
+export const shopSettings = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    monthlySalesGoal: decimalAmount.nullable().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, "envía al menos un ajuste");
 
 export const onboardMerchant = z.object({
   name: z.string().trim().min(1).max(80),
   wallet: walletAddress,
-  dailyCap: decimalAmount,
-  rules: z.array(rule).min(1).max(5),
+  monthlyCap: decimalAmount,
+  rules: z.array(rule).min(1).max(10),
 });
 
 export const updateRules = z.object({
   rules: z
     .array(rule.extend({ id: z.uuid().optional() }))
     .min(1)
-    .max(5)
+    .max(10)
     .refine(
       (rules) => {
         const ids = rules.flatMap((r) => (r.id ? [r.id] : []));
@@ -92,4 +129,23 @@ export const updateRules = z.object({
 
 export const createSale = z.object({ amount: decimalAmount, description });
 
+/** A sale paid in cash, and cash deposited into the wallet (ADR 0019). */
+export const cashSale = z.object({ amount: decimalAmount, description });
+export const cashDeposit = z.object({ amount: decimalAmount });
+
 export const paySale = z.object({ customerWallet: walletAddress });
+
+// Accounts ---------------------------------------------------------------------------------------
+
+const email = z.string().trim().max(200).email("escribe un correo válido");
+
+export const register = z.object({
+  name: z.string().trim().min(1).max(80),
+  email,
+  password: z.string().min(8, "usa al menos 8 caracteres").max(200),
+});
+
+export const login = z.object({
+  email,
+  password: z.string().min(1).max(200),
+});
