@@ -47,7 +47,6 @@ services:
       - "3000:3000"
     volumes:
       - ./backend/src:/app/src
-      - ./backend/public:/app/public
       - ./backend/prisma:/app/prisma
 
   frontend:

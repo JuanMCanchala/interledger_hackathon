@@ -1,5 +1,5 @@
 # Production stack for Coolify (Build Pack: Docker Compose, file: docker-compose.coolify.yml).
-# Only the frontend is public: its nginx serves the landing and proxies the API and the till pages
+# Only the frontend is public: its nginx serves the full Angular SPA and proxies /api/
 # to the backend over the internal network, so the whole app lives under one domain.
 # Set the domain on the frontend service in Coolify; the backend and the database get none.
 # Variables marked :? are required and Coolify asks for them; see docs/COOLIFY.md.

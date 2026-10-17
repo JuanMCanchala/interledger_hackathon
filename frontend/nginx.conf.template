@@ -1,7 +1,6 @@
-# Production server for the Angular landing (the official nginx image renders this template with
+# Production server for the Angular app (the official nginx image renders this template with
 # envsubst at start, so PORT and BACKEND_INTERNAL_URL are read at runtime, not at build time).
-# Everything that is not the landing is proxied to the backend; keep the list in sync with
-# proxy.conf.mjs, which does the same for `ng serve`.
+# Only /api/ is proxied to the backend; every page route is served by the Angular SPA.
 
 server {
     listen ${PORT};
@@ -19,10 +18,8 @@ server {
         include /etc/nginx/miplante-proxy.conf;
     }
 
-    location ~ ^/(css/|js/|img/|(login|register|onboard|merchant|pay|cobro|sandbox)(\.html|/)?$|favicon\.svg$) {
-        proxy_pass ${BACKEND_INTERNAL_URL};
-        include /etc/nginx/miplante-proxy.conf;
-    }
+    # Redirect old .html links (printed QR codes, legacy callbacks) to clean SPA routes, keeping query strings.
+    rewrite ^/(login|register|onboard|merchant|pay|cobro|sandbox)\.html$ /$1 permanent;
 
     # The service worker and its manifest must always be fresh, or a deploy never reaches phones.
     location ~ ^/(ngsw-worker\.js|ngsw\.json|safety-worker\.js|worker-basic\.min\.js|index\.html)$ {
