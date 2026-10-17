@@ -3,6 +3,7 @@ import { loadConfig } from "./config.js";
 import { createApp } from "./http/app.js";
 import { DashboardService } from "./merchants/dashboardService.js";
 import { MerchantService } from "./merchants/merchantService.js";
+import { PayoutService } from "./merchants/payoutService.js";
 import { SalesService } from "./merchants/salesService.js";
 import { createOpenPaymentsClient } from "./openPayments/client.js";
 import { describeError } from "./openPayments/errors.js";
@@ -29,13 +30,15 @@ try {
     frontendUrl: config.frontendUrl,
     walletSendUrl: config.walletSendUrl,
   });
+  const payouts = new PayoutService(flows, merchants, store);
   const frontendOrigin = new URL(config.frontendUrl).origin;
   const app = createApp({
     auth: new AuthService(store),
+    payouts,
     flows,
     merchants,
     sales,
-    dashboard: new DashboardService(flows, merchants, sales, store),
+    dashboard: new DashboardService(flows, merchants, sales, store, { payouts }),
     frontendUrl: config.frontendUrl,
     corsOrigin:
       frontendOrigin === new URL(config.publicBaseUrl).origin
@@ -43,6 +46,7 @@ try {
         : frontendOrigin,
   });
   const stopSweeper = sales.startSweeper();
+  const stopPayouts = payouts.startScheduler();
   const server = app.listen(config.port, () => {
     console.log(
       `Open Payments listo en ${config.publicBaseUrl} (wallet de la app: ${config.clientWalletAddress})`,
@@ -50,6 +54,7 @@ try {
   });
   const shutdown = () => {
     stopSweeper();
+    stopPayouts();
     server.close(() => void store.close().finally(() => process.exit(0)));
   };
   process.once("SIGINT", shutdown);

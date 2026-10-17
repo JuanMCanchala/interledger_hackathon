@@ -20,7 +20,7 @@ async function paidSale(
 }
 
 describe("settlement", () => {
-  it("splits a paid sale: 1,500 to the microcredit, 500 to savings, 8,000 stay", async () => {
+  it("splits a paid sale: 1,500 reserved for the microcredit, 500 to savings, 8,000 stay", async () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();
     const saleId = await paidSale(env, merchantId);
@@ -38,26 +38,27 @@ describe("settlement", () => {
         item.status,
       ]),
     ).toEqual([
-      ["Microcrédito", COOP, "150000", "processing"],
+      ["Microcrédito", COOP, "150000", "reserved"],
       ["Fondo de emergencia", SAVINGS, "50000", "processing"],
     ]);
-    // Each share leaves Rosa's wallet with the token of her daily-capped grant.
+    // Only the savings share leaves Rosa's wallet now, with the token of her monthly-capped grant.
+    // The microcredit's stays reserved in her wallet until its due day (ADR 0014).
     const charges = env.ops.createOutgoingPayment.mock.calls.slice(1);
     expect(charges.map(([sender, token]) => [sender.id, token])).toEqual([
       [BOB, "outgoing-token"],
-      [BOB, "outgoing-token"],
     ]);
-    expect(env.ops.createQuote).toHaveBeenCalledWith(
+    expect(env.ops.createQuote).toHaveBeenLastCalledWith(
       expect.objectContaining({ id: BOB }),
       {
         receiver: expect.any(String),
-        debitAmount: cop("150000"),
+        debitAmount: cop("50000"),
       },
     );
     const [microcredit, savings] = (await env.merchants.require(merchantId)).rules;
+    // Nothing reached the creditor yet: the debt is only lowered when the payout arrives.
     expect(microcredit).toMatchObject({
-      repaid: cop("150000"),
-      outstanding: cop("29850000"),
+      repaid: cop("0"),
+      outstanding: cop("30000000"),
     });
     expect(savings).toMatchObject({ repaid: cop("50000") });
   });
@@ -74,15 +75,16 @@ describe("settlement", () => {
     ]);
     await env.sales.refresh(saleId);
 
-    // One outgoing payment for the customer, plus one per rule.
-    expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(3);
+    // One outgoing payment for the customer, plus the savings share; the debt's is only reserved.
+    expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(2);
+    expect((await env.store.getSale(saleId))!.settlement.items).toHaveLength(2);
   });
 
-  it("fits the split into what is left of the daily cap", async () => {
+  it("fits the split into what is left of the monthly cap", async () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();
     const saleId = await paidSale(env, merchantId);
-    // Cap is 30,000 COP and 29,000 were already spent today.
+    // Cap is 30,000 COP and 29,000 were already spent this month.
     env.ops.getGrantSpentAmounts.mockResolvedValue({
       spentDebitAmount: cop("2900000"),
       spentReceiveAmount: null,
@@ -93,7 +95,7 @@ describe("settlement", () => {
     expect(
       sale.settlement.items.map((i) => [i.amount.value, i.capped, i.status]),
     ).toEqual([
-      ["100000", true, "processing"],
+      ["100000", true, "reserved"],
       ["0", true, "skipped"],
     ]);
     expect(sale.settlement.kept).toEqual(cop("900000"));
@@ -114,7 +116,7 @@ describe("settlement", () => {
     expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(1);
   });
 
-  it("marks a repayment that could not be sent as failed and leaves the debt untouched", async () => {
+  it("marks a savings share that could not be sent as failed", async () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();
     const saleId = await paidSale(env, merchantId);
@@ -128,24 +130,24 @@ describe("settlement", () => {
     const sale = await env.sales.refresh(saleId);
 
     expect(sale.settlement.items.map((i) => i.status)).toEqual([
+      "reserved",
       "failed",
-      "processing",
     ]);
-    expect(sale.settlement.items[0]?.error).toContain("insufficient grant");
-    expect(sale.settlement.kept).toEqual(cop("950000"));
-    expect((await env.merchants.require(merchantId)).rules[0]).toMatchObject({
+    expect(sale.settlement.items[1]?.error).toContain("insufficient grant");
+    expect(sale.settlement.kept).toEqual(cop("850000"));
+    expect((await env.merchants.require(merchantId)).rules[1]).toMatchObject({
       repaid: cop("0"),
-      outstanding: cop("30000000"),
     });
   });
 
-  it("follows each repayment until it arrives", async () => {
+  it("follows each share it sent until it arrives", async () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();
     const saleId = await paidSale(env, merchantId);
     const settled = await env.sales.refresh(saleId);
 
     for (const item of settled.settlement.items) {
+      if (!item.paymentId) continue;
       env.deliver(
         (await env.store.getPayment(item.paymentId!))!.incomingPaymentUrl,
         cop("5000000"),
@@ -154,7 +156,7 @@ describe("settlement", () => {
     const sale = await env.sales.refresh(saleId);
 
     expect(sale.settlement.items.map((i) => i.status)).toEqual([
-      "completed",
+      "reserved",
       "completed",
     ]);
   });

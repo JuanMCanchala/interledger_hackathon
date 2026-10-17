@@ -51,9 +51,15 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     const { merchantId, saleId } = await paidSale(env);
 
     const sale = await env.sales.refresh(saleId);
+    // The microcredit's share was reserved; its due day pays it and it counts as repaid.
+    const [payout] = await env.payOutDebts(merchantId);
 
     expect(sale.settlement.status).toBe("done");
     expect(sale.settlement.kept).toEqual(cop("800000"));
+    expect(sale.settlement.items.map((i) => i.status)).toEqual(["reserved", "processing"]);
+    expect((await store.listPayouts(merchantId)).map((p) => [p.id, p.amount, p.status])).toEqual([
+      [payout!.id, cop("150000"), "completed"],
+    ]);
     expect(sale.settlement.items.map((i) => i.amount.value)).toEqual([
       "150000",
       "50000",
@@ -72,7 +78,7 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     const mandate = (await store.getMandate(merchant.mandateId))!;
     expect(mandate.token?.value).toBe("outgoing-token");
     expect(mandate.continuation).toBeDefined();
-    expect(await store.listPayments({ mandateId: mandate.id })).toHaveLength(2);
+    expect(await store.listPayments({ mandateId: mandate.id })).toHaveLength(2); // savings + payout
     const dashboard = await store.listSales({ merchantId });
     expect(dashboard.map((s) => s.id)).toEqual([saleId]);
   });
@@ -86,9 +92,10 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     );
     await env.sales.refresh(saleId);
 
-    // One outgoing payment for the customer, plus one per rule.
-    expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(3);
+    // One outgoing payment for the customer, plus the savings share; the debt's is only reserved.
+    expect(env.ops.createOutgoingPayment).toHaveBeenCalledTimes(2);
     expect((await store.getSale(saleId))!.settlement.status).toBe("done");
+    expect((await store.getSale(saleId))!.settlement.items).toHaveLength(2);
   });
 
   it("lets only one claim win", async () => {
@@ -182,6 +189,7 @@ describe.skipIf(!url)("PrismaStore (PostgreSQL)", () => {
     const env = setupMiPlante(store);
     const { merchantId, saleId } = await paidSale(env);
     await env.sales.refresh(saleId);
+    await env.payOutDebts(merchantId);
     const [microcredit, savings] = (await store.getMerchant(merchantId))!
       .rules;
 

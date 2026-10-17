@@ -1,6 +1,7 @@
 import type {
   MerchantRecord,
   MerchantRule,
+  PayoutRecord,
   SaleRecord,
   SaleStatus,
 } from "../merchants/types.js";
@@ -36,6 +37,11 @@ export interface Store {
   saveMandate(record: MandateRecord): Promise<MandateRecord>;
 
   getMerchant(id: string): Promise<MerchantRecord | undefined>;
+  listMerchants(): Promise<MerchantRecord[]>;
+
+  savePayout(record: PayoutRecord): Promise<PayoutRecord>;
+  /** Newest first. */
+  listPayouts(merchantId: string): Promise<PayoutRecord[]>;
   saveMerchant(record: MerchantRecord): Promise<MerchantRecord>;
 
   getSale(id: string): Promise<SaleRecord | undefined>;
@@ -105,6 +111,7 @@ export class MemoryStore implements Store {
   private readonly merchants = new Map<string, MerchantRecord>();
   private readonly sales = new Map<string, SaleRecord>();
   private readonly users = new Map<string, UserRecord>();
+  private readonly payouts = new Map<string, PayoutRecord>();
   private readonly sessions = new Map<string, SessionRecord>();
 
   async getPayment(id: string) {
@@ -130,6 +137,22 @@ export class MemoryStore implements Store {
   async saveMandate(record: MandateRecord) {
     this.mandates.set(record.id, copy(record));
     return record;
+  }
+
+  async listMerchants() {
+    return [...this.merchants.values()].map((m) => copy(m));
+  }
+
+  async savePayout(record: PayoutRecord) {
+    this.payouts.set(record.id, copy(record));
+    return record;
+  }
+
+  async listPayouts(merchantId: string) {
+    return [...this.payouts.values()]
+      .filter((p) => p.merchantId === merchantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((p) => copy(p));
   }
 
   async getMerchant(id: string) {

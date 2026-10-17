@@ -7,6 +7,7 @@ import { AppError, NotFoundError } from "../shared/errors.js";
 import { fromMinorUnits, toAmount, type Amount } from "../shared/money.js";
 import type { SalePaymentChanges, Store } from "../storage/store.js";
 import type { MerchantService } from "./merchantService.js";
+import { reservedBalances } from "./payoutService.js";
 import type {
   MerchantRecord,
   SaleRecord,
@@ -35,8 +36,9 @@ const SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
 /**
  * A sale is a one-off Open Payments payment from the customer's wallet to the merchant's:
  * payment request → customer consent → execution → completion (the four steps the demo shows).
- * Once paid, the sale settles: each rule's share leaves the merchant's wallet under the
- * daily-capped grant (ADR 0004), exactly once (ADR 0006).
+ * Once paid, the sale settles exactly once (ADR 0006): savings shares leave the merchant's wallet
+ * under the monthly-capped grant (ADR 0004), and debt shares are reserved until their due day,
+ * when the creditor gets them in one payment (ADR 0014).
  */
 export class SalesService {
   private readonly now: () => Date;
@@ -179,16 +181,28 @@ export class SalesService {
       return;
     }
 
-    const [remainingCap, paidThisMonth] = await Promise.all([
+    const [cap, paidThisMonth, reserved] = await Promise.all([
       this.remainingCap(merchant),
       this.paidThisMonth(merchant.id, saleId),
+      reservedBalances(this.store, merchant.id),
     ]);
-    const plan = planAllocations(
-      sale.amount,
-      merchant.rules,
-      remainingCap,
-      paidThisMonth,
+    // What is reserved will leave under the same grant on the due day: it already uses the cap,
+    // and it already counts against each debt's balance.
+    const pending = Object.values(reserved).reduce(
+      (sum, value) => sum + (value > 0n ? value : 0n),
+      0n,
     );
+    const remainingCap = cap && {
+      ...cap,
+      value: (BigInt(cap.value) > pending ? BigInt(cap.value) - pending : 0n).toString(),
+    };
+    const rules = merchant.rules.map((rule) => {
+      const held = reserved[rule.id] ?? 0n;
+      if (!rule.outstanding || held <= 0n) return rule;
+      const left = BigInt(rule.outstanding.value) - held;
+      return { ...rule, outstanding: { ...rule.outstanding, value: (left > 0n ? left : 0n).toString() } };
+    });
+    const plan = planAllocations(sale.amount, rules, remainingCap, paidThisMonth);
     // The rules are charged in parallel: their amounts already fit the remaining monthly cap
     // (and the wallet rejects any excess anyway), so the split takes one charge, not one per rule.
     const items: (SettlementItem | undefined)[] = plan.allocations.map(
@@ -222,6 +236,12 @@ export class SalesService {
         };
         if (allocation.amount.value === "0") {
           items[index] = { ...base, status: "skipped" };
+          return;
+        }
+        if (rule.kind === "debt") {
+          // Set aside in the merchant's wallet; the creditor is paid in one go on the due day.
+          items[index] = { ...base, status: "reserved" };
+          await persistProgress();
           return;
         }
         try {

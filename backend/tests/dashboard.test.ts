@@ -59,10 +59,14 @@ describe("merchant dashboard", () => {
         },
       ],
     });
+    // The microcredit's share is reserved until its due day: nothing reached the creditor yet.
     expect(view.rules[0]).toMatchObject({
-      repaid: cop("150000"),
-      outstanding: cop("29850000"),
+      reserved: cop("150000"),
+      paidOutThisMonth: cop("0"),
+      repaid: cop("0"),
+      outstanding: cop("30000000"),
     });
+    expect(view.payouts).toEqual([]);
     expect(view.sales.map((sale) => sale.status)).toEqual(["open", "paid"]);
   });
 

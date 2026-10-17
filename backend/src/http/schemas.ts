@@ -70,9 +70,16 @@ const rule = z.object({
   monthlyQuota: decimalAmount.optional(),
   outstanding: decimalAmount.optional(),
   savingsGoal: decimalAmount.optional(),
+  dueDay: z.number().int().min(1).max(28).optional(),
 });
 
 export const changeCap = z.object({ monthlyCap: decimalAmount });
+
+/** Pay one debt now, or every debt as if its due day had come (`due-date`, for the demo). */
+export const payout = z.object({
+  ruleId: z.uuid().optional(),
+  reason: z.enum(["manual", "due-date"]).default("manual"),
+});
 
 export const shopSettings = z
   .object({

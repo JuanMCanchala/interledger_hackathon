@@ -30,9 +30,10 @@ model Merchant {
   createdAt        DateTime @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime @map("updated_at") @db.Timestamptz(3)
 
-  mandate Mandate @relation(fields: [mandateId], references: [id])
-  owner   User?   @relation(fields: [ownerId], references: [id])
+  mandate Mandate  @relation(fields: [mandateId], references: [id])
+  owner   User?    @relation(fields: [ownerId], references: [id])
   rules   Rule[]
+  payouts Payout[]
   sales   Sale[]
 
   @@map("merchants")
@@ -56,6 +57,8 @@ model Rule {
   repaid       BigInt  @default(0)
   /// Savings rules, optional: the amount the shop wants to reach.
   savingsGoal  BigInt? @map("savings_goal")
+  /// Debt rules: day of the month (1-28) the creditor is paid.
+  dueDay       Int?    @map("due_day")
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
@@ -196,4 +199,28 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+/// One payment to a creditor: everything reserved for a debt rule, sent on its due day or early.
+model Payout {
+  id          String   @id @db.Uuid
+  merchantId  String   @map("merchant_id") @db.Uuid
+  ruleId      String   @map("rule_id") @db.Uuid
+  label       String
+  destination String
+  amount      BigInt
+  assetCode   String   @map("asset_code")
+  assetScale  Int      @map("asset_scale")
+  reason      String
+  month       String
+  status      String
+  paymentId   String?  @map("payment_id") @db.Uuid
+  error       String?
+  createdAt   DateTime @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @map("updated_at") @db.Timestamptz(3)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, createdAt])
+  @@map("payouts")
 }

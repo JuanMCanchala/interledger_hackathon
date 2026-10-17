@@ -7,6 +7,7 @@ import express, {
 } from "express";
 import { z } from "zod";
 import type { AuthService } from "../auth/authService.js";
+import type { PayoutService } from "../merchants/payoutService.js";
 import { describeError } from "../openPayments/errors.js";
 import { AppError } from "../shared/errors.js";
 import type { DashboardService } from "../merchants/dashboardService.js";
@@ -17,6 +18,7 @@ import * as schemas from "./schemas.js";
 
 export interface AppOptions {
   auth: AuthService;
+  payouts: PayoutService;
   flows: PaymentFlows;
   merchants: MerchantService;
   sales: SalesService;
@@ -31,6 +33,7 @@ const PUBLIC_DIR = fileURLToPath(new URL("../../public", import.meta.url));
 
 export function createApp({
   auth,
+  payouts,
   flows,
   merchants,
   sales,
@@ -201,6 +204,17 @@ export function createApp({
     const merchant = await ownedMerchant(req);
     const { monthlyCap } = schemas.changeCap.parse(req.body);
     res.status(201).json(await merchants.changeCap(merchant.id, monthlyCap));
+  });
+
+  /**
+   * Pays the reserved debts now: one (`ruleId`) or all. `reason: "due-date"` runs them as if their
+   * due day had come, which is how the demo shows the monthly payment without waiting for it.
+   */
+  app.post("/api/merchants/:id/payouts", async (req, res) => {
+    const merchant = await ownedMerchant(req);
+    res
+      .status(201)
+      .json({ payouts: await payouts.pay(merchant.id, schemas.payout.parse(req.body)) });
   });
 
   app.post("/api/merchants/:id/consent", async (req, res) => {

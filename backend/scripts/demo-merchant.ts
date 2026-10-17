@@ -33,6 +33,7 @@ const SHOP = {
       destination: "$ilp.interledger-test.dev/proveedor-billeticos",
       sharePercent: 10,
       monthlyQuota: "200000",
+      dueDay: 25,
     },
     {
       label: "Microcrédito Anti-Gota",
@@ -42,6 +43,7 @@ const SHOP = {
       sharePercent: 15,
       monthlyQuota: "100000",
       outstanding: "300000",
+      dueDay: 15,
     },
     {
       label: "Fondo de emergencia",
@@ -90,8 +92,9 @@ if (!res.ok || !body.merchant || !body.redirectUrl) {
 }
 
 console.log(`
-${SHOP.name} registrada: 10% al proveedor hasta 200.000 COP/mes, 15% al microcrédito hasta 100.000 COP/mes
-(saldo 300.000 COP), 5% al ahorro. Límite mensual: ${SHOP.monthlyCap} COP.
+${SHOP.name} registrada: 10% de cada venta se aparta para el proveedor (200.000 COP/mes, se le paga
+el día 25) y 15% para el microcrédito (100.000 COP/mes, saldo 300.000, se paga el día 15); 5% va al
+ahorro en cada venta. En la demo, "Simular fecha de pago" envía lo apartado sin esperar al día. Límite mensual: ${SHOP.monthlyCap} COP.
 
 1. Abre este enlace, entra con la cuenta de la tienda y aprueba el límite mensual (una sola vez):
    ${body.redirectUrl}

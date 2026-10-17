@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AuthService } from "../src/auth/authService.js";
 import { createApp } from "../src/http/app.js";
+import { PayoutService } from "../src/merchants/payoutService.js";
 import { DashboardService } from "../src/merchants/dashboardService.js";
 import { MerchantService } from "../src/merchants/merchantService.js";
 import { SalesService } from "../src/merchants/salesService.js";
@@ -34,6 +35,7 @@ beforeAll(async () => {
   });
   server = createApp({
     auth: new AuthService(store),
+    payouts: new PayoutService(flows, merchants, store),
     flows,
     merchants,
     sales,

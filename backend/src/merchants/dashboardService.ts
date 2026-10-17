@@ -8,11 +8,13 @@ import type { PaymentFlows } from "../openPayments/flows.js";
 import type { Amount, Asset } from "../shared/money.js";
 import type { Store } from "../storage/store.js";
 import type { MerchantService } from "./merchantService.js";
+import { reservedBalances, type PayoutService } from "./payoutService.js";
 import type { SalesService } from "./salesService.js";
 import type { SaleRecord, SettlementItem } from "./types.js";
 
 const HISTORY_DAYS = 7;
 const RECENT_SALES = 20;
+const RECENT_PAYOUTS = 10;
 
 /**
  * The merchant's till and dashboard: today's sales and split, debt progress, what the grant has
@@ -26,20 +28,25 @@ export class DashboardService {
     private readonly merchants: MerchantService,
     private readonly sales: SalesService,
     private readonly store: Store,
-    options: { now?: () => Date } = {},
+    private readonly options: { now?: () => Date; payouts?: PayoutService } = {},
   ) {
     this.now = options.now ?? (() => new Date());
   }
 
   async get(merchantId: string) {
+    // Payouts on their way first: one that arrived lowers its debt, which the view must show.
+    await this.options.payouts?.refresh(merchantId);
     const merchant = await this.merchants.syncPendingCap(
       await this.merchants.require(merchantId),
     );
-    const [mandate, sales, paidThisMonth] = await Promise.all([
+    const [mandate, sales, paidThisMonth, payouts] = await Promise.all([
       this.flows.getMandate(merchant.mandateId),
       this.store.listSales({ merchantId }),
       this.sales.paidThisMonth(merchantId),
+      this.store.listPayouts(merchantId),
     ]);
+    const reserved = await reservedBalances(this.store, merchantId);
+    const month = bogotaDay(this.now()).slice(0, 7);
     const paid = sales.filter((sale) => sale.status === "paid" && sale.paidAt);
     const now = this.now();
     const startOfToday = startOfBogotaDay(now).getTime();
@@ -58,10 +65,36 @@ export class DashboardService {
       status: mandate.status,
       /** Spent from the monthly-capped grant in its current interval (this calendar month). */
       spentThisMonth: spent && sameAsset(spent, merchant.asset) ? spent : null,
-      /** Each rule with what it received this month, to show how much of its quota is paid. */
+      /**
+       * Each rule with what it took from this month's sales (for a debt, how much of its quota is
+       * covered), what is reserved and not paid yet, and what was paid out to it this month.
+       */
       rules: merchant.rules.map((rule) => ({
         ...rule,
         paidThisMonth: paidThisMonth[rule.id] ?? money(0n),
+        ...(rule.kind === "debt" && {
+          reserved: money((reserved[rule.id] ?? 0n) > 0n ? reserved[rule.id]! : 0n),
+          paidOutThisMonth: money(
+            sum(
+              payouts
+                .filter(
+                  (p) => p.ruleId === rule.id && p.month === month && p.status !== "failed",
+                )
+                .map((p) => p.amount),
+            ),
+          ),
+        }),
+      })),
+      /** Payments to creditors, newest first. */
+      payouts: payouts.slice(0, RECENT_PAYOUTS).map((p) => ({
+        id: p.id,
+        ruleId: p.ruleId,
+        label: p.label,
+        amount: p.amount,
+        reason: p.reason,
+        status: p.status,
+        error: p.error,
+        createdAt: p.createdAt,
       })),
       today: {
         salesCount: today.length,

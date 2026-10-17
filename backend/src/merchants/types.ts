@@ -8,6 +8,11 @@ export interface MerchantRule extends AllocationRule {
   repaid: Amount;
   /** Savings rules, optional: the amount the shop wants to reach. Shown as a goal, never a limit. */
   savingsGoal?: Amount;
+  /**
+   * Debt rules: the day of the month (1–28) the creditor is paid. Each sale only reserves the
+   * debt's share; on this day everything reserved leaves in one payment (ADR 0014).
+   */
+  dueDay?: number;
 }
 
 export interface MerchantRecord {
@@ -41,8 +46,9 @@ export interface MerchantRecord {
 export type SaleStatus =
   "open" | "awaiting-consent" | "processing" | "paid" | "failed";
 
+/** `reserved`: a debt's share set aside in the merchant's wallet until its due day (ADR 0014). */
 export type SettlementItemStatus =
-  "processing" | "completed" | "failed" | "skipped";
+  "processing" | "completed" | "failed" | "skipped" | "reserved";
 
 /** One rule's share of a sale, paid from the merchant's wallet under the daily-capped grant. */
 export interface SettlementItem {
@@ -66,6 +72,27 @@ export interface Settlement {
   /** What stayed with the merchant. */
   kept?: Amount;
   settledAt?: string;
+}
+
+/**
+ * One payment to a creditor: everything reserved for a debt rule, sent in one go on its due day
+ * (`due-date`) or when the merchant pays early (`manual`).
+ */
+export interface PayoutRecord {
+  id: string;
+  merchantId: string;
+  ruleId: string;
+  label: string;
+  destination: string;
+  amount: Amount;
+  reason: "due-date" | "manual";
+  /** Bogotá month the payout belongs to, "2026-10". */
+  month: string;
+  status: "processing" | "completed" | "failed";
+  paymentId?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SaleRecord {

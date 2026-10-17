@@ -3,6 +3,7 @@ import {
   type OnboardInput,
 } from "../src/merchants/merchantService.js";
 import { DashboardService } from "../src/merchants/dashboardService.js";
+import { PayoutService } from "../src/merchants/payoutService.js";
 import { SalesService } from "../src/merchants/salesService.js";
 import { PaymentFlows } from "../src/openPayments/flows.js";
 import { computeInteractHash } from "../src/openPayments/hash.js";
@@ -63,8 +64,10 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     frontendUrl: BASE_URL,
     now,
   });
+  const payouts = new PayoutService(flows, merchants, store, { now });
   const dashboard = new DashboardService(flows, merchants, sales, store, {
     now,
+    payouts,
   });
 
   /** What the wallet appends to the finish URL when its owner approves. */
@@ -95,8 +98,25 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     return merchant.id;
   };
 
+  /**
+   * Runs every reserved debt as on its due day and has the money arrive at each creditor, so the
+   * debts count as repaid (ADR 0014).
+   */
+  const payOutDebts = async (merchantId: string) => {
+    const sent = await payouts.pay(merchantId, { reason: "due-date" });
+    for (const payout of sent) {
+      deliver(
+        (await store.getPayment(payout.paymentId!))!.incomingPaymentUrl,
+        cop("5000000"),
+      );
+    }
+    await payouts.refresh(merchantId);
+    return sent;
+  };
+
   return {
     clock,
+    payOutDebts,
     now,
     ops,
     deliver,
@@ -104,6 +124,7 @@ export function setupMiPlante(store: Store = new MemoryStore()) {
     flows,
     merchants,
     sales,
+    payouts,
     dashboard,
     approve,
     approveMandate,

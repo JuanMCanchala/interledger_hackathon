@@ -66,6 +66,7 @@ describe("editing the split rules", () => {
     const env = setupMiPlante();
     const merchantId = await env.onboardRosa();
     await sell(env, merchantId);
+    await env.payOutDebts(merchantId);
     const [microcredit, savings] = (await env.merchants.require(merchantId))
       .rules;
 
@@ -116,7 +117,8 @@ describe("editing the split rules", () => {
         },
       ],
     });
-    await sell(env, merchantId); // 1,500 due, only 1,000 owed: the debt is now paid
+    await sell(env, merchantId); // 1,500 due, only 1,000 owed: 1,000 reserved
+    await env.payOutDebts(merchantId); // paid on its due day: the debt is now paid off
     const [supplier] = (await env.merchants.require(merchantId)).rules;
     expect(supplier!.outstanding).toEqual(cop("0"));
 

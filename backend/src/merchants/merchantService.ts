@@ -31,6 +31,8 @@ export interface RuleInput {
   outstanding?: string;
   /** Savings rules, optional: the amount the shop wants to save. */
   savingsGoal?: string;
+  /** Debt rules: day of the month (1–28) the creditor is paid; 28 if not given. */
+  dueDay?: number;
 }
 
 /** Editing the rules: `id` names an existing rule; without it, the rule is new. */
@@ -54,6 +56,8 @@ export interface OnboardInput {
 
 /** The merchant's grant resets every calendar month (ADR 0013). */
 export const MONTHLY_INTERVAL = "P1M";
+/** A debt without a due day is paid on the 28th, a day every month has. */
+export const DEFAULT_DUE_DAY = 28;
 
 export class MerchantService {
   private readonly now: () => Date;
@@ -93,6 +97,7 @@ export class MerchantService {
       monthlyQuota: debtAmount(rule, rule.monthlyQuota, asset),
       outstanding: debtAmount(rule, rule.outstanding, asset),
       savingsGoal: savingsGoal(rule, asset),
+      dueDay: dueDay(rule),
       repaid: { value: "0", ...asset },
     }));
     validateRules(rules, asset);
@@ -165,6 +170,7 @@ export class MerchantService {
         shareBps: percentToBps(rule.sharePercent),
         monthlyQuota: debtAmount(rule, rule.monthlyQuota, merchant.asset),
         savingsGoal: savingsGoal(rule, merchant.asset),
+        dueDay: dueDay(rule),
         outstanding,
       };
     });
@@ -366,6 +372,11 @@ export class MerchantService {
       createdAt: merchant.createdAt,
     };
   }
+}
+
+/** A debt's due day; savings have none. */
+function dueDay(rule: { kind: RuleKind; dueDay?: number }): number | undefined {
+  return rule.kind === "debt" ? (rule.dueDay ?? DEFAULT_DUE_DAY) : undefined;
 }
 
 /** A savings rule's goal in the shop's asset; debts have none. */
