@@ -1,0 +1,350 @@
+@if (merchant(); as m) {
+  <section class="view stack" aria-label="Caja registradora">
+    @if (!currentSale()) {
+      <div class="pos-workspace">
+        <section class="workspace-panel stack sell-card">
+          <div class="panel-head">
+            <div>
+              <h2>Nueva venta</h2>
+              <p class="muted small">
+                Elige cómo te paga el cliente y registra el valor
+              </p>
+            </div>
+          </div>
+
+          <div class="segmented" role="tablist" aria-label="Cómo te paga el cliente">
+            <button
+              type="button"
+              role="tab"
+              [attr.aria-selected]="sellMode() === 'qr'"
+              (click)="setSellMode('qr')"
+            >
+              Con QR
+            </button>
+            <button
+              type="button"
+              role="tab"
+              [attr.aria-selected]="sellMode() === 'cash'"
+              (click)="setSellMode('cash')"
+            >
+              En efectivo
+            </button>
+          </div>
+
+          <form class="stack" (ngSubmit)="sellMode() === 'cash' ? submitCashSale() : submitSale()">
+            <div class="field">
+              <label for="sale-amount">
+                {{ sellMode() === 'cash' ? 'Monto recibido en efectivo' : 'Monto a cobrar' }}
+              </label>
+              <div class="dictate-row">
+                <input
+                  #saleAmountInput
+                  id="sale-amount"
+                  name="saleAmount"
+                  class="input-xl"
+                  required
+                  inputmode="numeric"
+                  autocomplete="off"
+                  placeholder="10.000"
+                  [ngModel]="saleAmountInputVal()"
+                  (ngModelChange)="onSaleAmountInput($event); saleHint.set('')"
+                />
+                @if (voice.canListen) {
+                  <button
+                    type="button"
+                    class="dictate-button"
+                    [class.is-listening]="voice.listening()"
+                    [attr.aria-pressed]="voice.listening()"
+                    [attr.aria-label]="voice.listening() ? 'Dejar de escuchar' : 'Dictar el monto'"
+                    [title]="voice.listening() ? 'Te escucho…' : 'Dicta el monto: «veinte mil de arroz»'"
+                    (click)="dictateSale()"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="9" y="3" width="6" height="11" rx="3" />
+                      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+                    </svg>
+                  </button>
+                }
+              </div>
+            </div>
+            @if (saleHint()) {
+              <p class="banner banner-ok" role="status">{{ saleHint() }}</p>
+            }
+            <div class="stack-sm">
+              <span class="small muted">Montos rápidos:</span>
+              <div class="chips" aria-label="Montos rápidos">
+                @for (q of quickAmounts; track q) {
+                  <button
+                    type="button"
+                    class="chip-button"
+                    [class.is-active]="isQuickAmountSelected(q)"
+                    (click)="pickQuickAmount(q)"
+                  >
+                    {{ formatMoney(q, 'COP') }}
+                  </button>
+                }
+              </div>
+            </div>
+            <label class="field">
+              <span>Descripción o nota (opcional)</span>
+              <input
+                name="saleDescription"
+                maxlength="120"
+                autocomplete="off"
+                placeholder="Ej: Arroz, huevos y gaseosa"
+                [(ngModel)]="saleDescription"
+              />
+            </label>
+            @if (saleFormError()) {
+              <p class="banner banner-bad" role="alert">{{ saleFormError() }}</p>
+            }
+            @if (sellMode() === 'cash') {
+              <button
+                class="btn btn-lima btn-lg btn-block"
+                type="submit"
+                [disabled]="saleBusy()"
+                [attr.aria-busy]="saleBusy() ? 'true' : null"
+              >
+                {{ saleBusy() ? 'Registrando…' : 'Registrar venta en efectivo' }}
+              </button>
+              <p class="hint">
+                Se suma a tus ventas y se reparte; sus repartos quedan en efectivo hasta
+                que consignes, y solo hay que consignar esa parte.
+              </p>
+              @if (cashMessage(); as cm) {
+                <p [class]="'banner banner-' + cm.tone" role="status">{{ cm.text }}</p>
+              }
+            } @else {
+              <button
+                class="btn btn-lima btn-lg btn-block"
+                type="submit"
+                [disabled]="!canSell() || saleBusy()"
+                [attr.aria-busy]="saleBusy() ? 'true' : null"
+              >
+                {{ saleBusy() ? 'Generando código QR…' : 'Generar QR de cobro →' }}
+              </button>
+            }
+            @if (!canSell() && sellMode() === 'qr') {
+              <p class="hint">
+                Para cobrar, primero autoriza tu límite mensual en tu
+                billetera.
+              </p>
+            }
+          </form>
+        </section>
+
+        @if (liveSalePreview(); as lp) {
+          <aside class="workspace-panel stack" aria-label="Simulación de reparto de esta venta">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Reparto automático en vivo</p>
+                <h2>Así se divide {{ lp.totalFormatted }}</h2>
+              </div>
+            </div>
+
+            <ul class="pocket-jars">
+              <li class="pocket-jar-item">
+                <div class="pocket-jar-vessel">
+                  <div
+                    class="pocket-jar-fill"
+                    [style.height.%]="lp.keptPercent"
+                  ></div>
+                  <span class="pocket-jar-pct">{{ lp.keptPercent }}%</span>
+                </div>
+                <strong>Tu ganancia</strong>
+                <span class="small num">{{ lp.keptFormatted }}</span>
+              </li>
+              @for (item of lp.items; track $index) {
+                <li class="pocket-jar-item">
+                  <div class="pocket-jar-vessel">
+                    <div
+                      class="pocket-jar-fill"
+                      [class.is-debt]="item.kind === 'debt'"
+                      [class.is-savings]="item.kind === 'savings'"
+                      [style.height.%]="item.percent"
+                    ></div>
+                    <span class="pocket-jar-pct">{{ item.percent }}%</span>
+                  </div>
+                  <strong>{{ item.label }}</strong>
+                  <span class="small num">{{ item.formatted }}</span>
+                </li>
+              }
+            </ul>
+
+            <p class="small muted">
+              Cuando tu cliente pague el QR, cada bolsillo apartará su
+              parte automáticamente sobre la red Interledger.
+            </p>
+          </aside>
+        }
+      </div>
+    } @else if (currentSale(); as cur) {
+      <section class="workspace-panel qr-active-panel stack narrow" aria-live="polite">
+        <div class="row between">
+          <div style="min-width: 0">
+            <p class="eyebrow">Recibo de cobro · {{ formatTime(cur.sale.createdAt) }}</p>
+            <p class="amount-xl">{{ formatAmount(cur.sale.amount) }}</p>
+          </div>
+          <span
+            [class]="saleStatusBadgeClass(cur.sale.status)"
+            [class.badge-live]="cur.sale.status !== 'paid' && cur.sale.status !== 'failed' && cur.sale.status !== 'cancelled'"
+          >
+            @if (cur.sale.status !== 'paid' && cur.sale.status !== 'failed' && cur.sale.status !== 'cancelled') {
+              <span class="live-status-pulse" aria-hidden="true">
+                <span class="live-status-core"></span>
+              </span>
+            }
+            <span>{{ saleStatusText(cur.sale.status) }}</span>
+          </span>
+        </div>
+
+        @if (cur.sale.description) {
+          <p class="muted">{{ cur.sale.description }}</p>
+        }
+
+        @if (waitingForCustomer(cur.sale)) {
+          <div class="stack">
+            <div class="segmented" role="tablist" aria-label="Dónde mostrar el cobro">
+              <button
+                type="button"
+                role="tab"
+                [attr.aria-selected]="showOn() === 'phone'"
+                (click)="showOn.set('phone')"
+              >
+                En mi celular
+              </button>
+              <button
+                type="button"
+                role="tab"
+                [attr.aria-selected]="showOn() === 'here'"
+                (click)="showOn.set('here')"
+              >
+                En esta pantalla
+              </button>
+            </div>
+
+            @if (showOn() === 'phone') {
+              <div class="stack">
+                @if (m.displayUrl) {
+                  <p class="banner banner-ok" role="status">
+                    Este cobro ya aparece en tu pantalla de cobro. ¿Otro celular? Escanea este
+                    código una vez y quedará mostrando cada cobro nuevo.
+                  </p>
+                  <div class="qr-box">
+                    <app-qr-code [value]="m.displayUrl" [size]="230" />
+                  </div>
+                } @else {
+                  <div class="qr-box">
+                    <app-qr-code [value]="cobroUrl(cur.sale)" [size]="230" />
+                    <p class="small center">
+                      Escanéalo con <strong>tu</strong> celular: abre la
+                      pantalla de cobro limpio para mostrársela a tu cliente.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-block"
+                    [disabled]="displayBusy()"
+                    (click)="linkDisplay()"
+                  >
+                    Dejar mi celular como pantalla fija de cobro
+                  </button>
+                  @if (displayMessage(); as dm) {
+                    <p [class]="'banner banner-' + dm.tone" role="status">{{ dm.text }}</p>
+                  }
+                }
+              </div>
+            } @else {
+              <div class="stack">
+                <div class="qr-box">
+                  <app-qr-code [value]="cur.payUrl" [size]="256" />
+                  <p class="small center">
+                    {{
+                      cur.sale.pending
+                        ? 'Que tu cliente escanee de nuevo y confirme los ' + formatAmount(cur.sale.pending) + ' que faltan'
+                        : 'Que tu cliente lo escanee y confirme ' + formatAmount(cur.sale.amount) + ' en su billetera'
+                    }}
+                  </p>
+                </div>
+                <div class="copy-row">
+                  <input
+                    readonly
+                    aria-label="Enlace de pago"
+                    [value]="cur.payUrl"
+                  />
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    (click)="copyPayUrl(cur.payUrl)"
+                  >
+                    {{ copyLabel() }}
+                  </button>
+                </div>
+                <p class="hint">
+                  ¿Paga desde el navegador o con otra billetera Open Payments?
+                  <a
+                    [href]="checkoutUrl(cur.sale)"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    Ábrele la página de pago en MiPlante →
+                  </a>
+                </p>
+              </div>
+            }
+
+            <a
+              class="btn btn-lima btn-block"
+              [href]="m.displayUrl || cobroUrl(cur.sale)"
+              target="_blank"
+              rel="noopener"
+            >
+              Abrir pantalla de cobro para mostrador →
+            </a>
+          </div>
+        }
+
+        @if (cur.sale.pending) {
+          <p class="banner banner-wait" role="status">
+            Llegaron {{ formatAmount(cur.sale.payment?.receivedAmount) }} de
+            {{ formatAmount(cur.sale.amount) }}. Faltan
+            {{ formatAmount(cur.sale.pending) }}: el cliente puede volver a
+            escanear el mismo QR.
+          </p>
+        }
+
+        @if (cur.sale.status === 'failed') {
+          <p class="banner banner-bad" role="alert">
+            El pago no se completó{{ cur.sale.error ? ': ' + cur.sale.error : '' }}.
+            Toca «Nueva venta» para cobrar de nuevo.
+          </p>
+        }
+
+        @if (cur.sale.status === 'paid') {
+          <div class="success">
+            <span class="success-icon" aria-hidden="true">✓</span>
+            <p class="success-title">¡Venta cobrada y repartida!</p>
+          </div>
+          <div class="stack-sm">
+            <h3>Así se repartió esta venta</h3>
+            <app-split-list
+              [settlement]="cur.sale.settlement"
+              [rules]="m.rules"
+            />
+            @if (settlementNote(cur.sale)) {
+              <p class="hint">{{ settlementNote(cur.sale) }}</p>
+            }
+          </div>
+        }
+
+        <button
+          class="btn btn-secondary btn-block"
+          type="button"
+          (click)="resetSaleForm()"
+        >
+          + Registrar otra venta
+        </button>
+      </section>
+    }
+  </section>
+}
