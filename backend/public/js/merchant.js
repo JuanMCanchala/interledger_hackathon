@@ -9,7 +9,6 @@ import {
   el,
   formatAmount,
   formatDay,
-  formatMoney,
   formatTime,
   homeOfSignedIn,
   localDate,
@@ -125,16 +124,16 @@ function renderMerchant(m) {
     );
   }
 
-  $("daily-cap").textContent = `Límite: ${formatAmount(m.dailyCap)}`;
-  if (m.spentToday) {
-    $("spent-today").textContent = formatAmount(m.spentToday);
+  $("monthly-cap").textContent = `Límite: ${formatAmount(m.monthlyCap)}`;
+  if (m.spentThisMonth) {
+    $("spent-month").textContent = formatAmount(m.spentThisMonth);
     const ratio =
-      toNumber(m.dailyCap) > 0
-        ? toNumber(m.spentToday) / toNumber(m.dailyCap)
+      toNumber(m.monthlyCap) > 0
+        ? toNumber(m.spentThisMonth) / toNumber(m.monthlyCap)
         : 0;
     $("cap-bar").style.width = `${Math.min(100, ratio * 100)}%`;
   } else {
-    $("spent-today").textContent = "—";
+    $("spent-month").textContent = "—";
     $("cap-bar").style.width = "0%";
   }
 
@@ -201,55 +200,83 @@ function renderStatusBanner(status, wallet) {
   banner.hidden = false;
 }
 
-function renderRules(rules) {
-  $("rules").replaceChildren(
-    ...rules.map((rule) => {
-      const percent = (rule.shareBps / 100).toLocaleString("es-CO", {
-        maximumFractionDigits: 2,
-      });
-      const parts = [
-        el(
-          "div",
-          { class: "row between" },
-          el("strong", { text: rule.label }),
-          badge(
-            RULE_KIND[rule.kind] || rule.kind,
-            rule.kind === "debt" ? "wait" : "info",
-          ),
-        ),
-        el("p", { class: "muted small", text: `${percent}% de cada venta` }),
-        el("p", { class: "mono muted", text: rule.destination }),
-      ];
-      if (rule.kind === "debt") {
-        const repaid = toNumber(rule.repaid);
-        const outstanding = rule.outstanding ? toNumber(rule.outstanding) : 0;
-        const total = repaid + outstanding;
-        const ratio = total > 0 ? repaid / total : 1;
-        parts.push(
-          el(
-            "div",
-            { class: "progress" },
-            el("span", { style: `width: ${Math.min(100, ratio * 100)}%` }),
-          ),
-        );
-        parts.push(
-          outstanding <= 0
-            ? badge("¡Deuda pagada!", "ok")
-            : el("p", {
-                class: "small",
-                text: `Pagado ${formatAmount(rule.repaid)} de ${formatMoney(total, rule.repaid.assetCode, rule.repaid.assetScale)} · faltan ${formatAmount(rule.outstanding)}`,
-              }),
-        );
-      } else {
-        parts.push(
-          el("p", {
+/** One rule: its share, this month's quota (obligations) and what it has received. */
+function renderRule(rule) {
+  const percent = (rule.shareBps / 100).toLocaleString("es-CO", {
+    maximumFractionDigits: 2,
+  });
+  const parts = [
+    el(
+      "div",
+      { class: "row between" },
+      el("strong", { text: rule.label }),
+      badge(
+        RULE_KIND[rule.kind] || rule.kind,
+        rule.kind === "debt" ? "wait" : "info",
+      ),
+    ),
+    el("p", { class: "muted small", text: `${percent}% de cada venta` }),
+    el("p", { class: "mono muted", text: walletName(rule.destination) }),
+  ];
+  if (rule.kind === "debt") {
+    const paid = rule.paidThisMonth ? toNumber(rule.paidThisMonth) : 0;
+    const quota = rule.monthlyQuota ? toNumber(rule.monthlyQuota) : 0;
+    const done = quota > 0 && paid >= quota;
+    parts.push(
+      el(
+        "div",
+        { class: "progress" },
+        el("span", {
+          style: `width: ${quota > 0 ? Math.min(100, (paid / quota) * 100) : 0}%`,
+        }),
+      ),
+    );
+    parts.push(
+      done
+        ? badge("Cuota del mes completa: el resto es ganancia", "ok")
+        : el("p", {
             class: "small",
-            text: `Ahorrado: ${formatAmount(rule.repaid)}`,
+            text: `Este mes: pagado ${formatAmount(rule.paidThisMonth)} de ${formatAmount(rule.monthlyQuota)}`,
           }),
-        );
-      }
-      return el("li", { class: "list-item" }, ...parts);
-    }),
+    );
+    if (rule.outstanding) {
+      parts.push(
+        toNumber(rule.outstanding) <= 0
+          ? badge("¡Deuda pagada!", "ok")
+          : el("p", {
+              class: "muted small",
+              text: `Deuda total: faltan ${formatAmount(rule.outstanding)} (pagado ${formatAmount(rule.repaid)})`,
+            }),
+      );
+    }
+  } else {
+    parts.push(
+      el("p", {
+        class: "small",
+        text: `Este mes: ${formatAmount(rule.paidThisMonth)} · ahorrado en total: ${formatAmount(rule.repaid)}`,
+      }),
+    );
+  }
+  return el("li", { class: "list-item" }, ...parts);
+}
+
+/** Rules grouped by the category the shopkeeper gave them, in the order they were set up. */
+function renderRules(rules) {
+  const groups = new Map();
+  for (const rule of rules) {
+    const name = rule.category || RULE_KIND[rule.kind] || rule.kind;
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(rule);
+  }
+  $("rules").replaceChildren(
+    ...[...groups].map(([name, members]) =>
+      el(
+        "li",
+        { class: "stack-sm" },
+        el("h3", { class: "eyebrow", text: name }),
+        el("ul", { class: "list" }, ...members.map(renderRule)),
+      ),
+    ),
   );
 }
 
@@ -336,15 +363,17 @@ function openRulesEditor() {
       cap: $("preview-cap"),
     },
     asset: merchant.asset,
-    capMinor: () => BigInt(merchant.dailyCap.value),
+    capMinor: () => BigInt(merchant.monthlyCap.value),
   });
   editor.clear();
   for (const rule of merchant.rules) {
     editor.add({
       id: rule.id,
       label: rule.label,
+      category: rule.category,
       kind: rule.kind,
       sharePercent: rule.shareBps / 100,
+      monthlyQuota: toDecimal(rule.monthlyQuota),
       outstanding: toDecimal(rule.outstanding),
       destination: walletName(rule.destination),
     });
@@ -365,7 +394,7 @@ $("edit-rules").addEventListener("click", openRulesEditor);
 $("cancel-rules").addEventListener("click", () => setEditing(false));
 
 $("add-rule").addEventListener("click", () =>
-  editor?.add({ label: "Proveedor", kind: "debt" }),
+  editor?.add({ label: "Proveedor", category: "Proveedores", kind: "debt" }),
 );
 
 $("rules-form").addEventListener("input", () => {

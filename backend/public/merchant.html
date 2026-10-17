@@ -109,7 +109,7 @@
                   Cobrar
                 </button>
                 <p class="hint" id="sale-disabled-hint" hidden>
-                  Para cobrar, primero autoriza tu límite diario en tu
+                  Para cobrar, primero autoriza tu límite mensual en tu
                   billetera.
                 </p>
               </form>
@@ -213,17 +213,17 @@
 
               <section class="card stack" aria-labelledby="cap-title">
                 <div class="row between">
-                  <h2 id="cap-title">Límite diario</h2>
-                  <span class="muted small" id="daily-cap"></span>
+                  <h2 id="cap-title">Límite mensual</h2>
+                  <span class="muted small" id="monthly-cap"></span>
                 </div>
                 <p>
-                  <span class="amount-lg" id="spent-today">—</span>
-                  <span class="muted small">descontado hoy</span>
+                  <span class="amount-lg" id="spent-month">—</span>
+                  <span class="muted small">descontado este mes</span>
                 </p>
                 <div class="progress is-gold"><span id="cap-bar"></span></div>
                 <p class="hint">
-                  Nunca se descuenta más de esto en un día. Lo aprobaste en tu
-                  billetera y lo puedes cancelar cuando quieras.
+                  Nunca sale más de esto en un mes; se renueva el día 1. Lo
+                  aprobaste en tu billetera y lo puedes cancelar cuando quieras.
                 </p>
               </section>
 
@@ -242,9 +242,9 @@
 
                 <form id="rules-form" class="stack" hidden novalidate>
                   <p class="muted small">
-                    Cambia los porcentajes, las wallets de destino o agrega
-                    reglas. Aplica desde la próxima venta y no necesitas volver
-                    a autorizar en tu wallet: el tope diario sigue igual.
+                    Cambia los porcentajes, las cuotas del mes, las billeteras o
+                    agrega otras. Aplica desde la próxima venta y no necesitas
+                    volver a autorizar: el límite mensual sigue igual.
                   </p>
                   <div id="rules-editor" class="stack"></div>
                   <button
@@ -252,7 +252,7 @@
                     class="btn btn-secondary"
                     id="add-rule"
                   >
-                    + Agregar regla
+                    + Agregar billetera
                   </button>
 
                   <div class="stack-sm" aria-live="polite">
@@ -334,9 +334,19 @@
           />
         </label>
         <label class="field">
+          <span>Categoría</span>
+          <input
+            data-field="category"
+            required
+            maxlength="40"
+            list="category-options"
+            placeholder="Proveedores"
+          />
+        </label>
+        <label class="field">
           <span>Tipo</span>
           <select data-field="kind">
-            <option value="debt">Crédito / proveedor</option>
+            <option value="debt">Obligación mensual</option>
             <option value="savings">Ahorro</option>
           </select>
         </label>
@@ -352,8 +362,17 @@
             inputmode="decimal"
           />
         </label>
-        <label class="field outstanding-field">
-          <span>Saldo por pagar</span>
+        <label class="field debt-only">
+          <span>Cuota del mes</span>
+          <input
+            data-field="monthlyQuota"
+            inputmode="decimal"
+            autocomplete="off"
+            placeholder="200.000"
+          />
+        </label>
+        <label class="field debt-only">
+          <span>Deuda total (opcional)</span>
           <input
             data-field="outstanding"
             inputmode="decimal"
@@ -376,5 +395,10 @@
         <button type="button" class="btn btn-danger remove-rule">Quitar</button>
       </fieldset>
     </template>
+    <datalist id="category-options">
+      <option value="Proveedores"></option>
+      <option value="Microcréditos"></option>
+      <option value="Ahorro"></option>
+    </datalist>
   </body>
 </html>

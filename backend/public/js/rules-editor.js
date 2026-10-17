@@ -8,13 +8,13 @@ import {
   toMinor,
 } from "./app.js";
 
-export const MAX_RULES = 5;
+export const MAX_RULES = 10;
 export const MAX_TOTAL_PERCENT = 50;
 /** The preview shows how a sale of this amount splits. */
 const PREVIEW_SALE = "10000";
 
 /**
- * Rule rows plus the live "así se reparte una venta" preview. Shared by onboarding and the till.
+ * Rule rows plus the live "así se reparte una venta" preview, used by the till.
  * Rows created from a stored rule remember its ID and balance: an untouched balance is not sent
  * back, so editing never undoes a repayment that lands meanwhile.
  */
@@ -36,7 +36,9 @@ export function createRulesEditor({
     if (rows().length >= MAX_RULES) return;
     const row = template.content.firstElementChild.cloneNode(true);
     field(row, "label").value = values.label ?? "";
+    field(row, "category").value = values.category ?? "";
     field(row, "kind").value = values.kind ?? "debt";
+    field(row, "monthlyQuota").value = values.monthlyQuota ?? "";
     field(row, "sharePercent").value = values.sharePercent ?? "";
     field(row, "outstanding").value = values.outstanding ?? "";
     field(row, "destination").value = values.destination ?? "";
@@ -62,11 +64,13 @@ export function createRulesEditor({
     box.replaceChildren();
   }
 
-  /** The outstanding balance only makes sense (and is required) for debts. */
+  /** The monthly quota (required) and the balance (optional) only make sense for obligations. */
   function syncKind(row) {
     const isDebt = field(row, "kind").value === "debt";
-    row.querySelector(".outstanding-field").hidden = !isDebt;
-    field(row, "outstanding").required = isDebt;
+    for (const debtField of row.querySelectorAll(".debt-only")) {
+      debtField.hidden = !isDebt;
+    }
+    field(row, "monthlyQuota").required = isDebt;
   }
 
   function read() {
@@ -77,11 +81,16 @@ export function createRulesEditor({
         id: row.dataset.ruleId,
         storedOutstanding: row.dataset.outstanding,
         label: field(row, "label").value.trim(),
+        category: field(row, "category").value.trim(),
         kind,
         destination: field(row, "destination").value.trim(),
         sharePercent: Number.isFinite(percent)
           ? Math.round(percent * 100) / 100
           : NaN,
+        monthlyQuota:
+          kind === "debt"
+            ? normalizeDecimal(field(row, "monthlyQuota").value)
+            : "",
         outstanding:
           kind === "debt"
             ? normalizeDecimal(field(row, "outstanding").value)
@@ -160,20 +169,30 @@ export function createRulesEditor({
     );
 
     const cap = capMinor();
-    if (cap !== undefined && split.allocated > cap) {
+    const quotas = rules
+      .filter((rule) => rule.kind === "debt" && rule.monthlyQuota)
+      .reduce((sum, rule) => sum + toMinor(rule.monthlyQuota, scale), 0n);
+    const overCap = cap !== undefined && quotas > cap;
+    if (overCap) {
       preview.cap.hidden = false;
-      preview.cap.textContent = `Tu tope diario (${money(cap)}) es menor que lo que se repartiría en esta venta (${money(split.allocated)}): lo que pase del tope no se descuenta ese día.`;
+      preview.cap.textContent = `Las cuotas del mes suman ${money(quotas)}, más que tu límite mensual de ${money(cap)}. Baja alguna cuota.`;
     } else {
       preview.cap.hidden = true;
     }
-    return { totalPercent, overLimit };
+    return { totalPercent, overLimit, overCap };
   }
 
   /** Request body for the rules. Throws an Error with a message for the merchant. */
   function collect() {
-    if (render().overLimit) {
+    const { overLimit, overCap } = render();
+    if (overLimit) {
       throw new Error(
         `La suma de porcentajes no puede pasar de ${MAX_TOTAL_PERCENT}%.`,
+      );
+    }
+    if (overCap) {
+      throw new Error(
+        "Las cuotas del mes no pueden sumar más que tu límite mensual.",
       );
     }
     return read().map((rule, index) => {
@@ -187,25 +206,32 @@ export function createRulesEditor({
           `${position}: el porcentaje debe estar entre 0,01 y ${MAX_TOTAL_PERCENT}`,
         );
       }
+      if (!rule.category) {
+        throw new Error(`${position}: escribe su categoría, por ejemplo Proveedores`);
+      }
+      if (rule.kind === "debt" && !rule.monthlyQuota) {
+        throw new Error(
+          `${position}: escribe la cuota del mes, por ejemplo 200.000`,
+        );
+      }
       // An existing debt whose balance was not touched keeps the stored one (even a paid-off 0).
       const untouched =
         rule.id &&
         rule.kind === "debt" &&
         rule.outstanding === rule.storedOutstanding;
-      if (rule.kind === "debt" && !rule.outstanding && !untouched) {
-        throw new Error(
-          `${position}: escribe el saldo por pagar, por ejemplo 300.000`,
-        );
-      }
       const body = {
         label: rule.label,
+        category: rule.category,
         kind: rule.kind,
         // "proveedor-billeticos" → "$ilp.interledger-test.dev/proveedor-billeticos", like onboarding.
         destination: normalizeWallet(rule.destination),
         sharePercent: rule.sharePercent,
       };
       if (rule.id) body.id = rule.id;
-      if (rule.kind === "debt" && !untouched) body.outstanding = rule.outstanding;
+      if (rule.kind === "debt") body.monthlyQuota = rule.monthlyQuota;
+      if (rule.kind === "debt" && !untouched && rule.outstanding) {
+        body.outstanding = rule.outstanding;
+      }
       return body;
     });
   }

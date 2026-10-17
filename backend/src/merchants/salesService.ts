@@ -170,7 +170,7 @@ export class SalesService {
       await this.update(sale, {
         settlement: {
           status: "skipped",
-          reason: "La autorización diaria del comercio no está activa",
+          reason: "La autorización mensual del comercio no está activa",
           items: [],
           kept: sale.amount,
           settledAt: this.timestamp(),

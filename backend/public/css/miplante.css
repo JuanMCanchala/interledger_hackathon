@@ -871,10 +871,6 @@ fieldset {
       minmax(0, 1fr);
   }
 
-  .rule-row .destination-field {
-    grid-column: 1 / span 3;
-  }
-
   .rule-row .remove-rule {
     align-self: end;
   }

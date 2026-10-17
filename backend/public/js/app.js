@@ -40,11 +40,11 @@ export const ITEM_STATUS = {
   processing: { text: "Enviando…", tone: "wait" },
   completed: { text: "Enviado", tone: "ok" },
   failed: { text: "Falló", tone: "bad" },
-  skipped: { text: "Límite diario alcanzado", tone: "neutral" },
+  skipped: { text: "Límite mensual alcanzado", tone: "neutral" },
 };
 
 export const RULE_KIND = {
-  debt: "Deuda",
+  debt: "Obligación",
   savings: "Ahorro",
 };
 
@@ -452,7 +452,7 @@ export function renderSplit(
           el("span", { text: RULE_KIND[item.kind] || item.kind }),
           statusBadge(ITEM_STATUS, item.status),
           item.capped && item.status !== "skipped"
-            ? badge("Límite diario alcanzado")
+            ? badge("Límite mensual alcanzado")
             : null,
           item.error
             ? el("span", { class: "error-text", text: item.error })
