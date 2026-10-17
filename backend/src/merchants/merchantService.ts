@@ -15,6 +15,7 @@ import {
   type Asset,
 } from "../shared/money.js";
 import type { RuleUpdate, Store } from "../storage/store.js";
+import { reservedBalances } from "./payoutService.js";
 import type { MerchantRecord, MerchantRule } from "./types.js";
 
 export interface RuleInput {
@@ -146,6 +147,20 @@ export class MerchantService {
     for (const rule of input) {
       if (rule.id && !existing.has(rule.id)) {
         throw new AppError(`El comercio no tiene la regla ${rule.id}`);
+      }
+    }
+    // Money reserved for a debt waits for that debt's payout: removing the debt (or turning it into
+    // savings) would leave it reserved forever, taking room from the monthly cap.
+    const reserved = await reservedBalances(this.store, merchant.id);
+    for (const old of merchant.rules) {
+      const held = reserved[old.id] ?? 0n;
+      if (old.kind !== "debt" || held <= 0n) continue;
+      const kept = input.find((rule) => rule.id === old.id);
+      if (!kept || kept.kind !== "debt") {
+        throw new AppError(
+          `"${old.label}" tiene ${formatAmount({ ...merchant.asset, value: held.toString() })} apartado sin pagar: págalo con "Pagar ahora" antes de quitarla`,
+          409,
+        );
       }
     }
     const destinations = await Promise.all(

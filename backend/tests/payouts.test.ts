@@ -184,4 +184,28 @@ describe("paying creditors on their due day", () => {
     expect((await env.store.listPayouts(id)).map((p) => p.status)).toEqual(["processing"]);
     await expect(env.payouts.pay(id, { reason: "manual" })).rejects.toThrow(/apartado/);
   });
+
+  it("does not let a debt with money reserved be removed or turned into savings", async () => {
+    const env = setupMiPlante();
+    const id = await env.onboardRosa({ rules: [MICROCREDIT] });
+    const rule = (await env.store.getMerchant(id))!.rules[0]!;
+    await sellAndPay(env, id);
+    const savings = {
+      label: "Ahorro",
+      category: "Ahorro",
+      kind: "savings" as const,
+      destination: "$ilp.interledger-test.dev/ahorro",
+      sharePercent: 5,
+    };
+
+    await expect(env.merchants.updateRules(id, [savings])).rejects.toThrow(/apartado sin pagar/);
+    await expect(
+      env.merchants.updateRules(id, [{ ...savings, id: rule.id }]),
+    ).rejects.toThrow(/apartado sin pagar/);
+
+    // Paid, it can go.
+    await env.payouts.pay(id, { reason: "manual" });
+    const updated = await env.merchants.updateRules(id, [savings]);
+    expect(updated.rules.map((r) => r.label)).toEqual(["Ahorro"]);
+  });
 });
