@@ -998,7 +998,8 @@ function drawQrs() {
       drawn.phone = drawQr($("phone-qr"), url, { size: 220 }) ? url : null;
     }
   } else {
-    $("pay-url").value = current.payUrl;
+    // Only when it changes: rewriting it every poll would undo selecting the link to copy it.
+    if ($("pay-url").value !== current.payUrl) $("pay-url").value = current.payUrl;
     if (drawn.here !== current.payUrl) {
       drawn.here = drawQr($("qr"), current.payUrl) ? current.payUrl : null;
     }
