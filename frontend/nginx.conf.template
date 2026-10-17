@@ -6,6 +6,9 @@ server {
     listen ${PORT};
     root /usr/share/nginx/html;
     server_tokens off;
+    # Redirects keep the browser's scheme and host: behind the platform's TLS proxy, an absolute one
+    # would point at http and this container's own port.
+    absolute_redirect off;
 
     # Not in nginx's default MIME types; browsers want it to install the PWA.
     types {
