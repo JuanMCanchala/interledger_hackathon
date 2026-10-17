@@ -12,7 +12,10 @@ import { describeError } from "../openPayments/errors.js";
 import { AppError, NotFoundError } from "../shared/errors.js";
 import type { DashboardService } from "../merchants/dashboardService.js";
 import type { MerchantService } from "../merchants/merchantService.js";
-import type { SalesService } from "../merchants/salesService.js";
+import {
+  type SalesService,
+  toPublicSale,
+} from "../merchants/salesService.js";
 import type { PaymentFlows } from "../openPayments/flows.js";
 import * as schemas from "./schemas.js";
 
@@ -245,13 +248,15 @@ export function createApp({
   });
 
   app.get("/api/sales/:id", async (req, res) => {
-    res.json(await sales.refresh(req.params.id));
+    res.json(toPublicSale(await sales.refresh(req.params.id)));
   });
 
   app.post("/api/sales/:id/pay", async (req, res) => {
-    res
-      .status(201)
-      .json(await sales.pay(req.params.id, schemas.paySale.parse(req.body)));
+    const { sale, redirectUrl } = await sales.pay(
+      req.params.id,
+      schemas.paySale.parse(req.body),
+    );
+    res.status(201).json({ sale: toPublicSale(sale), redirectUrl });
   });
 
   app.use("/api", (_req, res) => {

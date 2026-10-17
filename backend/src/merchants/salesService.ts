@@ -499,6 +499,25 @@ export class SalesService {
   }
 }
 
+export type SaleView = Awaited<ReturnType<SalesService["view"]>>;
+
+/**
+ * The sale as anyone holding its link sees it (the customer's checkout, the phone at the till): how
+ * it was split, but not the wallets each share went to nor the payments that carried them, which
+ * are the shop's own business.
+ */
+export function toPublicSale(sale: SaleView) {
+  return {
+    ...sale,
+    settlement: {
+      ...sale.settlement,
+      items: sale.settlement.items.map(
+        ({ destination: _d, paymentId: _p, ruleId: _r, ...item }) => item,
+      ),
+    },
+  };
+}
+
 function itemStatus(paymentStatus: string): SettlementItemStatus {
   if (paymentStatus === "completed") return "completed";
   if (paymentStatus === "failed" || paymentStatus === "rejected")
