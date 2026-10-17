@@ -1259,3 +1259,48 @@ fieldset {
     align-items: end;
   }
 }
+
+/* Checkout screen on the shopkeeper's phone (/cobro) ----------------------------------------- */
+
+.cobro {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px
+    max(16px, env(safe-area-inset-bottom));
+}
+
+.cobro-card {
+  display: grid;
+  gap: 14px;
+  justify-items: stretch;
+}
+
+.cobro-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cobro-head .eyebrow {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cobro-amount {
+  margin: 0;
+  text-align: center;
+}
+
+.cobro-qr .qr-box img,
+.cobro-qr .qr-box canvas {
+  width: min(320px, 78vw);
+}
+
+.cobro-done {
+  padding: 8px 0;
+}

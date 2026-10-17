@@ -470,6 +470,34 @@ export function renderSplit(
   });
 }
 
+// QR ----------------------------------------------------------------------------------------------
+
+/**
+ * Draws `url` as a QR code in `target` with the qrcodejs library the page loads from the CDN.
+ * Returns false (and leaves a hint) when the library is not there yet, so the page can retry on load.
+ */
+export function drawQr(target, url, { size = 256, fallback = "Comparte el enlace de abajo." } = {}) {
+  target.replaceChildren();
+  if (typeof window.QRCode !== "function") {
+    target.append(el("p", { class: "small", text: fallback }));
+    return false;
+  }
+  try {
+    new window.QRCode(target, {
+      text: url,
+      width: size,
+      height: size,
+      colorDark: "#0e1410",
+      colorLight: "#ffffff",
+      correctLevel: window.QRCode.CorrectLevel.M,
+    });
+    return true;
+  } catch {
+    target.replaceChildren(el("p", { class: "small", text: fallback }));
+    return false;
+  }
+}
+
 // Misc --------------------------------------------------------------------------------------------
 
 export const remember = {

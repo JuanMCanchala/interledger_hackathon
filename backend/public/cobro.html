@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#094641" />
+    <title>Cobro · MiPlante</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/miplante.css" />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+      integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+      async
+    ></script>
+    <script type="module" src="/js/cobro.js"></script>
+  </head>
+  <body class="cobro-page">
+    <main class="cobro" aria-live="polite">
+      <section class="card cobro-card stack" id="missing" hidden>
+        <h1 class="h1-sm">No encontramos este cobro</h1>
+        <p class="muted">
+          Revisa el enlace o genera el cobro de nuevo desde tu caja.
+        </p>
+      </section>
+
+      <section class="card cobro-card" id="cobro" hidden>
+        <header class="cobro-head">
+          <p class="eyebrow" id="merchant-name">MiPlante</p>
+          <span id="status"></span>
+        </header>
+
+        <p class="cobro-amount amount-xl" id="amount"></p>
+        <p class="muted center" id="description" hidden></p>
+
+        <div class="cobro-qr" id="qr-block">
+          <div class="qr-box">
+            <div id="qr" aria-hidden="true"></div>
+            <p class="small center" id="qr-caption">
+              Escanea con tu celular y confirma en tu billetera
+            </p>
+          </div>
+        </div>
+
+        <p id="partial" class="banner banner-wait" role="status" hidden></p>
+
+        <div class="success cobro-done" id="done" hidden>
+          <span class="success-icon" aria-hidden="true">✓</span>
+          <p class="success-title">¡Pago recibido!</p>
+          <p class="muted small" id="done-detail"></p>
+        </div>
+
+        <p id="error" class="banner banner-bad" role="alert" hidden></p>
+      </section>
+
+      <p class="muted small center cobro-foot">
+        Pago con Open Payments sobre la red Interledger.
+      </p>
+    </main>
+  </body>
+</html>

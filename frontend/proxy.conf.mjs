@@ -16,6 +16,7 @@ const BACKEND_PATHS = [
   '/onboard',
   '/merchant',
   '/pay',
+  '/cobro',
   '/sandbox',
   '/favicon.svg',
 ];

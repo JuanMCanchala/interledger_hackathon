@@ -253,6 +253,7 @@ export const PAGES = [
   "onboard",
   "merchant",
   "pay",
+  "cobro",
   "sandbox",
 ] as const;
 

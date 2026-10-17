@@ -19,7 +19,7 @@ server {
         include /etc/nginx/miplante-proxy.conf;
     }
 
-    location ~ ^/(css/|js/|img/|(login|register|onboard|merchant|pay|sandbox)(\.html|/)?$|favicon\.svg$) {
+    location ~ ^/(css/|js/|img/|(login|register|onboard|merchant|pay|cobro|sandbox)(\.html|/)?$|favicon\.svg$) {
         proxy_pass ${BACKEND_INTERNAL_URL};
         include /etc/nginx/miplante-proxy.conf;
     }
