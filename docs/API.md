@@ -67,7 +67,6 @@ The till and dashboard.
   "asset": { "assetCode": "COP", "assetScale": 2 },
   "dailyCap": Amount,
   "status": "awaiting-consent" | "active" | "rejected" | "revoked" | "failed",
-  "qrPayments": boolean,               // the consent also lets MiPlante see QR payments to the wallet
   "spentToday": Amount | null,          // spent from the grant in its current 24 h interval
   "rules": [{ "id", "label", "kind", "destination", "shareBps", "outstanding"?: Amount, "repaid": Amount }],
   "today": { "salesCount", "gross": Amount, "kept": Amount, "allocated": Amount,
@@ -107,31 +106,33 @@ the daily total, and the percentages are applied by MiPlante (ADR 0004).
 
 Asks for the daily-capped consent again, with the same cap and rules, when the first attempt was
 never approved, was rejected (for example, the merchant logged in with another account) or was
-revoked. It also renews an active consent from before QR payments, which lacks the permission to
-watch the wallet. `201` → `{ "merchant": Merchant, "redirectUrl": "…" }`. Answers `409` if the
-consent is already active and includes it.
+revoked. `201` → `{ "merchant": Merchant, "redirectUrl": "…" }`. Answers `409` if the
+consent is already active.
 
 ### `POST /api/merchants/:id/sales`
 
 `{ "amount": "10000", "description": "Mercado" }` →
-`201 { "sale": Sale, "payUrl": "https://wallet.interledger-test.dev/send?merchantWA=…", "checkoutUrl": "…/pay?sale=<id>" }`.
+`201 { "sale": Sale, "payUrl": "https://wallet.interledger-test.dev/send?merchantWA=<incoming payment>", "checkoutUrl": "…/pay?sale=<id>" }`.
 
-Show `payUrl` as a QR code:
+Each sale is an Open Payments **payment request**: an incoming payment on the shop's wallet with
+`incomingAmount` equal to the sale. Show `payUrl` as a QR code. There are two ways to pay it, and
+both pay that same incoming payment, so a sale can only be paid once:
 
-- **When the shop's consent lets MiPlante watch its wallet** (`qrPayments: true` on the merchant),
-  `payUrl` opens the **wallet app's send screen** with the shop as the receiver
-  (`https://wallet.interledger-test.dev/send?merchantWA=<shop>&merchantDescription=<shop · amount>`,
-  set by `OP_WALLET_SEND_URL`). A customer without a session logs in and comes back to it. With a
-  session, they pick their own account and wallet from the wallet's selects, type the amount (the
-  screen does not take one) and send. With `OP_WALLET_SEND_URL` empty, `payUrl` is the bare wallet
-  address, which the provider redirects to its payment page (`pay.interledger-test.dev`). The payment carries no reference to the sale, so MiPlante matches
-  it by amount. Each payment, oldest first, pays the most recent open sale created before it whose
-  amount it covers, within 2% for a payer in another currency. It never matches a payment that
-  already paid a sale or that MiPlante's checkout created. The claim is atomic, so each incoming
-  payment pays one sale at most. The till polls, and the background sweeper also matches.
-- **Otherwise** `payUrl` is MiPlante's checkout, the same as `checkoutUrl`: the customer types their
-  wallet name and approves in their wallet (`POST /api/sales/:id/pay`). It needs the customer's phone
-  to reach MiPlante.
+- **QR, in the customer's wallet app.** `payUrl` opens the wallet's send screen on the incoming
+  payment (`OP_WALLET_SEND_URL`, the Interledger test wallet's `/send?merchantWA=`). The screen
+  reads the amount and the description from the incoming payment and locks them, and it preselects
+  the customer's wallet. A customer without a session logs in and comes back to it. They only
+  confirm. With `OP_WALLET_SEND_URL` empty, `payUrl` is the incoming payment URL itself, which any
+  Open Payments wallet can pay. The customer's phone never needs to reach MiPlante.
+- **`checkoutUrl`, MiPlante's checkout.** This is the one-time payment flow from the Open Payments
+  guide: the customer gives their wallet address, and MiPlante creates a quote on it and requests an
+  interactive outgoing-payment grant limited to the quote's `debitAmount`. The customer approves in
+  their wallet and MiPlante creates the outgoing payment (`POST /api/sales/:id/pay`). It needs the
+  customer's phone to reach MiPlante.
+
+The sale stays `open` until the money arrives. MiPlante polls the incoming payment (the till and the
+background sweeper), marks the sale `paid` when it completes and then splits it. A request that
+expires unpaid (after one hour) fails the sale, and its `payUrl` falls back to the checkout.
 
 ### `GET /api/sales/:id`
 
@@ -142,7 +143,7 @@ Polls the customer's payment and settles the sale once it is paid. It is safe to
   "id", "merchantId", "merchantName", "amount": Amount, "description"?,
   "status": "open" | "awaiting-consent" | "processing" | "paid" | "failed",
   "payUrl": "https://wallet.interledger-test.dev/send?merchantWA=…" | "…/pay?sale=<id>",
-  "checkoutUrl": "…/pay?sale=<id>", "paidByQr": boolean,
+  "checkoutUrl": "…/pay?sale=<id>",
   "customer"?: "https://…", "error"?: "…", "paidAt"?: "…",
   "payment"?: { "status", "steps": { "request", "authorization", "execution", "completion" },
                 "debitAmount"?: Amount, "receivedAmount"?: Amount },

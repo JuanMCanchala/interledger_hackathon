@@ -17,5 +17,6 @@ earlier one instead of editing it.
 | [0009](0009-adopt-nextjs-nestjs-prisma-and-postgresql-stack.md) | Adopt Next.js, NestJS, Prisma ORM, and PostgreSQL stack   | Partly superseded by 0011 |
 | [0010](0010-postgresql-through-prisma-with-atomic-transitions.md) | PostgreSQL through Prisma, with atomic state transitions | Accepted |
 | [0011](0011-angular-landing-behind-one-domain-with-an-express-backend.md) | Angular landing behind one domain, with an Express backend | Accepted |
+| [0012](0012-each-sale-is-an-open-payments-payment-request.md) | Each sale is an Open Payments payment request | Accepted |
 
 To add one, copy the structure of an existing ADR, take the next number and add it to this table.
